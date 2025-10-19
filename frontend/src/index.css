@@ -1,0 +1,263 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Custom Animations */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* Mobile Viewport Fix */
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+/* Ensure proper light mode body styling */
+body {
+  background-color: #ffffff;
+  color: #1f2937;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.dark body {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+#root {
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
+}
+
+/* Chat Layout Fixes - Only for chat window */
+.chat-container {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: visible; /* Allow proper layout flow */
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  padding-bottom: 0;
+  min-height: 0; /* Allow flex shrinking */
+  max-height: calc(100vh - 160px); /* Ensure space for header and input */
+}
+
+.chat-input {
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: #ffffff;
+  min-height: 60px; /* Ensure minimum height for input */
+}
+
+.dark .chat-input {
+  background: #111827;
+}
+
+/* Ensure chat window takes full height */
+.chat-window-container {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Mobile-specific fixes */
+@media (max-width: 768px) {
+  .chat-container {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  
+  .chat-input {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  }
+  
+  .chat-messages {
+    padding-bottom: 80px; /* Space for fixed input */
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
+/* Smooth Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #5568d3 0%, #6b3fa0 100%);
+}
+
+/* Light mode specific scrollbar improvements */
+:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Force scrollbar visibility for chat messages */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.3);
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.5);
+}
+
+/* Glass Morphism Effect */
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Gradient Text Animation */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.gradient-text {
+  background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #4facfe);
+  background-size: 400% 400%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* Smooth Transitions - More selective to avoid conflicts */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Reset transitions for specific elements that might conflict */
+button, input, textarea, select {
+  transition-duration: 100ms;
+}
+
+/* Ensure proper light mode defaults */
+html {
+  color-scheme: light;
+}
+
+.dark html {
+  color-scheme: dark;
+}
+
+/* Global light mode improvements */
+:not(.dark) {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --border-primary: #e5e7eb;
+  --border-secondary: #d1d5db;
+}
+
+.dark {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --border-primary: #334155;
+  --border-secondary: #475569;
+}
+
+/* Ensure proper contrast for form elements */
+input, textarea, select {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+/* Button improvements for light mode */
+button {
+  transition: all 100ms ease;
+}
+
+/* Focus styles for better accessibility */
+*:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.dark *:focus {
+  outline-color: #60a5fa;
+}

@@ -1,0 +1,307 @@
+import mongoose from "mongoose";
+
+const meetingSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: [true, "Meeting title is required"],
+      trim: true,
+      maxlength: [200, "Meeting title cannot exceed 200 characters"]
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [1000, "Description cannot exceed 1000 characters"]
+    },
+    project: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      required: true
+    },
+    organizer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+    attendees: [{
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
+      },
+      status: {
+        type: String,
+        enum: ["invited", "accepted", "declined", "tentative"],
+        default: "invited"
+      },
+      joinedAt: Date,
+      leftAt: Date
+    }],
+    startTime: {
+      type: Date,
+      required: true
+    },
+    endTime: {
+      type: Date,
+      required: true,
+      validate: {
+        validator: function(value) {
+          return value > this.startTime;
+        },
+        message: "End time must be after start time"
+      }
+    },
+    location: {
+      type: String,
+      trim: true,
+      maxlength: [200, "Location cannot exceed 200 characters"]
+    },
+    meetingUrl: {
+      type: String,
+      trim: true
+    },
+    meetingId: {
+      type: String,
+      trim: true
+    },
+    password: {
+      type: String,
+      trim: true
+    },
+    agenda: [{
+      item: {
+        type: String,
+        required: true,
+        maxlength: [500, "Agenda item cannot exceed 500 characters"]
+      },
+      duration: Number, // in minutes
+      presenter: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      }
+    }],
+    minutes: {
+      content: String,
+      recordedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      },
+      recordedAt: Date
+    },
+    attachments: [{
+      name: String,
+      url: String,
+      uploadedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      },
+      uploadedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    status: {
+      type: String,
+      enum: ["scheduled", "in_progress", "completed", "cancelled", "postponed"],
+      default: "scheduled"
+    },
+    type: {
+      type: String,
+      enum: ["team_meeting", "client_meeting", "review", "planning", "standup", "other"],
+      default: "team_meeting"
+    },
+    recurring: {
+      isRecurring: {
+        type: Boolean,
+        default: false
+      },
+      frequency: {
+        type: String,
+        enum: ["daily", "weekly", "monthly", "yearly"]
+      },
+      interval: {
+        type: Number,
+        default: 1
+      },
+      endDate: Date,
+      occurrences: Number
+    },
+    reminders: [{
+      type: {
+        type: String,
+        enum: ["email", "notification", "sms"],
+        default: "email"
+      },
+      time: {
+        type: Number, // minutes before meeting
+        default: 15
+      },
+      sent: {
+        type: Boolean,
+        default: false
+      }
+    }],
+    isActive: {
+      type: Boolean,
+      default: true
+    }
+  },
+  {
+    timestamps: true
+  }
+);
+
+// Indexes
+meetingSchema.index({ project: 1 });
+meetingSchema.index({ organizer: 1 });
+meetingSchema.index({ "attendees.user": 1 });
+meetingSchema.index({ startTime: 1, endTime: 1 });
+meetingSchema.index({ status: 1 });
+
+// Virtual for duration in minutes
+meetingSchema.virtual("duration").get(function() {
+  if (!this.startTime || !this.endTime) return 0;
+  return Math.round((this.endTime - this.startTime) / (1000 * 60));
+});
+
+// Virtual for attendee count
+meetingSchema.virtual("attendeeCount").get(function() {
+  return this.attendees.length;
+});
+
+// Virtual for accepted attendees
+meetingSchema.virtual("acceptedAttendees").get(function() {
+  return this.attendees.filter(attendee => attendee.status === "accepted");
+});
+
+// Virtual for meeting status
+meetingSchema.virtual("meetingStatus").get(function() {
+  const now = new Date();
+  if (this.status === "cancelled" || this.status === "postponed") {
+    return this.status;
+  }
+  if (now < this.startTime) {
+    return "upcoming";
+  }
+  if (now >= this.startTime && now <= this.endTime) {
+    return "ongoing";
+  }
+  if (now > this.endTime) {
+    return "completed";
+  }
+  return "unknown";
+});
+
+// Ensure virtual fields are serialized
+meetingSchema.set("toJSON", { virtuals: true });
+meetingSchema.set("toObject", { virtuals: true });
+
+// Pre-save middleware
+meetingSchema.pre("save", function(next) {
+  // Validate end time
+  if (this.endTime <= this.startTime) {
+    return next(new Error("End time must be after start time"));
+  }
+  
+  // Set default reminders if none provided
+  if (this.reminders.length === 0) {
+    this.reminders = [
+      { type: "email", time: 15, sent: false },
+      { type: "notification", time: 5, sent: false }
+    ];
+  }
+  
+  next();
+});
+
+// Method to check if user can manage meeting
+meetingSchema.methods.canBeManagedBy = function(user) {
+  // Admin can manage all meetings
+  if (user.role === "admin") {
+    return true;
+  }
+  
+  // HR can manage all meetings
+  if (user.role === "hr") {
+    return true;
+  }
+  
+  // Project manager can manage meetings in their projects
+  if (user.role === "project_manager") {
+    return this.project.projectManager.toString() === user._id.toString();
+  }
+  
+  // Organizer can manage their own meetings
+  if (this.organizer.toString() === user._id.toString()) {
+    return true;
+  }
+  
+  return false;
+};
+
+// Method to add attendee
+meetingSchema.methods.addAttendee = function(userId, status = "invited") {
+  const existingAttendee = this.attendees.find(attendee => 
+    attendee.user.toString() === userId.toString()
+  );
+  
+  if (existingAttendee) {
+    existingAttendee.status = status;
+    return existingAttendee;
+  }
+  
+  this.attendees.push({
+    user: userId,
+    status: status
+  });
+  
+  return this.attendees[this.attendees.length - 1];
+};
+
+// Method to remove attendee
+meetingSchema.methods.removeAttendee = function(userId) {
+  const attendeeIndex = this.attendees.findIndex(attendee => 
+    attendee.user.toString() === userId.toString()
+  );
+  
+  if (attendeeIndex === -1) {
+    return false;
+  }
+  
+  this.attendees.splice(attendeeIndex, 1);
+  return true;
+};
+
+// Method to update attendee status
+meetingSchema.methods.updateAttendeeStatus = function(userId, status) {
+  const attendee = this.attendees.find(attendee => 
+    attendee.user.toString() === userId.toString()
+  );
+  
+  if (!attendee) {
+    return false;
+  }
+  
+  attendee.status = status;
+  return attendee;
+};
+
+// Method to start meeting
+meetingSchema.methods.startMeeting = function() {
+  this.status = "in_progress";
+  return this;
+};
+
+// Method to end meeting
+meetingSchema.methods.endMeeting = function() {
+  this.status = "completed";
+  return this;
+};
+
+// Method to cancel meeting
+meetingSchema.methods.cancelMeeting = function() {
+  this.status = "cancelled";
+  return this;
+};
+
+export const Meeting = mongoose.model("Meeting", meetingSchema);
