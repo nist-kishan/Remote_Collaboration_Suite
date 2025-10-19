@@ -47,7 +47,7 @@ export default function App() {
   const dispatch = useDispatch();
 
   const query = useCurrentUser();
-  const { data, isSuccess, isError } = query;
+  const { data, isSuccess, isError, isLoading } = query;
   const { loading } = useSelector((state) => state.auth);
 
   useEffect(() => {
@@ -58,11 +58,18 @@ export default function App() {
     if (isSuccess && data?.user) {
       dispatch(setUser({ user: data.user }));
     } else if (isError) {
-      dispatch(clearUser());
+      // Only clear user if it's an auth error (401/403), not rate limit or network errors
+      if (query.error?.response?.status === 401 || query.error?.response?.status === 403) {
+        dispatch(clearUser());
+      }
+      // Log rate limit errors but don't clear user state
+      if (query.error?.response?.status === 429) {
+        console.warn('Rate limit exceeded, retrying later...');
+      }
     }
-  }, [isSuccess, isError, data, dispatch]);
+  }, [isSuccess, isError, data, dispatch, query.error]);
 
-  if (loading) return <AppLoading message="Initializing Application" />;
+  if (loading || isLoading) return <AppLoading message="Initializing Application" />;
   return (
     <>
       <Routes>

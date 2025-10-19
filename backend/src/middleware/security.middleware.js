@@ -29,6 +29,11 @@ export const securityHeaders = helmet({
 
 // Rate limiting middleware
 export const createRateLimit = (windowMs = 15 * 60 * 1000, max = 100) => {
+  // Disable rate limiting in development
+  if (process.env.NODE_ENV === 'development') {
+    return (req, res, next) => next();
+  }
+  
   return rateLimit({
     windowMs,
     max,
@@ -42,10 +47,13 @@ export const createRateLimit = (windowMs = 15 * 60 * 1000, max = 100) => {
 };
 
 // API rate limiting
-export const apiLimiter = createRateLimit(15 * 60 * 1000, 100); // 100 requests per 15 minutes
+export const apiLimiter = createRateLimit(15 * 60 * 1000, 1000); // 1000 requests per 15 minutes
 
 // Auth rate limiting (stricter for login/signup)
-export const authLimiter = createRateLimit(15 * 60 * 1000, 20); // 20 requests per 15 minutes
+export const authLimiter = createRateLimit(15 * 60 * 1000, 100); // 100 requests per 15 minutes
+
+// Permissive rate limiting for auth check endpoints
+export const authCheckLimiter = createRateLimit(15 * 60 * 1000, 500); // 500 requests per 15 minutes
 
 // Document upload rate limiting
 export const uploadLimiter = createRateLimit(60 * 1000, 10); // 10 uploads per minute

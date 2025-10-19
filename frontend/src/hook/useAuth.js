@@ -99,10 +99,23 @@ export const useLogout = () => {
 
 export const useCurrentUser = () => {
   return useQuery({
-    queryKey: ["user"],
+    queryKey: ["currentUser"],
     queryFn: getCurrentUser,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5, // 5 minutes
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: (failureCount, error) => {
+      // Don't retry on rate limit errors (429) or auth errors (401/403)
+      if (error?.response?.status === 429 || 
+          error?.response?.status === 401 || 
+          error?.response?.status === 403) {
+        return false;
+      }
+      // Retry up to 2 times for other errors
+      return failureCount < 2;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    enabled: true, // Always enabled, let the API handle auth
   });
 };
 

@@ -7,6 +7,7 @@ import {
   securityHeaders, 
   apiLimiter, 
   authLimiter, 
+  authCheckLimiter,
   uploadLimiter,
   sanitizeMongo, 
   preventHPP, 
@@ -51,6 +52,7 @@ app.use(cookieParser());
 // Rate limiting middleware
 app.use('/api/', apiLimiter);
 app.use('/api/v1/auth/', authLimiter);
+app.use('/api/v1/auth/me', authCheckLimiter); // More permissive for auth check
 app.use('/api/v1/documents/upload', uploadLimiter);
 app.use('/api/v1/whiteboards/upload', uploadLimiter);
 

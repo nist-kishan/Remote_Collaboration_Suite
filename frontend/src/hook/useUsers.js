@@ -3,14 +3,15 @@ import { useSelector } from 'react-redux';
 import { searchUsers, getCurrentUser, getUserRoles, updateUserRole } from '../api/userApi';
 import { toast } from 'react-hot-toast';
 
-export const useCurrentUser = () => {
+export const useUserProfile = () => {
   const { user } = useSelector((state) => state.auth);
   
   return useQuery({
-    queryKey: ['currentUser'],
+    queryKey: ['userProfile'],
     queryFn: getCurrentUser,
     enabled: !!user,
     staleTime: 300000, // 5 minutes
+    refetchOnWindowFocus: false,
   });
 };
 
