@@ -45,7 +45,7 @@ export const createRateLimit = (windowMs = 15 * 60 * 1000, max = 100) => {
 export const apiLimiter = createRateLimit(15 * 60 * 1000, 100); // 100 requests per 15 minutes
 
 // Auth rate limiting (stricter for login/signup)
-export const authLimiter = createRateLimit(15 * 60 * 1000, 5); // 5 requests per 15 minutes
+export const authLimiter = createRateLimit(15 * 60 * 1000, 20); // 20 requests per 15 minutes
 
 // Document upload rate limiting
 export const uploadLimiter = createRateLimit(60 * 1000, 10); // 10 uploads per minute
@@ -102,12 +102,24 @@ export const corsOptions = {
       process.env.CLIENT_URL,
       'http://localhost:3000',
       'http://localhost:5173',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173',
+      'http://0.0.0.0:3000',
+      'http://0.0.0.0:5173',
       'https://your-frontend-domain.onrender.com', // Replace with your actual Render frontend URL
     ].filter(Boolean);
+
+    // In development, be more permissive
+    if (process.env.NODE_ENV === 'development') {
+      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0')) {
+        return callback(null, true);
+      }
+    }
 
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.warn('🚫 CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },

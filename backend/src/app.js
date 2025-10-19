@@ -38,6 +38,7 @@ if (process.env.NODE_ENV === 'production') {
 app.use(securityHeaders);
 app.use(securityLogger);
 app.use(compression());
+app.use(cors(corsOptions)); // CORS middleware must be before other middleware
 app.use(sanitizeMongo);
 app.use(preventHPP);
 app.use(xssProtection);
