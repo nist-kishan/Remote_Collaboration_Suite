@@ -3,63 +3,32 @@ dotenv.config();
 
 import nodemailer from "nodemailer";
 
-// Alternative email service configurations for better cloud deployment support
+// Email configuration optimized for cloud deployments
 const getEmailConfig = () => {
-  const configs = [
-    // Primary configuration
-    {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: process.env.SMTP_PORT == 465,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      connectionTimeout: 60000,
-      greetingTimeout: 30000,
-      socketTimeout: 60000,
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      rateDelta: 20000,
-      rateLimit: 5,
-      retryDelay: 5000,
-      retryAttempts: 3,
-      tls: {
-        rejectUnauthorized: false,
-        ciphers: 'SSLv3'
-      },
-      debug: process.env.NODE_ENV === 'development',
-      logger: process.env.NODE_ENV === 'development'
+  return {
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT,
+    secure: process.env.SMTP_PORT == 465,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
     },
-    // Fallback configuration for cloud deployments
-    {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: process.env.SMTP_PORT == 465,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-      connectionTimeout: 30000, // Shorter timeout
-      greetingTimeout: 15000,
-      socketTimeout: 30000,
-      pool: false, // Disable pooling for cloud
-      tls: {
-        rejectUnauthorized: false,
-        ciphers: 'SSLv3'
-      },
-      debug: false,
-      logger: false
-    }
-  ];
-  
-  return configs;
+    // Enhanced configuration for cloud deployments
+    connectionTimeout: 60000, // 60 seconds
+    greetingTimeout: 30000,   // 30 seconds
+    socketTimeout: 60000,     // 60 seconds
+    // TLS configuration for better compatibility
+    tls: {
+      rejectUnauthorized: false, // Allow self-signed certificates
+    },
+    // Debug mode for development
+    debug: process.env.NODE_ENV === 'development',
+    logger: process.env.NODE_ENV === 'development'
+  };
 };
 
-// Create transporter with primary configuration
-const configs = getEmailConfig();
-const transporter = nodemailer.createTransport(configs[0]);
+// Create transporter with configuration
+const transporter = nodemailer.createTransport(getEmailConfig());
 
 // Verify transporter configuration (non-blocking)
 transporter.verify((error, success) => {
@@ -82,48 +51,29 @@ setTimeout(() => {
   });
 }, 5000); // Wait 5 seconds before verification
 
-// Retry function for email sending with fallback configurations
+// Retry function for email sending
 const retryEmailSend = async (mailOptions, maxRetries = 3, delay = 5000) => {
-  const configs = getEmailConfig();
-  
-  for (let configIndex = 0; configIndex < configs.length; configIndex++) {
-    const currentConfig = configs[configIndex];
-    const currentTransporter = nodemailer.createTransport(currentConfig);
-    
-    console.log(`📧 Trying configuration ${configIndex + 1}/${configs.length}`);
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`📧 Attempt ${attempt}/${maxRetries} - Sending email to: ${mailOptions.to}`);
-        const result = await currentTransporter.sendMail(mailOptions);
-        console.log(`✅ Email sent successfully to ${mailOptions.to}. MessageId: ${result.messageId}`);
-        return result;
-      } catch (error) {
-        console.error(`❌ Attempt ${attempt}/${maxRetries} failed for ${mailOptions.to}:`, error.message);
-        
-        if (attempt === maxRetries) {
-          // If this is the last config, throw the error
-          if (configIndex === configs.length - 1) {
-            throw error;
-          }
-          // Otherwise, break to try next configuration
-          break;
-        }
-        
-        // Wait before retrying
-        console.log(`⏳ Waiting ${delay}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        
-        // Increase delay for next retry (exponential backoff)
-        delay *= 1.5;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`📧 Attempt ${attempt}/${maxRetries} - Sending email to: ${mailOptions.to}`);
+      const result = await transporter.sendMail(mailOptions);
+      console.log(`✅ Email sent successfully to ${mailOptions.to}. MessageId: ${result.messageId}`);
+      return result;
+    } catch (error) {
+      console.error(`❌ Attempt ${attempt}/${maxRetries} failed for ${mailOptions.to}:`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw error;
       }
+      
+      // Wait before retrying
+      console.log(`⏳ Waiting ${delay}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      // Increase delay for next retry (exponential backoff)
+      delay *= 1.5;
     }
-    
-    // Close the current transporter
-    currentTransporter.close();
   }
-  
-  throw new Error('All email configurations failed');
 };
 
 export const sendEmail = async ({ email, subject, message, html }) => {
