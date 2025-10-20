@@ -1,11 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from "@tailwindcss/vite";
-import { mimeTypePlugin } from './vite-mime-plugin.js';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), mimeTypePlugin()],
+  plugins: [react(), tailwindcss()],
   
   // Development server configuration
   server: {
@@ -44,8 +43,17 @@ export default defineConfig({
     cssCodeSplit: true,
     // Force proper file extensions
     assetsDir: 'assets',
+    // Ensure proper module format
+    target: 'es2015',
+    modulePreload: {
+      polyfill: true,
+    },
     rollupOptions: {
       output: {
+        // Ensure proper file extensions
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: (id) => {
           // Vendor chunks
           if (id.includes('node_modules')) {

@@ -8,7 +8,6 @@ import ApplicationLoadingSpinner from "./components/ui/ApplicationLoadingSpinner
 import ChatNotificationToast from "./components/chat/ChatNotificationToast";
 import BrowserExtensionNotification from "./components/ui/BrowserExtensionNotification";
 import { setupGlobalErrorHandling } from "./utils/errorHandler";
-import "./utils/debugApi"; // Import debug utility
 import Login from "./pages/authenication/Login";
 import Signup from "./pages/authenication/Signup";
 import ResetPassword from "./pages/authenication/ResetPassword";
