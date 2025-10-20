@@ -107,14 +107,6 @@ export const corsOptions = {
     
     const allowedOrigins = [
       process.env.FRONTEND_URL,
-      process.env.CLIENT_URL,
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'http://127.0.0.1:3000',
-      'http://127.0.0.1:5173',
-      'http://0.0.0.0:3000',
-      'http://0.0.0.0:5173',
-      'https://your-frontend-domain.onrender.com', // Replace with your actual Render frontend URL
     ].filter(Boolean);
 
     // In development, be more permissive
@@ -173,14 +165,9 @@ export const securityLogger = (req, res, next) => {
       timestamp: new Date().toISOString(),
     };
     
-    // Log suspicious activities
-    if (res.statusCode >= 400) {
-      console.warn('⚠️ Security Warning:', logData);
-    }
-    
-    // Log successful requests in production
-    if (process.env.NODE_ENV === 'production') {
-      console.log('📊 Request:', logData);
+    // Log only critical errors (500+)
+    if (res.statusCode >= 500) {
+      console.error('Critical Error:', logData);
     }
   });
   

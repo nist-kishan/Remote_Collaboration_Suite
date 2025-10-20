@@ -18,6 +18,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { setUser, clearUser, setLoading } from "../store/slice/authSlice";
 import {toast} from "react-hot-toast";
 import { useNavigate, useLocation } from "react-router-dom";
+import { setLoggedOut } from "../api/ApiClient";
 
 export const useSignUp = () => {
   const dispatch = useDispatch();
@@ -37,13 +38,16 @@ export const useSignUp = () => {
         setTimeout(() => navigate("/request-otp"), 700);
       } else {
         dispatch(clearUser());
-        toast.error(data.data.message || data.message || "Signup failed. No user data found.");
+        const errorMsg = data.data.message || data.message || "Signup failed. No user data found.";
+        toast.error(errorMsg);
       }
     },
     onError: (error) => {
       dispatch(clearUser());
       const message = error?.response?.data?.message;
-      if (message) toast.error(message);
+      if (message) {
+        toast.error(message);
+      }
     },
   });
 };
@@ -54,7 +58,10 @@ export const useSignIn = () => {
   const navigate = useNavigate();
 
   return useMutation({
-    mutationFn: signin,
+    mutationFn: async (credentials) => {
+      const response = await signin(credentials);
+      return response;
+    },
     onSuccess: (data) => {
       if (data.data.user) {
         dispatch(setUser({ user: data.data.user }));
@@ -63,13 +70,21 @@ export const useSignIn = () => {
         setTimeout(() => navigate("/"), 700);
       } else {
         dispatch(clearUser());
-        toast.error(data.data.message || data.message || "Login failed. No user data found.");
+        const errorMsg = data.data.message || data.message || "Login failed. No user data found.";
+        toast.error(errorMsg);
       }
     },
     onError: (error) => {
       dispatch(clearUser());
-      const message = error?.response?.data?.message;
-      if (message) toast.error(message);
+      
+      let message = error?.response?.data?.message || 
+                   error?.response?.data?.error || 
+                   error?.message || 
+                   'Sign in failed';
+      
+      if (message) {
+        toast.error(message);
+      }
     },
   });
 };
@@ -80,18 +95,32 @@ export const useLogout = () => {
   const navigate = useNavigate();
 
   return useMutation({
-    mutationFn: logout,
-    onSuccess: () => {
+    mutationFn: async () => {
+      const response = await logout();
+      return response;
+    },
+    onSuccess: (data) => {
       dispatch(clearUser());
       queryClient.removeQueries({ queryKey: ["currentUser"], exact: true });
       queryClient.removeQueries({ queryKey: ["user"], exact: true });
-      toast.success(data?.message || "Logged out successfully");
+      
+      // Cancel any ongoing queries to prevent them from running after logout
+      queryClient.cancelQueries({ queryKey: ["currentUser"] });
+      queryClient.cancelQueries({ queryKey: ["user"] });
+      
+      // Set logout flag to prevent refresh token errors
+      setLoggedOut(true);
+      
+      const message = data?.data?.message || data?.message || "Logged out successfully";
+      toast.success(message);
 
       navigate("/login", { replace: true });
     },
     onError: (error) => {
       const message = error?.response?.data?.message;
-      if (message) toast.error(message);
+      if (message) {
+        toast.error(message);
+      }
     },
   });
 };
@@ -103,12 +132,6 @@ export const useCurrentUser = () => {
   // Don't run auth check on auth pages
   const isAuthPage = ['/login', '/signup', '/reset-password'].includes(location.pathname) || 
                      location.pathname.startsWith('/reset-password/');
-  
-  console.log("🔍 useCurrentUser - Location:", {
-    pathname: location.pathname,
-    isAuthPage,
-    enabled: !isAuthPage
-  });
   
   const query = useQuery({
     queryKey: ["currentUser"],
@@ -133,20 +156,10 @@ export const useCurrentUser = () => {
 
   // Update Redux loading state based on query status
   useEffect(() => {
-    console.log("🔍 useCurrentUser - Loading State Update:", {
-      isAuthPage,
-      isLoading: query.isLoading,
-      isSuccess: query.isSuccess,
-      isError: query.isError,
-      status: query.status
-    });
-    
     if (!isAuthPage) {
       if (query.isLoading) {
-        console.log("🔄 Setting loading to true");
         dispatch(setLoading(true));
       } else if (query.isSuccess || query.isError) {
-        console.log("✅ Setting loading to false");
         dispatch(setLoading(false));
       }
     } else {
@@ -162,15 +175,22 @@ export const useUpdateProfile = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: updateProfile,
+    mutationFn: async (profileData) => {
+      const response = await updateProfile(profileData);
+      return response;
+    },
     onSuccess: (data) => {
-      const message = data?.message || data?.data?.message;
-      if (message) toast.success(message);
+      const message = data?.data?.message || data?.message;
+      if (message) {
+        toast.success(message);
+      }
       queryClient.invalidateQueries(["user"]);
     },
     onError: (error) => {
       const message = error?.response?.data?.message;
-      if (message) toast.error(message);
+      if (message) {
+        toast.error(message);
+      }
     },
   });
 };
@@ -196,15 +216,27 @@ export const useChangePassword = () => {
   const navigate = useNavigate();
 
   return useMutation({
-    mutationFn: changePassword,
+    mutationFn: async (passwordData) => {
+      const response = await changePassword(passwordData);
+      return response;
+    },
     onSuccess: (data) => {
       const message = data?.message || data?.data?.message;
-      if (message) toast.success(message);
+      if (message) {
+        toast.success(message);
+      }
+      
       setTimeout(() => navigate("/profile"), 800);
     },
     onError: (error) => {
-      const message = error?.response?.data?.message;
-      if (message) toast.error(message);
+      const message = error?.response?.data?.message || 
+                     error?.response?.data?.error || 
+                     error?.message || 
+                     'Failed to change password';
+      
+      if (message) {
+        toast.error(message);
+      }
     },
   });
 };
@@ -228,14 +260,21 @@ export const useChangePasswordWithLink = (token) => {
 
 export const useResetPassword = () =>
   useMutation({
-    mutationFn: resetPassword,
+    mutationFn: async (credentials) => {
+      const response = await resetPassword(credentials);
+      return response;
+    },
     onSuccess: (data) => {
       const message = data?.message || data?.data?.message;
-      if (message) toast.success(message);
+      if (message) {
+        toast.success(message);
+      }
     },
     onError: (error) => {
       const message = error?.response?.data?.message;
-      if (message) toast.error(message);
+      if (message) {
+        toast.error(message);
+      }
     },
   });
 
@@ -244,15 +283,23 @@ export const useSendOtp = () => {
   const { user } = useSelector((state) => state.auth);
 
   return useMutation({
-    mutationFn: () => sendOtp({ identifier: user?.email }), // auto attach email
+    mutationFn: async () => {
+      const otpData = { identifier: user?.email };
+      const response = await sendOtp(otpData);
+      return response;
+    },
     onSuccess: (data) => {
       const message = data?.message || data?.data?.message;
-      if (message) toast.success(message);
+      if (message) {
+        toast.success(message);
+      }
       setTimeout(() => navigate("/verification-otp"), 500);
     },
     onError: (error) => {
       const message = error?.response?.data?.message;
-      if (message) toast.error(message);
+      if (message) {
+        toast.error(message);
+      }
     },
   });
 };
@@ -280,18 +327,30 @@ export const useToggleTheme = () => {
   const { user } = useSelector((state) => state.auth);
 
   return useMutation({
-    mutationFn: toggleTheme,
+    mutationFn: async () => {
+      const response = await toggleTheme();
+      return response;
+    },
     onSuccess: (data) => {
       if (data?.data?.theme !== undefined) {
-        dispatch(setUser({ ...user, theme: data.data.theme }));
-        const message = data?.message || data?.data?.message;
-        if (message) toast.success(message);
+        // Fix: Ensure user exists and properly merge theme
+        if (user) {
+          const updatedUser = { ...user, theme: data.data.theme };
+          dispatch(setUser({ user: updatedUser }));
+        }
+        
+        const message = data?.data?.message || data?.message;
+        if (message) {
+          toast.success(message);
+        }
         queryClient.invalidateQueries({ queryKey: ["user"] });
       }
     },
     onError: (error) => {
       const message = error?.response?.data?.message;
-      if (message) toast.error(message);
+      if (message) {
+        toast.error(message);
+      }
     },
   });
 };

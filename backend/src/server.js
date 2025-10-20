@@ -79,15 +79,15 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 // Graceful shutdown handling
 const gracefulShutdown = (server) => {
   const shutdown = (signal) => {
-    console.log(`\n🛑 ${signal} received. Starting graceful shutdown...`);
+    // console.log(`\n🛑 ${signal} received. Starting graceful shutdown...`);
     
     server.close(() => {
-      console.log('✅ HTTP server closed');
+      // console.log('✅ HTTP server closed');
       
       // Close database connection
       if (global.mongoose && global.mongoose.connection) {
         global.mongoose.connection.close(() => {
-          console.log('✅ Database connection closed');
+          // console.log('✅ Database connection closed');
           process.exit(0);
         });
       } else {
@@ -115,28 +115,28 @@ DbConnection()
     const socketServer = new SocketServer(server);
     
     server.listen(PORT, '0.0.0.0', () => {
-      console.log('🚀 Server Information:');
-      console.log(`   Environment: ${NODE_ENV}`);
-      console.log(`   Port: ${PORT}`);
-      console.log(`   Frontend URL: ${process.env.FRONTEND_URL}`);
-      console.log(`   Database: ${process.env.MONGODB_URI?.replace(/\/\/.*@/, '//***:***@')}`);
-      console.log(`   Access Token Expiry: ${process.env.ACCESS_TOKEN_EXPIRY}`);
-      console.log(`   Refresh Token Expiry: ${process.env.REFRESH_TOKEN_EXPIRY}`);
+      // console.log('🚀 Server Information:');
+      // console.log(`   Environment: ${NODE_ENV}`);
+      // console.log(`   Port: ${PORT}`);
+      // console.log(`   Frontend URL: ${process.env.FRONTEND_URL}`);
+      // console.log(`   Database: ${process.env.MONGODB_URI?.replace(/\/\/.*@/, '//***:***@')}`);
+      // console.log(`   Access Token Expiry: ${process.env.ACCESS_TOKEN_EXPIRY}`);
+      // console.log(`   Refresh Token Expiry: ${process.env.REFRESH_TOKEN_EXPIRY}`);
       
       // Show correct URLs based on environment
       if (NODE_ENV === 'production') {
         const productionUrl = process.env.RENDER_EXTERNAL_URL || `https://remote-collaboration-suite.onrender.com`;
-        console.log(`   Server URL: ${productionUrl}`);
-        console.log(`   API Base URL: ${productionUrl}/api/v1`);
-        console.log('🔒 Production mode enabled');
+        // console.log(`   Server URL: ${productionUrl}`);
+        // console.log(`   API Base URL: ${productionUrl}/api/v1`);
+        // console.log('🔒 Production mode enabled');
       } else {
-        console.log(`   Server URL: http://localhost:${PORT}`);
-        console.log(`   API Base URL: http://localhost:${PORT}/api/v1`);
-        console.log('🔧 Development mode enabled');
+        // console.log(`   Server URL: http://localhost:${PORT}`);
+        // console.log(`   API Base URL: http://localhost:${PORT}/api/v1`);
+        // console.log('🔧 Development mode enabled');
       }
       
-      console.log('✅ Server started successfully!');
-      console.log('📡 Socket.IO server initialized');
+      // console.log('✅ Server started successfully!');
+      // console.log('📡 Socket.IO server initialized');
     });
     
     // Set up graceful shutdown

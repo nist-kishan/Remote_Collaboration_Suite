@@ -17,7 +17,7 @@ export const getFrontendUrl = () => {
     process.env.VITE_FRONTEND_URL ||
     'http://localhost:5173'; // Default fallback
 
-  console.log('🌐 Frontend URL resolved to:', frontendUrl);
+  // console.log('🌐 Frontend URL resolved to:', frontendUrl);
   return frontendUrl;
 };
 
@@ -30,7 +30,7 @@ export const getDocumentUrl = (documentId) => {
   const frontendUrl = getFrontendUrl();
   const documentUrl = `${frontendUrl}/documents/shared/${documentId}`;
   
-  console.log('📄 Document URL generated:', documentUrl);
+  // console.log('📄 Document URL generated:', documentUrl);
   return documentUrl;
 };
 
@@ -43,7 +43,7 @@ export const getWhiteboardUrl = (whiteboardId) => {
   const frontendUrl = getFrontendUrl();
   const whiteboardUrl = `${frontendUrl}/boards/${whiteboardId}`;
   
-  console.log('🎨 Whiteboard URL generated:', whiteboardUrl);
+  // console.log('🎨 Whiteboard URL generated:', whiteboardUrl);
   return whiteboardUrl;
 };
 
@@ -56,7 +56,7 @@ export const getMeetingUrl = (meetingId) => {
   const frontendUrl = getFrontendUrl();
   const meetingUrl = `${frontendUrl}/meetings/${meetingId}`;
   
-  console.log('📅 Meeting URL generated:', meetingUrl);
+  // console.log('📅 Meeting URL generated:', meetingUrl);
   return meetingUrl;
 };
 
@@ -69,7 +69,7 @@ export const getProjectUrl = (projectId) => {
   const frontendUrl = getFrontendUrl();
   const projectUrl = `${frontendUrl}/projects/${projectId}`;
   
-  console.log('📁 Project URL generated:', projectUrl);
+  // console.log('📁 Project URL generated:', projectUrl);
   return projectUrl;
 };
 
@@ -82,7 +82,7 @@ export const getWorkspaceUrl = (workspaceId) => {
   const frontendUrl = getFrontendUrl();
   const workspaceUrl = `${frontendUrl}/workspaces/${workspaceId}`;
   
-  console.log('🏢 Workspace URL generated:', workspaceUrl);
+  // console.log('🏢 Workspace URL generated:', workspaceUrl);
   return workspaceUrl;
 };
 

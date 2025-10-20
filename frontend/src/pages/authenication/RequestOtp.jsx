@@ -1,9 +1,10 @@
-/* eslint-disable no-unused-vars */
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useSendOtp } from "../../hook/useAuth";
 import { useSelector } from "react-redux";
-import { useState } from "react";
+import { AuthContainer, AuthButton, AuthLink, AuthAlert } from "../../components/auth";
+import { Mail, ArrowRight, Shield } from "lucide-react";
 
 export default function RequestOtp() {
   const navigate = useNavigate();
@@ -26,44 +27,97 @@ export default function RequestOtp() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 transition-colors duration-500">
-      <motion.form
-        onSubmit={handleSendOtp}
-        initial={{ opacity: 0, y: 30 }}
+    <AuthContainer
+      title="Verify Your Email"
+      subtitle="We'll send you a verification code to confirm your email address"
+    >
+      {/* Error Alert */}
+      {error && (
+        <AuthAlert
+          type="error"
+          message={error}
+          onClose={() => setError("")}
+        />
+      )}
+
+      {/* Email Display */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="bg-white dark:bg-gray-900 p-6 rounded-xl shadow-xl w-full max-w-sm border border-gray-200 dark:border-gray-800"
+        transition={{ delay: 0.7, duration: 0.5 }}
+        className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 mb-6"
       >
-        <h1 className="text-2xl font-bold text-center mb-5 text-indigo-700 dark:text-indigo-400">
-          Confirm Email
-        </h1>
-
-        {error && (
-          <div className="mb-3 p-2 text-sm rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700">
-            {error}
+        <div className="flex items-center gap-3">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.8, duration: 0.4, type: "spring", stiffness: 200 }}
+            className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center"
+          >
+            <Mail className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+          </motion.div>
+          <div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">We'll send the OTP to:</p>
+            <p className="font-semibold text-gray-900 dark:text-gray-100">{email}</p>
           </div>
-        )}
+        </div>
+      </motion.div>
 
-        <p className="text-center mb-5 text-gray-800 dark:text-gray-200">
-          We will send an OTP to: <span className="font-semibold">{email}</span>
-        </p>
+      {/* Security Info */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.9, duration: 0.5 }}
+        className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 mb-6"
+      >
+        <div className="flex items-start gap-3">
+          <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm text-blue-800 dark:text-blue-200 font-medium mb-1">
+              Secure Verification
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              The OTP will expire in 5 minutes for your security.
+            </p>
+          </div>
+        </div>
+      </motion.div>
 
-        <button
+      <motion.form
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.0, duration: 0.5 }}
+        onSubmit={handleSendOtp}
+        className="space-y-6"
+      >
+        {/* Send OTP Button */}
+        <AuthButton
           type="submit"
-          disabled={isLoading}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white py-2.5 rounded-md font-semibold text-sm transition-transform hover:scale-[1.02] disabled:opacity-60 mb-3"
+          loading={isLoading}
+          disabled={isLoading || !email}
+          icon={ArrowRight}
+          className="w-full"
         >
-          {isLoading ? "Sending OTP..." : "Send OTP"}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => navigate("/")}
-          className="w-full text-center text-indigo-600 dark:text-indigo-400 font-medium hover:underline text-sm"
-        >
-          Cancel
-        </button>
+          {isLoading ? "Sending OTP..." : "Send Verification Code"}
+        </AuthButton>
       </motion.form>
-    </div>
+
+      {/* Footer Links */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.1, duration: 0.5 }}
+        className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700"
+      >
+        <div className="text-center">
+          <AuthLink 
+            onClick={() => navigate("/")} 
+            variant="muted"
+          >
+            Back to Dashboard
+          </AuthLink>
+        </div>
+      </motion.div>
+    </AuthContainer>
   );
 }

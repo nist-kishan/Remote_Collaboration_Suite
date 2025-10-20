@@ -19,6 +19,20 @@ const skipRefreshEndpoints = [
   "/auth/refresh_token",
 ];
 
+// Track if user just logged out to prevent showing refresh token errors
+let isLoggedOut = false;
+
+// Function to set logout state
+export const setLoggedOut = (loggedOut) => {
+  isLoggedOut = loggedOut;
+  // Reset the flag after a short delay
+  if (loggedOut) {
+    setTimeout(() => {
+      isLoggedOut = false;
+    }, 2000);
+  }
+};
+
 // Endpoints that should skip global error toasts (handled by hooks)
 const skipErrorToastEndpoints = [
   "/auth/signin",
@@ -41,20 +55,9 @@ ApiClient.interceptors.request.use(
   (config) => {
     // Add request timestamp for performance monitoring
     config.metadata = { startTime: Date.now() };
-    
-    // Log requests in development
-    if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS && import.meta.env.DEV) {
-      console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
-        baseURL: config.baseURL,
-        fullURL: `${config.baseURL}${config.url}`,
-        data: config.data
-      });
-    }
-    
     return config;
   },
   (error) => {
-    console.error('📤 Request Error:', error);
     return Promise.reject(error);
   }
 );
@@ -65,11 +68,6 @@ ApiClient.interceptors.response.use(
     // Calculate request duration
     const duration = Date.now() - response.config.metadata.startTime;
     
-    // Log successful responses in development
-    if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS && import.meta.env.DEV) {
-      // console.log(`📥 API Response: ${response.config.method?.toUpperCase()} ${response.config.url} (${duration}ms)`, response.data);
-    }
-    
     // Performance monitoring
     if (FEATURE_FLAGS.ENABLE_PERFORMANCE_MONITORING && duration > 5000) {
       console.warn(`⚠️ Slow API response: ${response.config.url} took ${duration}ms`);
@@ -79,21 +77,6 @@ ApiClient.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
-    
-    // Calculate request duration
-    const duration = originalRequest?.metadata ? Date.now() - originalRequest.metadata.startTime : 0;
-    
-    // Log errors
-    if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-      console.error(`📥 API Error: ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url} (${duration}ms)`, {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-        fullURL: `${originalRequest?.baseURL}${originalRequest?.url}`,
-        baseURL: originalRequest?.baseURL
-      });
-    }
 
     // Handle network errors
     if (!error.response) {
@@ -122,10 +105,13 @@ ApiClient.interceptors.response.use(
       } catch (refreshError) {
         // Refresh failed, redirect to login
         if (refreshError.response?.status === 401) {
-          const message = refreshError.response?.data?.message || 'Session expired. Please log in again.';
-          toast.error(message);
-          // Redirect to login page using navigation utility
-          navigateToLogin();
+          // Don't show error if user just logged out
+          if (!isLoggedOut) {
+            const message = refreshError.response?.data?.message || 'Session expired. Please log in again.';
+            toast.error(message);
+            // Redirect to login page using navigation utility
+            navigateToLogin();
+          }
         }
         return Promise.reject(refreshError);
       }

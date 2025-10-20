@@ -14,20 +14,13 @@ class SocketServer {
     
     // Production-ready CORS configuration
     const corsOrigins = [
-      frontendUrl,
-      "http://localhost:5173", 
-      "http://localhost:3000", 
-      "http://127.0.0.1:5173", 
-      "http://127.0.0.1:3000",
-      "http://0.0.0.0:5173",
-      // Add your computer's IP address here for mobile access
-      "http://192.168.0.113:5173"
+      frontendUrl
     ];
 
     // Remove duplicates and filter out undefined values
     const uniqueOrigins = [...new Set(corsOrigins.filter(Boolean))];
 
-    console.log('🔌 Socket.IO CORS Origins:', uniqueOrigins);
+    // console.log('🔌 Socket.IO CORS Origins:', uniqueOrigins);
 
     this.io = new Server(server, {
       cors: {
@@ -130,7 +123,7 @@ class SocketServer {
           lastSeen: new Date()
         });
         
-        console.log(`User ${socket.userId} is now online - broadcasting status to all users`);
+        // console.log(`User ${socket.userId} is now online - broadcasting status to all users`);
       } catch (error) {
         console.error('Error updating user online status:', error);
       }
@@ -362,7 +355,7 @@ class SocketServer {
             activeCollaborators: this.getActiveCollaboratorsInDocument(documentId),
           });
 
-          console.log(`User ${socket.userId} joined document room: document:${documentId}`);
+          // console.log(`User ${socket.userId} joined document room: document:${documentId}`);
 
         } catch (error) {
           socket.emit("error", { message: "Failed to join document" });
@@ -571,7 +564,7 @@ class SocketServer {
           
           // Also join user-specific room for individual messaging
           socket.join(`user:${socket.userId}`);
-          console.log(`User ${socket.userId} joined user-specific room: user:${socket.userId}`);
+          // console.log(`User ${socket.userId} joined user-specific room: user:${socket.userId}`);
 
           // Add to chat room
           if (!this.chatRooms.has(chatId)) {
@@ -579,7 +572,7 @@ class SocketServer {
           }
           this.chatRooms.get(chatId).add(socket.id);
           
-          console.log(`User ${socket.userId} joined chat room: chat:${chatId}`);
+          // console.log(`User ${socket.userId} joined chat room: chat:${chatId}`);
 
           // Emit confirmation to the user who joined
           socket.emit('chat_joined', { 
@@ -626,14 +619,14 @@ class SocketServer {
 
       // Send message
       socket.on("send_message", async (data) => {
-        console.log('Socket.IO send_message received:', {
-          chatId: data.chatId,
-          content: data.content,
-          type: data.type,
-          media: data.media ? 'present' : 'not present',
-          replyTo: data.replyTo,
-          replyToType: typeof data.replyTo
-        });
+      // console.log('Socket.IO send_message received:', {
+      //   chatId: data.chatId,
+      //   content: data.content,
+      //   type: data.type,
+      //   media: data.media ? 'present' : 'not present',
+      //   replyTo: data.replyTo,
+      //   replyToType: typeof data.replyTo
+      // });
         
         try {
           const { chatId, content, type, media, replyTo } = data;
@@ -739,13 +732,13 @@ class SocketServer {
           });
 
           // Broadcast to all users in the chat
-          console.log(`Broadcasting message to chat room: chat:${chatId}`);
-          console.log(`Message details:`, {
-            messageId: message._id,
-            content: message.content,
-            senderId: socket.userId,
-            senderName: socket.user.name
-          });
+          // console.log(`Broadcasting message to chat room: chat:${chatId}`);
+          // console.log(`Message details:`, {
+          //   messageId: message._id,
+          //   content: message.content,
+          //   senderId: socket.userId,
+          //   senderName: socket.user.name
+          // });
           
           const broadcastData = {
             message,
@@ -757,19 +750,19 @@ class SocketServer {
             }
           };
           
-          console.log(`Broadcasting to room chat:${chatId} with data:`, broadcastData);
+          // console.log(`Broadcasting to room chat:${chatId} with data:`, broadcastData);
           
           // Get the number of clients in the room
           const room = this.io.sockets.adapter.rooms.get(`chat:${chatId}`);
           const clientCount = room ? room.size : 0;
-          console.log(`Number of clients in room chat:${chatId}:`, clientCount);
+          // console.log(`Number of clients in room chat:${chatId}:`, clientCount);
           
           this.io.to(`chat:${chatId}`).emit("new_message", broadcastData);
           
           // Also emit to individual users as backup
           chat.participants.forEach(participant => {
             if (participant.user._id.toString() !== socket.userId.toString()) {
-              console.log(`Sending message to individual user: ${participant.user._id}`);
+              // console.log(`Sending message to individual user: ${participant.user._id}`);
               this.io.to(`user:${participant.user._id}`).emit("new_message", broadcastData);
             }
           });
@@ -1024,7 +1017,7 @@ class SocketServer {
             try {
               const activeCall = this.activeCalls.get(call._id.toString());
               if (activeCall && activeCall.status === 'ringing') {
-                console.log(`Auto-terminating unanswered call: ${call._id}`);
+                // console.log(`Auto-terminating unanswered call: ${call._id}`);
                 
                 // Update call status in database
                 await Call.findByIdAndUpdate(call._id, {
@@ -1051,7 +1044,7 @@ class SocketServer {
                   });
                 });
                 
-                console.log(`Call ${call._id} auto-terminated due to timeout`);
+                // console.log(`Call ${call._id} auto-terminated due to timeout`);
               }
             } catch (error) {
               console.error('Error in auto-termination:', error);
@@ -1157,11 +1150,11 @@ class SocketServer {
       socket.on("end_call", async (data) => {
         try {
           const { callId } = data;
-          console.log(`Call ended by ${socket.userId} for call ${callId}`);
+          // console.log(`Call ended by ${socket.userId} for call ${callId}`);
           
           const call = await Call.findById(callId);
           if (!call) {
-            console.log('Call not found:', callId);
+            // console.log('Call not found:', callId);
             return;
           }
 
@@ -1213,7 +1206,7 @@ class SocketServer {
           socket.leave(`call:${callId}`);
           socket.currentCallId = null;
           
-          console.log(`Call ${callId} ended and all participants notified`);
+          // console.log(`Call ${callId} ended and all participants notified`);
         } catch (error) {
           console.error('Error ending call:', error);
           socket.emit("error", "Failed to end call");
@@ -1224,11 +1217,11 @@ class SocketServer {
       socket.on("reject_call", async (data) => {
         try {
           const { callId } = data;
-          console.log(`Call rejected by ${socket.userId} for call ${callId}`);
+          // console.log(`Call rejected by ${socket.userId} for call ${callId}`);
           
           const call = await Call.findById(callId);
           if (!call) {
-            console.log('Call not found:', callId);
+            // console.log('Call not found:', callId);
             return;
           }
 
@@ -1249,7 +1242,7 @@ class SocketServer {
           await call.save();
 
           // Notify caller
-          console.log(`Notifying caller ${call.startedBy} about rejection`);
+          // console.log(`Notifying caller ${call.startedBy} about rejection`);
           this.io.to(`user:${call.startedBy}`).emit("call_rejected", {
             callId,
             rejectedBy: socket.userId,
@@ -1266,7 +1259,7 @@ class SocketServer {
             });
           });
 
-          console.log(`Call ${callId} rejected and all participants notified`);
+          // console.log(`Call ${callId} rejected and all participants notified`);
         } catch (error) {
           console.error('Error rejecting call:', error);
           socket.emit("error", "Failed to reject call");
@@ -1440,7 +1433,7 @@ class SocketServer {
             lastSeen: new Date()
           });
           
-          console.log(`User ${socket.userId} is now offline - broadcasting status to all users`);
+          // console.log(`User ${socket.userId} is now offline - broadcasting status to all users`);
         } catch (error) {
           console.error('Error updating user offline status:', error);
         }

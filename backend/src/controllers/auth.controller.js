@@ -1,4 +1,3 @@
-import env from "dotenv"
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandle } from "../utils/asyncHandler.js";
 import User from "../models/user.model.js";
@@ -170,12 +169,17 @@ export const signinHandler = asyncHandle(async (req, res) => {
 });
 
 export const logoutHandler = asyncHandle(async (req, res) => {
+  if (!req.user) {
+    throw new ApiError(401, "User not authenticated");
+  }
+
   // update refresh token in database
-  await User.findByIdAndUpdate(
+  const updatedUser = await User.findByIdAndUpdate(
     req.user._id,
     { $set: { refreshToken: "" } },
     { new: true }
   );
+
   return res
     .status(200)
     .clearCookie("refreshToken", options)
@@ -240,6 +244,7 @@ export const refreshTokenHandler = asyncHandle(async (req, res) => {
 });
 
 export const resetPasswordHandler = asyncHandle(async (req, res) => {
+
   const { credential } = req.body;
   if (!credential) {
     throw new ApiError(400, "User credential is required");
@@ -248,6 +253,7 @@ export const resetPasswordHandler = asyncHandle(async (req, res) => {
   const user = await User.findOne({
     $or: [{ email: credential }, { username: credential }],
   });
+
   if (!user) {
     throw new ApiError(404, "User not found");
   }
@@ -263,7 +269,8 @@ export const resetPasswordHandler = asyncHandle(async (req, res) => {
     Date.now() + parseInt(process.env.RESET_PASSWORD_TOKEN_EXPIRY);
 
   await user.save({ validateBeforeSave: false });
-  const frontUrl=process.env.FRONTEND_URI
+
+  const frontUrl = process.env.FRONTEND_URI
   const resetUrl = `${frontUrl}/reset-password/${resetToken}`;
 
   try {
@@ -277,13 +284,11 @@ export const resetPasswordHandler = asyncHandle(async (req, res) => {
       .status(200)
       .json(new ApiResponse(200, "Password reset email sent successfully"));
   } catch (error) {
-    console.error('❌ Password reset email failed:', error);
-    
     // Clean up the reset token
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save({ validateBeforeSave: false });
-    
+
     // Provide more specific error messages
     let errorMessage = "Failed to send password reset email";
     if (error.code === 'ETIMEDOUT') {
@@ -293,7 +298,7 @@ export const resetPasswordHandler = asyncHandle(async (req, res) => {
     } else if (error.responseCode === 535) {
       errorMessage = "Email authentication failed. Please contact support.";
     }
-    
+
     return res
       .status(500)
       .json(new ApiResponse(500, errorMessage));
@@ -329,7 +334,10 @@ export const changePasswordWithLinkHandler = asyncHandle(async (req, res) => {
 
 export const otpSendHandler = asyncHandle(async (req, res) => {
   const user = await User.findById(req.user._id);
-  if (!user) throw new ApiError(404, "User not found");
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
 
   let otp;
   const now = Date.now();
@@ -354,9 +362,26 @@ export const otpSendHandler = asyncHandle(async (req, res) => {
 
     return res.status(200).json(new ApiResponse(200, "OTP sent successfully"));
   } catch (error) {
+    // Clean up the OTP
+    user.otp = undefined;
+    user.optExpire = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    // Provide more specific error messages
+    let errorMessage = "Failed to send OTP email";
+    if (error.code === 'ETIMEDOUT') {
+      errorMessage = "Email service is temporarily unavailable. Please try again later.";
+    } else if (error.code === 'ECONNREFUSED') {
+      errorMessage = "Email service connection failed. Please try again later.";
+    } else if (error.responseCode === 535) {
+      errorMessage = "Email authentication failed. Please contact support.";
+    } else if (error.message && error.message.includes('Invalid login')) {
+      errorMessage = "Email authentication failed. Check your email configuration.";
+    }
+
     return res
       .status(500)
-      .json(new ApiResponse(500, "Failed to send OTP email"));
+      .json(new ApiResponse(500, errorMessage));
   }
 });
 
@@ -455,9 +480,12 @@ export const updateAvatarHandler = asyncHandle(async (req, res) => {
 });
 
 export const updateProfileHandler = asyncHandle(async (req, res) => {
+  if (!req.user) {
+    throw new ApiError(401, "User not authenticated");
+  }
+
   const userId = req.user._id;
   const { name, username } = req.body;
-
   if (!name && !username) {
     throw new ApiError(
       400,
@@ -470,10 +498,16 @@ export const updateProfileHandler = asyncHandle(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
-  if (name) user.name = name;
-  if (username) user.username = username;
+  if (name) {
+    user.name = name;
+  }
+  if (username) {
+    user.username = username;
+  }
 
   await user.save({ validateBeforeSave: true });
+
+  const responseData = { name: user.name, username: user.username };
 
   return res
     .status(200)
@@ -481,7 +515,7 @@ export const updateProfileHandler = asyncHandle(async (req, res) => {
       new ApiResponse(
         200,
         "Profile updated successfully",
-        { name: user.name, username: user.username }
+        responseData
       )
     );
 });
@@ -501,12 +535,17 @@ export const themeHandler = asyncHandle(async (req, res) => {
       );
 
       const user = await User.findById(decodedToken.id);
-      if (!user) throw new ApiError(404, "User not found");
+      if (!user) {
+        throw new ApiError(404, "User not found");
+      }
 
       user.theme = newTheme;
       await user.save({ validateBeforeSave: false });
     } catch (error) {
+      throw new ApiError(404, error.message);
     }
+  } else {
+    throw new ApiError(404, "Refresh token not found");
   }
   res
     .status(200)

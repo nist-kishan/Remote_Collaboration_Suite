@@ -3,8 +3,8 @@ import React from "react";
 
 export default function AvatarUpdate({ avatarPreview, name, setAvatarFile }) {
   return (
-    <div className="relative">
-      <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-white/40 dark:border-gray-800 shadow-md">
+    <div className="relative w-full h-full">
+      <div className="w-full h-full rounded-full overflow-hidden">
         {avatarPreview ? (
           <img
             src={avatarPreview}
@@ -13,13 +13,13 @@ export default function AvatarUpdate({ avatarPreview, name, setAvatarFile }) {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-500">
-            <span className="text-4xl font-semibold">
+            <span className="text-lg sm:text-2xl font-semibold">
               {(name || "U").charAt(0)}
             </span>
           </div>
         )}
       </div>
-      <label className="absolute bottom-0 right-0 bg-white dark:bg-gray-800 rounded-full p-2 -translate-y-2 translate-x-2 shadow-md cursor-pointer border border-white/30 dark:border-gray-700">
+      <label className="absolute bottom-0 right-0 bg-white dark:bg-gray-800 rounded-full p-1.5 sm:p-2 shadow-lg cursor-pointer border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
         <input
           type="file"
           accept="image/*"
@@ -28,7 +28,7 @@ export default function AvatarUpdate({ avatarPreview, name, setAvatarFile }) {
             if (e.target.files?.[0]) setAvatarFile(e.target.files[0]);
           }}
         />
-        <Camera className="w-4 h-4 text-gray-700 dark:text-gray-200" />
+        <Camera className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600 dark:text-gray-300" />
       </label>
     </div>
   );

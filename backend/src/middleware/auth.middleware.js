@@ -27,7 +27,6 @@ export const verifyToken = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
     return next(new ApiError(401, error.message || "Invalid or expired token"));
   }
 };

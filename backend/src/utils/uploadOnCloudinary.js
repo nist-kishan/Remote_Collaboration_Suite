@@ -66,7 +66,7 @@ export const uploadOnCloudinary = async (localFilePath) => {
 
     // Clean up local file after successful upload
     fs.unlinkSync(localFilePath);
-    console.log('File uploaded to Cloudinary successfully:', response.url);
+    // console.log('File uploaded to Cloudinary successfully:', response.url);
     return response;
 
   } catch (error) {
@@ -108,7 +108,7 @@ export const deleteFromUrl = async (fileUrl) => {
     const result = await cloudinary.uploader.destroy(publicId);
     
     if (result.result === 'ok') {
-      console.log('File deleted from Cloudinary successfully:', publicId);
+      // console.log('File deleted from Cloudinary successfully:', publicId);
       return true;
     } else {
       console.error('Failed to delete file from Cloudinary:', result);

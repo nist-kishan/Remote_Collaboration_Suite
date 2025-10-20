@@ -1,41 +1,115 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { useResetPassword } from "../../hook/useAuth";
+import { AuthContainer, AuthInput, AuthButton, AuthLink, AuthAlert } from "../../components/auth";
+import { Mail, ArrowRight, Key } from "lucide-react";
 
 export default function ResetPassword() {
   const { mutate: resetPassword, isLoading } = useResetPassword();
   const [emailOrUsername, setEmailOrUsername] = useState("");
+  const [error, setError] = useState("");
+
+  const validateForm = () => {
+    if (!emailOrUsername.trim()) {
+      setError("Please enter your email or username");
+      return false;
+    }
+    setError("");
+    return true;
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
     resetPassword({ credential: emailOrUsername });
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md"
-      >
-        <h1 className="text-2xl font-semibold text-center text-indigo-700 mb-6">
-          Reset Password
-        </h1>
+    <AuthContainer
+      title="Reset Password"
+      subtitle="Enter your email or username to receive a password reset link"
+    >
+      {/* Error Alert */}
+      {error && (
+        <AuthAlert
+          type="error"
+          message={error}
+          onClose={() => setError("")}
+        />
+      )}
 
-        <input
+      {/* Info Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.7, duration: 0.5 }}
+        className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 mb-6"
+      >
+        <div className="flex items-start gap-3">
+          <Key className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm text-blue-800 dark:text-blue-200 font-medium mb-1">
+              Password Reset Instructions
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              We'll send you a secure link to reset your password. Check your email after submitting.
+            </p>
+          </div>
+        </div>
+      </motion.div>
+
+      <motion.form
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.9, duration: 0.5 }}
+        onSubmit={handleSubmit}
+        className="space-y-6"
+      >
+        {/* Email/Username Input */}
+        <AuthInput
+          label="Email or Username"
           type="text"
-          placeholder="Email or Username"
-          className="w-full border p-3 rounded-lg mb-5"
+          placeholder="Enter your email or username"
           value={emailOrUsername}
-          onChange={(e) => setEmailOrUsername(e.target.value)}
+          onChange={(e) => {
+            setEmailOrUsername(e.target.value);
+            if (error) setError("");
+          }}
+          error={error}
+          required
+          icon={Mail}
+          disabled={isLoading}
         />
 
-        <button
+        {/* Submit Button */}
+        <AuthButton
           type="submit"
-          disabled={isLoading}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-semibold transition"
+          loading={isLoading}
+          disabled={isLoading || !emailOrUsername.trim()}
+          icon={ArrowRight}
+          className="w-full"
         >
-          {isLoading ? "Sending..." : "Send Reset Link"}
-        </button>
-      </form>
-    </div>
+          {isLoading ? "Sending Reset Link..." : "Send Reset Link"}
+        </AuthButton>
+      </motion.form>
+
+      {/* Footer Links */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.1, duration: 0.5 }}
+        className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700"
+      >
+        <div className="text-center">
+          <AuthLink to="/login" variant="muted">
+            Remember your password? Sign in
+          </AuthLink>
+        </div>
+      </motion.div>
+    </AuthContainer>
   );
 }

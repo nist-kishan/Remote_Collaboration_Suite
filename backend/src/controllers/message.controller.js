@@ -7,7 +7,6 @@ import { uploadOnCloudinary } from '../utils/uploadOnCloudinary.js';
 
 // Test endpoint to verify API is working
 export const testMessage = asyncHandle(async (req, res) => {
-  console.log('Test message endpoint hit');
   return res.status(200).json(
     new ApiResponse(200, 'Test endpoint working', { test: true })
   );
@@ -16,74 +15,40 @@ export const testMessage = asyncHandle(async (req, res) => {
 // Send message - Simplified version matching Socket.IO handler
 export const sendMessage = asyncHandle(async (req, res) => {
   try {
-    console.log('sendMessage function called');
     const userId = req.user._id;
     const { chatId } = req.params;
     const { content, type, media, replyTo } = req.body;
 
-    console.log('Send message request:', {
-      userId,
-      chatId,
-      content,
-      type,
-      media: media ? 'present' : 'not present',
-      replyTo,
-      replyToType: typeof replyTo
-    });
 
     // Clean up undefined values exactly like Socket.IO handler
     const cleanReplyTo = (replyTo && replyTo !== 'undefined' && replyTo !== 'null') ? replyTo : null;
     const cleanMedia = (media && media !== 'undefined' && media !== 'null') ? media : null;
 
-    console.log('Cleaned values:', {
-      content,
-      cleanMedia,
-      cleanReplyTo
-    });
 
     // Validate exactly like Socket.IO handler
     if (!content && !cleanMedia && !cleanReplyTo) {
-      console.log('Validation failed: No content, media, or reply');
       throw new ApiError(400, 'Message content, media, or reply is required');
     }
 
     if (content && typeof content === 'string' && content.trim().length === 0 && !cleanMedia && !cleanReplyTo) {
-      console.log('Validation failed: Empty content');
       throw new ApiError(400, 'Message content cannot be empty');
     }
 
-    console.log('Validation passed, proceeding to chat verification...');
-
     // Verify chat exists and user is participant exactly like Socket.IO
-    console.log('Looking for chat with ID:', chatId);
     const chat = await Chat.findById(chatId).populate('participants.user', 'name email');
     if (!chat) {
-      console.log('Chat not found with ID:', chatId);
       throw new ApiError(404, 'Chat not found');
     }
-    console.log('Chat found:', chat._id, 'with participants:', chat.participants.length);
 
     const isParticipant = chat.participants.some(
       p => p.user && p.user._id.toString() === userId.toString()
     );
 
-    console.log('Is participant check:', { userId, isParticipant });
-
     if (!isParticipant) {
-      console.log('User is not a participant in this chat');
       throw new ApiError(403, 'You are not a participant in this chat');
     }
 
     // Create message exactly like Socket.IO handler
-    console.log('Creating message with data:', {
-      chat: chatId,
-      sender: userId,
-      content,
-      type: type || 'text',
-      media: cleanMedia,
-      replyTo: cleanReplyTo
-    });
-    
     const message = await Message.create({
       chat: chatId,
       sender: userId,
@@ -92,8 +57,6 @@ export const sendMessage = asyncHandle(async (req, res) => {
       media: cleanMedia,
       replyTo: cleanReplyTo
     });
-    
-    console.log('Message created successfully:', message._id);
 
     await message.populate('sender', 'name avatar');
     await message.populate('replyTo');
@@ -139,7 +102,7 @@ export const sendMessage = asyncHandle(async (req, res) => {
     const wasSentViaSocket = req.body.wasSentViaSocket;
     
     if (global.io && !wasSentViaSocket) {
-      console.log(`API: Broadcasting message to chat room: chat:${chatId}`);
+      // console.log(`API: Broadcasting message to chat room: chat:${chatId}`);
       global.io.to(`chat:${chatId}`).emit("new_message", {
         message,
         chatId,
@@ -149,11 +112,11 @@ export const sendMessage = asyncHandle(async (req, res) => {
           avatar: message.sender.avatar
         }
       });
-      console.log('API: Message broadcasted to chat:', chatId);
+      // console.log('API: Message broadcasted to chat:', chatId);
     } else if (wasSentViaSocket) {
-      console.log('API: Message was sent via Socket.IO, skipping broadcast to prevent duplicates');
+      // console.log('API: Message was sent via Socket.IO, skipping broadcast to prevent duplicates');
     } else {
-      console.log('API: Socket.IO not available for broadcasting');
+      // console.log('API: Socket.IO not available for broadcasting');
     }
 
     return res.status(201).json(
@@ -642,12 +605,12 @@ export const uploadFile = asyncHandle(async (req, res) => {
   try {
     // Upload file to Cloudinary
     const fileLocalPath = req.file.path;
-    console.log('Uploading file:', {
-      originalName: req.file.originalname,
-      localPath: fileLocalPath,
-      size: req.file.size,
-      mimetype: req.file.mimetype
-    });
+    // console.log('Uploading file:', {
+    //   originalName: req.file.originalname,
+    //   localPath: fileLocalPath,
+    //   size: req.file.size,
+    //   mimetype: req.file.mimetype
+    // });
     
     const cloudinaryResponse = await uploadOnCloudinary(fileLocalPath);
 
