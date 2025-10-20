@@ -59,6 +59,25 @@ app.use('/api/v1/whiteboards/upload', uploadLimiter);
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     message: "Api connection is running",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+    version: "1.0.0"
+  });
+});
+
+// Root endpoint for Render health checks
+app.get("/", (req, res) => {
+  res.status(200).json({
+    message: "Remote Work Collaboration Suite API",
+    status: "running",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+    version: "1.0.0",
+    endpoints: {
+      health: "/api/health",
+      auth: "/api/v1/auth",
+      docs: "/api/v1/docs"
+    }
   });
 });
 

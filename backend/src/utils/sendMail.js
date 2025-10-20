@@ -61,14 +61,26 @@ const getEmailConfig = () => {
 const configs = getEmailConfig();
 const transporter = nodemailer.createTransport(configs[0]);
 
-// Verify transporter configuration
+// Verify transporter configuration (non-blocking)
 transporter.verify((error, success) => {
   if (error) {
-    console.error('❌ SMTP Configuration Error:', error);
+    console.warn('⚠️ SMTP Configuration Warning:', error.message);
+    console.log('📧 Email service will be available with retry logic');
   } else {
     console.log('✅ SMTP Server is ready to send emails');
   }
 });
+
+// Alternative verification with timeout
+setTimeout(() => {
+  transporter.verify((error, success) => {
+    if (error) {
+      console.warn('⚠️ SMTP Delayed Verification Warning:', error.message);
+    } else {
+      console.log('✅ SMTP Server verified successfully');
+    }
+  });
+}, 5000); // Wait 5 seconds before verification
 
 // Retry function for email sending with fallback configurations
 const retryEmailSend = async (mailOptions, maxRetries = 3, delay = 5000) => {

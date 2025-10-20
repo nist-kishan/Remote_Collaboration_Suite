@@ -55,6 +55,11 @@ const setDefaults = () => {
     process.env.FRONTEND_URL = "http://localhost:5173";
   }
   
+  // Set FRONTEND_URI for backward compatibility
+  if (!process.env.FRONTEND_URI) {
+    process.env.FRONTEND_URI = process.env.FRONTEND_URL;
+  }
+  
   // Production-specific settings
   if (process.env.NODE_ENV === 'production') {
     if (!process.env.PORT) {
@@ -117,16 +122,21 @@ DbConnection()
       console.log(`   Database: ${process.env.MONGODB_URI?.replace(/\/\/.*@/, '//***:***@')}`);
       console.log(`   Access Token Expiry: ${process.env.ACCESS_TOKEN_EXPIRY}`);
       console.log(`   Refresh Token Expiry: ${process.env.REFRESH_TOKEN_EXPIRY}`);
-      console.log(`   Server URL: http://localhost:${PORT}`);
-      console.log(`   API Base URL: http://localhost:${PORT}/api/v1`);
-      console.log('✅ Server started successfully!');
-      console.log('📡 Socket.IO server initialized');
       
+      // Show correct URLs based on environment
       if (NODE_ENV === 'production') {
+        const productionUrl = process.env.RENDER_EXTERNAL_URL || `https://remote-collaboration-suite.onrender.com`;
+        console.log(`   Server URL: ${productionUrl}`);
+        console.log(`   API Base URL: ${productionUrl}/api/v1`);
         console.log('🔒 Production mode enabled');
       } else {
+        console.log(`   Server URL: http://localhost:${PORT}`);
+        console.log(`   API Base URL: http://localhost:${PORT}/api/v1`);
         console.log('🔧 Development mode enabled');
       }
+      
+      console.log('✅ Server started successfully!');
+      console.log('📡 Socket.IO server initialized');
     });
     
     // Set up graceful shutdown
