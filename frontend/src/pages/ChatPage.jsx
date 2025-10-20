@@ -1,26 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import ChatList from '../components/chat/ChatList';
-import ChatListOptimized from '../components/chat/ChatListOptimized';
-import EnhancedChatList from '../components/chat/EnhancedChatList';
-import ChatWindow from '../components/chat/ChatWindow';
-import NewChatModal from '../components/chat/NewChatModal';
+import ChatConversationList from '../components/chat/ChatConversationList';
+import ChatConversationWindow from '../components/chat/ChatConversationWindow';
+import CreateNewChatModal from '../components/chat/CreateNewChatModal';
 import { createGroupChat } from '../api/chatApi';
-import { useCallManager } from '../hook/useCallManager';
-import IncomingCallModal from '../components/call/IncomingCallModal';
-import OutgoingCallModal from '../components/call/OutgoingCallModal';
-import ActiveCallWindow from '../components/call/ActiveCallWindow';
-import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
-import ConnectionStatus from '../components/ui/ConnectionStatus';
+import { useCall } from '../hook/useCall';
+import IncomingVideoCallModal from '../components/call/IncomingVideoCallModal';
+import OutgoingVideoCallModal from '../components/call/OutgoingVideoCallModal';
+import VideoCallInterface from '../components/call/VideoCallInterface';
+import CustomButton from '../components/ui/CustomButton';
+import CustomInput from '../components/ui/CustomInput';
+import NetworkConnectionStatus from '../components/ui/NetworkConnectionStatus';
 import { X } from 'lucide-react';
 
 const ChatPage = () => {
   const { receiverId, groupId } = useParams();
   const navigate = useNavigate();
-  const [selectedChat, setSelectedChat] = useState(null);
+  const messageInputRef = useRef(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -41,7 +39,7 @@ const ChatPage = () => {
     declineCall,
     cancelCall,
     endActiveCall
-  } = useCallManager();
+  } = useCall();
 
   // Handle URL parameters
   useEffect(() => {
@@ -162,9 +160,8 @@ const ChatPage = () => {
     
     // Focus on the message input for immediate typing
     setTimeout(() => {
-      const messageInput = document.querySelector('textarea[placeholder*="Type a message"]');
-      if (messageInput) {
-        messageInput.focus();
+      if (messageInputRef.current) {
+        messageInputRef.current.focus();
       }
     }, 100);
   };
@@ -172,7 +169,7 @@ const ChatPage = () => {
   return (
     <>
       {/* Call Modals */}
-      <IncomingCallModal
+      <IncomingVideoCallModal
         incomingCall={incomingCall}
         onAccept={acceptCall}
         onReject={rejectCall}
@@ -180,7 +177,7 @@ const ChatPage = () => {
         isVisible={showIncomingCall}
       />
 
-      <OutgoingCallModal
+      <OutgoingVideoCallModal
         outgoingCall={outgoingCall}
         onCancel={cancelCall}
         isVisible={showOutgoingCall}
@@ -188,7 +185,7 @@ const ChatPage = () => {
 
       {/* Active Call Window */}
       {showActiveCall && activeCall && (
-        <ActiveCallWindow
+        <VideoCallInterface
           call={activeCall}
           onEndCall={handleEndCall}
           onToggleChat={handleToggleChat}
@@ -196,14 +193,14 @@ const ChatPage = () => {
       )}
 
       {/* Connection Status */}
-      <ConnectionStatus className="fixed top-4 right-4 z-50 max-w-sm" />
+      <NetworkConnectionStatus className="fixed top-4 right-4 z-50 max-w-sm" />
 
       {/* Main Chat Interface */}
       {!showActiveCall && (
         <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
           {/* Chat List - Hidden on mobile when chat is selected */}
           <div className={`${selectedChat ? 'hidden md:block' : 'block'} w-full md:w-96`}>
-            <EnhancedChatList
+            <ChatConversationList
               onSelectChat={setSelectedChat}
               onVideoCall={handleVideoCall}
             />
@@ -212,7 +209,8 @@ const ChatPage = () => {
           {/* Chat Window */}
           {selectedChat ? (
             <div className="flex-1 h-screen">
-              <ChatWindow
+              <ChatConversationWindow
+                ref={messageInputRef}
                 chat={selectedChat}
                 onVideoCall={handleVideoCall}
                 onCallHistory={handleCallHistory}
@@ -252,7 +250,7 @@ const ChatPage = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Group Name
                 </label>
-                <Input
+                <CustomInput
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
                   placeholder="Enter group name"
@@ -274,21 +272,21 @@ const ChatPage = () => {
               </div>
 
               <div className="flex gap-2">
-                <Button
+                <CustomButton
                   onClick={() => setShowCreateGroup(false)}
                   variant="outline"
                   className="flex-1"
                 >
                   Cancel
-                </Button>
-                <Button
+                </CustomButton>
+                <CustomButton
                   onClick={handleCreateGroup}
                   disabled={createGroupMutation.isPending || !groupName.trim() || selectedMembers.length < 2}
                   loading={createGroupMutation.isPending}
                   className="flex-1"
                 >
                   Create Group
-                </Button>
+                </CustomButton>
               </div>
             </div>
           </div>
@@ -296,7 +294,7 @@ const ChatPage = () => {
       )}
 
       {/* New Chat Modal */}
-      <NewChatModal
+      <CreateNewChatModal
         isOpen={showNewChat}
         onClose={() => setShowNewChat(false)}
         onChatCreated={handleNewChatCreated}

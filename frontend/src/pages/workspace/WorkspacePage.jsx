@@ -15,11 +15,11 @@ import {
 import { toast } from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceApi';
 import { projectApi } from '../../api/projectApi';
-import PageLayout from '../../components/ui/PageLayout';
-import Card from '../../components/ui/Card';
-import Button from '../../components/ui/Button';
+import PageLayoutWrapper from '../../components/ui/PageLayoutWrapper';
+import CustomCard from '../../components/ui/CustomCard';
+import CustomButton from '../../components/ui/CustomButton';
 import ProjectList from '../../components/project/ProjectList';
-import CreateProjectModal from '../../components/project/CreateProjectModal';
+import ProjectCreator from '../../components/project/ProjectCreator';
 
 const WorkspacePage = () => {
   const { workspaceId } = useParams();
@@ -59,7 +59,7 @@ const WorkspacePage = () => {
 
   if (workspaceLoading) {
     return (
-      <PageLayout title="Loading..." subtitle="Please wait">
+      <PageLayoutWrapper title="Loading..." subtitle="Please wait">
         <div className="space-y-6">
           <div className="h-32 bg-gray-200 dark:bg-gray-700 rounded-lg animate-pulse"></div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -68,18 +68,18 @@ const WorkspacePage = () => {
             ))}
           </div>
         </div>
-      </PageLayout>
+      </PageLayoutWrapper>
     );
   }
 
   if (workspaceError || !workspace) {
     return (
-      <PageLayout title="Workspace Not Found" subtitle="The workspace you're looking for doesn't exist">
+      <PageLayoutWrapper title="Workspace Not Found" subtitle="The workspace you're looking for doesn't exist">
         <div className="text-center py-12">
           <p className="text-red-500 mb-4">Failed to load workspace</p>
-          <Button onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
+          <CustomButton onClick={() => navigate('/dashboard')}>Go to Dashboard</CustomButton>
         </div>
-      </PageLayout>
+      </PageLayoutWrapper>
     );
   }
 
@@ -99,10 +99,10 @@ const WorkspacePage = () => {
                   className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
               </div>
-              <Button onClick={() => setShowCreateProject(true)} className="flex items-center gap-2">
+              <CustomButton onClick={() => setShowCreateProject(true)} className="flex items-center gap-2">
                 <Plus className="w-4 h-4" />
                 Create Project
-              </Button>
+              </CustomButton>
             </div>
 
             <ProjectList 
@@ -120,15 +120,15 @@ const WorkspacePage = () => {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Workspace Members
               </h3>
-              <Button variant="outline" className="flex items-center gap-2">
+              <CustomButton variant="outline" className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 Invite Members
-              </Button>
+              </CustomButton>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {workspace.members.map((member) => (
-                <Card key={member.user._id} className="p-4">
+                <CustomCard key={member.user._id} className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
                       <span className="text-indigo-600 dark:text-indigo-400 font-medium">
@@ -156,7 +156,7 @@ const WorkspacePage = () => {
                       <MoreVertical className="w-4 h-4" />
                     </button>
                   </div>
-                </Card>
+                </CustomCard>
               ))}
             </div>
           </div>
@@ -169,7 +169,7 @@ const WorkspacePage = () => {
               Workspace Analytics
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="p-6">
+              <CustomCard className="p-6">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
                     <FolderOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -181,9 +181,9 @@ const WorkspacePage = () => {
                     </p>
                   </div>
                 </div>
-              </Card>
+              </CustomCard>
 
-              <Card className="p-6">
+              <CustomCard className="p-6">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
                     <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -195,9 +195,9 @@ const WorkspacePage = () => {
                     </p>
                   </div>
                 </div>
-              </Card>
+              </CustomCard>
 
-              <Card className="p-6">
+              <CustomCard className="p-6">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900 rounded-lg flex items-center justify-center">
                     <BarChart3 className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
@@ -209,9 +209,9 @@ const WorkspacePage = () => {
                     </p>
                   </div>
                 </div>
-              </Card>
+              </CustomCard>
 
-              <Card className="p-6">
+              <CustomCard className="p-6">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
                     <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -227,7 +227,7 @@ const WorkspacePage = () => {
                     </p>
                   </div>
                 </div>
-              </Card>
+              </CustomCard>
             </div>
           </div>
         );
@@ -238,11 +238,11 @@ const WorkspacePage = () => {
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
               Workspace Settings
             </h3>
-            <Card className="p-6">
+            <CustomCard className="p-6">
               <p className="text-gray-600 dark:text-gray-400">
                 Settings panel will be implemented here
               </p>
-            </Card>
+            </CustomCard>
           </div>
         );
 
@@ -252,7 +252,7 @@ const WorkspacePage = () => {
   };
 
   return (
-    <PageLayout 
+    <PageLayoutWrapper 
       title={workspace.name}
       subtitle={workspace.description || 'Workspace management and collaboration'}
     >
@@ -290,12 +290,12 @@ const WorkspacePage = () => {
       </div>
 
       {/* Modals */}
-      <CreateProjectModal
+      <ProjectCreator
         isOpen={showCreateProject}
         onClose={() => setShowCreateProject(false)}
         workspaceId={workspaceId}
       />
-    </PageLayout>
+      </PageLayoutWrapper>
   );
 };
 

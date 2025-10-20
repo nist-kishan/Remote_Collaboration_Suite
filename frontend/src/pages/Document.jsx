@@ -305,7 +305,10 @@ export default function Document() {
       return (
         <DocumentError 
           message="Failed to load document. Please try again." 
-          onRetry={() => window.location.reload()} 
+          onRetry={() => {
+            queryClient.invalidateQueries(['document', documentId]);
+            queryClient.invalidateQueries(['documents']);
+          }} 
         />
       );
     }
@@ -329,10 +332,12 @@ export default function Document() {
   // Show error state for document list
   if (documentsError) {
     return (
-      <DocumentError 
-        message="Failed to load documents. Please try again." 
-        onRetry={() => window.location.reload()} 
-      />
+        <DocumentError 
+          message="Failed to load documents. Please try again." 
+          onRetry={() => {
+            queryClient.invalidateQueries(['documents']);
+          }} 
+        />
     );
   }
 

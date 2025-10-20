@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { useSignUp } from "../../hook/useAuth";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import MyLoader from "../../components/ui/MyLoader";
-import AuthForm from "../../components/auth/AuthForm";
-import Input from "../../components/ui/Input";
-import AuthLink from "../../components/auth/AuthLink";
-import PhoneCode from "../../components/Authenication/PhoneCode";
+import LoadingSpinner from "../../components/ui/LoadingSpinner";
+import LoginSignupForm from "../../components/auth/LoginSignupForm";
+import CustomInput from "../../components/ui/CustomInput";
+import AuthNavigationLink from "../../components/auth/AuthNavigationLink";
+import PhoneVerificationCode from "../../components/Authentication/PhoneVerificationCode";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -69,20 +69,20 @@ export default function Signup() {
   };
 
   if (loadingCodes) {
-    return <MyLoader />;
+    return <LoadingSpinner />;
   }
 
   const footer = (
     <p>
       Already have an account?{" "}
-      <AuthLink to="/login">
+      <AuthNavigationLink to="/login">
         Sign In
-      </AuthLink>
+      </AuthNavigationLink>
     </p>
   );
 
   return (
-    <AuthForm
+    <LoginSignupForm
       title="Sign Up"
       onSubmit={handleSubmit}
       submitText={isLoading ? "Creating Account..." : "Sign Up"}
@@ -90,7 +90,7 @@ export default function Signup() {
       footer={footer}
     >
       {["name", "email", "username", "password"].map((key) => (
-        <Input
+        <CustomInput
           key={key}
           type={key === "password" ? "password" : "text"}
           placeholder={key.charAt(0).toUpperCase() + key.slice(1)}
@@ -100,19 +100,19 @@ export default function Signup() {
         />
       ))}
 
-      <PhoneCode
+      <PhoneVerificationCode
         countrycode={formData.countrycode}
         handleChange={handleChange}
         countryCodes={countryCodes}
       />
 
-      <Input
+      <CustomInput
         type="number"
         placeholder="Phone Number"
         value={formData.phone}
         onChange={(e) => handleChange("phone", e.target.value)}
         disabled={isLoading}
       />
-    </AuthForm>
+      </LoginSignupForm>
   );
 }

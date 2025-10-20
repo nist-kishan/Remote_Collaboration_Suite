@@ -1,6 +1,7 @@
 import axios from "axios";
 import { API_CONFIG, LOGGING_CONFIG, FEATURE_FLAGS } from "../config/environment";
 import toast from "react-hot-toast";
+import { navigateToLogin } from "../utils/navigation";
 
 const ApiClient = axios.create({
   baseURL: `${API_CONFIG.BASE_URL}/api/v1`,
@@ -13,8 +14,26 @@ const ApiClient = axios.create({
 
 const skipRefreshEndpoints = [
   "/auth/signin",
-  "/auth/signup",
+  "/auth/signup", 
+  "/auth/login",
   "/auth/refresh_token",
+];
+
+// Endpoints that should skip global error toasts (handled by hooks)
+const skipErrorToastEndpoints = [
+  "/auth/signin",
+  "/auth/signup", 
+  "/auth/login",
+  "/auth/refresh_token",
+  "/auth/logout",
+  "/auth/reset_password",
+  "/auth/password_change",
+  "/auth/password_change_link",
+  "/auth/send_otp",
+  "/auth/otp_verification",
+  "/auth/update-profile",
+  "/auth/update_avatar",
+  "/auth/theme",
 ];
 
 // Request interceptor
@@ -25,7 +44,11 @@ ApiClient.interceptors.request.use(
     
     // Log requests in development
     if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS && import.meta.env.DEV) {
-      console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data);
+      console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        data: config.data
+      });
     }
     
     return config;
@@ -44,7 +67,7 @@ ApiClient.interceptors.response.use(
     
     // Log successful responses in development
     if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS && import.meta.env.DEV) {
-      console.log(`📥 API Response: ${response.config.method?.toUpperCase()} ${response.config.url} (${duration}ms)`, response.data);
+      // console.log(`📥 API Response: ${response.config.method?.toUpperCase()} ${response.config.url} (${duration}ms)`, response.data);
     }
     
     // Performance monitoring
@@ -67,12 +90,18 @@ ApiClient.interceptors.response.use(
         statusText: error.response?.statusText,
         data: error.response?.data,
         message: error.message,
+        fullURL: `${originalRequest?.baseURL}${originalRequest?.url}`,
+        baseURL: originalRequest?.baseURL
       });
     }
 
     // Handle network errors
     if (!error.response) {
-      toast.error('Network error. Please check your connection.');
+      // Only show network error toast if no specific error message is available
+      const message = error?.message;
+      if (message) {
+        toast.error(message);
+      }
       return Promise.reject(error);
     }
 
@@ -93,11 +122,10 @@ ApiClient.interceptors.response.use(
       } catch (refreshError) {
         // Refresh failed, redirect to login
         if (refreshError.response?.status === 401) {
-          toast.error('Session expired. Please log in again.');
-          // Clear any stored auth data
-          localStorage.removeItem('user');
-          // Redirect to login page
-          window.location.href = '/auth/signin';
+          const message = refreshError.response?.data?.message || 'Session expired. Please log in again.';
+          toast.error(message);
+          // Redirect to login page using navigation utility
+          navigateToLogin();
         }
         return Promise.reject(refreshError);
       }
@@ -106,27 +134,15 @@ ApiClient.interceptors.response.use(
     // Handle other HTTP errors
     const status = error.response?.status;
     const message = error.response?.data?.message || error.message;
-
-    switch (status) {
-      case 400:
-        toast.error(message || 'Bad request. Please check your input.');
-        break;
-      case 403:
-        toast.error('Access denied. You do not have permission to perform this action.');
-        break;
-      case 404:
-        toast.error('Resource not found.');
-        break;
-      case 429:
-        toast.error('Too many requests. Please try again later.');
-        break;
-      case 500:
-        toast.error('Server error. Please try again later.');
-        break;
-      default:
-        if (message) {
-          toast.error(message);
-        }
+    
+    // Skip error toasts for authentication endpoints (handled by hooks)
+    const shouldSkipToast = skipErrorToastEndpoints.some((url) => originalRequest.url.includes(url));
+    
+    if (!shouldSkipToast) {
+      // Only show toast if there's a message from the backend
+      if (message) {
+        toast.error(message);
+      }
     }
 
     return Promise.reject(error);

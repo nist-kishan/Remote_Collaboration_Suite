@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import DocumentEditorOptimizedV2 from '../../components/documents/DocumentEditorOptimizedV2';
-import DocumentLoading from '../../components/documents/DocumentLoading';
-import DocumentError from '../../components/documents/DocumentError';
-import ShareModal from '../../components/documents/ShareModal';
-import ConfirmationModal from '../../components/ui/ConfirmationModal';
+import DocumentEditorV2 from '../../components/documents/DocumentEditorV2';
+import DocumentLoadingSpinner from '../../components/documents/DocumentLoadingSpinner';
+import DocumentErrorDisplay from '../../components/documents/DocumentErrorDisplay';
+import DocumentShareModal from '../../components/documents/DocumentShareModal';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { 
   getDocument, 
   updateDocument,
@@ -162,21 +162,23 @@ export default function SharedDocument() {
   };
 
   if (isLoading) {
-    return <DocumentLoading message="Loading shared document..." />;
+    return <DocumentLoadingSpinner message="Loading shared document..." />;
   }
 
   if (error) {
     return (
-      <DocumentError 
+      <DocumentErrorDisplay 
         message="Failed to load shared document. You may not have access to this document." 
-        onRetry={() => window.location.reload()} 
+        onRetry={() => {
+          queryClient.invalidateQueries(['document', documentId]);
+        }} 
       />
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-slate-900 dark:to-indigo-900">
-      <DocumentEditorOptimizedV2
+      <DocumentEditorV2
         document={documentData?.data?.document}
         onSave={handleSaveDocument}
         onShare={handleShareDocument}
@@ -186,7 +188,7 @@ export default function SharedDocument() {
         showDeleteButton={false} // Don't show delete button for shared documents
       />
 
-      <ShareModal
+      <DocumentShareModal
         document={documentData?.data?.document}
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
@@ -197,7 +199,7 @@ export default function SharedDocument() {
         loading={shareDocumentMutation.isPending || shareViaEmailMutation.isPending}
       />
 
-      <ConfirmationModal
+      <ConfirmationDialog
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
         onConfirm={confirmModal.onConfirm}

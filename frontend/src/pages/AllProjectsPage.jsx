@@ -1,15 +1,15 @@
 import React from 'react';
-import PageLayout from '../components/ui/PageLayout';
-import AllProjectsList from '../components/project/AllProjectsList';
+import PageLayoutWrapper from '../components/ui/PageLayoutWrapper';
+import ProjectListGrid from '../components/project/ProjectListGrid';
 
 const AllProjectsPage = () => {
   return (
-    <PageLayout 
+    <PageLayoutWrapper 
       title="All Projects"
       subtitle="View and manage all your projects across workspaces"
     >
-      <AllProjectsList />
-    </PageLayout>
+      <ProjectListGrid />
+    </PageLayoutWrapper>
   );
 };
 

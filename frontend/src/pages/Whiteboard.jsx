@@ -1,7 +1,7 @@
 import React from 'react';
-import PageLayout from "../components/ui/PageLayout";
-import Card from "../components/ui/Card";
-import Button from "../components/ui/Button";
+import PageLayoutWrapper from "../components/ui/PageLayoutWrapper";
+import CustomCard from "../components/ui/CustomCard";
+import CustomButton from "../components/ui/CustomButton";
 import { PenTool, Eraser, Square, Circle, Type, Undo, Redo, Save, Share } from "lucide-react";
 
 export default function Whiteboard() {

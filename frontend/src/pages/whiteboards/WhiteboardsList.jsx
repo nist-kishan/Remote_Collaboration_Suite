@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, Filter, Grid, List, Users, PenTool } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import WhiteboardList from '../../components/whiteboard/WhiteboardList';
-import WhiteboardLoading from '../../components/whiteboard/WhiteboardLoading';
-import WhiteboardError from '../../components/whiteboard/WhiteboardError';
-import WhiteboardSearch from '../../components/whiteboard/WhiteboardSearch';
-import Button from '../../components/ui/Button';
+import WhiteboardListGrid from '../../components/whiteboard/WhiteboardListGrid';
+import WhiteboardLoadingSpinner from '../../components/whiteboard/WhiteboardLoadingSpinner';
+import WhiteboardErrorDisplay from '../../components/whiteboard/WhiteboardErrorDisplay';
+import WhiteboardSearchBar from '../../components/whiteboard/WhiteboardSearchBar';
+import CustomButton from '../../components/ui/CustomButton';
 import { getUserWhiteboards } from '../../api/whiteboardApi';
 
 export default function WhiteboardsList() {
@@ -64,12 +64,12 @@ export default function WhiteboardsList() {
   ];
 
   if (isLoading) {
-    return <WhiteboardLoading message="Loading whiteboards..." />;
+    return <WhiteboardLoadingSpinner message="Loading whiteboards..." />;
   }
 
   if (error) {
     return (
-      <WhiteboardError 
+      <WhiteboardErrorDisplay 
         message="Failed to load whiteboards. Please try again." 
         onRetry={() => refetch()} 
       />
@@ -100,13 +100,13 @@ export default function WhiteboardsList() {
                 Create and collaborate on interactive whiteboards in real-time
               </p>
             </div>
-            <Button
+            <CustomButton
               onClick={handleCreateWhiteboard}
               className="flex items-center gap-2 px-6 py-3"
             >
               <Plus className="w-5 h-5" />
               New Whiteboard
-            </Button>
+            </CustomButton>
           </div>
 
           {/* Tabs */}
@@ -137,9 +137,9 @@ export default function WhiteboardsList() {
 
           {/* Content */}
           {activeTab === 'search' ? (
-            <WhiteboardSearch onWhiteboardSelect={handleWhiteboardSelect} />
+            <WhiteboardSearchBar onWhiteboardSelect={handleWhiteboardSelect} />
           ) : (
-            <WhiteboardList
+            <WhiteboardListGrid
               whiteboards={whiteboardsData?.data?.whiteboards || []}
               loading={isLoading}
               onCreateWhiteboard={handleCreateWhiteboard}

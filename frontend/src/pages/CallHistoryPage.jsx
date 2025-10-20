@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import CallHistory from '../components/call/CallHistory';
-import CallDetailsModal from '../components/call/CallDetailsModal';
-import Button from '../components/ui/Button';
+import CallHistoryList from '../components/call/CallHistoryList';
+import CallHistoryDetailsModal from '../components/call/CallHistoryDetailsModal';
+import CustomButton from '../components/ui/CustomButton';
 
 const CallHistoryPage = () => {
   const navigate = useNavigate();
@@ -33,7 +33,7 @@ const CallHistoryPage = () => {
       {/* Header with Back Button */}
       <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="flex items-center gap-3">
-          <Button
+          <CustomButton
             onClick={handleBack}
             variant="ghost"
             size="sm"
@@ -41,7 +41,7 @@ const CallHistoryPage = () => {
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Back</span>
-          </Button>
+          </CustomButton>
           <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">
             Call History
           </h1>
@@ -50,7 +50,7 @@ const CallHistoryPage = () => {
 
       {/* Call History Content */}
       <div className="flex-1 overflow-hidden">
-        <CallHistory
+        <CallHistoryList
           onStartCall={handleStartCall}
           onViewCallDetails={handleViewCallDetails}
           className="h-full"
@@ -58,7 +58,7 @@ const CallHistoryPage = () => {
       </div>
 
       {/* Call Details Modal */}
-      <CallDetailsModal
+      <CallHistoryDetailsModal
         call={selectedCall}
         isVisible={showCallDetails}
         onClose={handleCloseCallDetails}

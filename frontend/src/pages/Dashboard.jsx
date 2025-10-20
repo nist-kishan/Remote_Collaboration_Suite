@@ -1,13 +1,18 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { MessageSquare, Video, FileText, PenTool, Building2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import PageLayout from "../components/ui/PageLayout";
-import Card from "../components/ui/Card";
+import PageLayoutWrapper from "../components/ui/PageLayoutWrapper";
+import CustomCard from "../components/ui/CustomCard";
 
 export default function Dashboard() {
   const user = useSelector((state) => state.auth.user);
+
+  useEffect(() => {
+    // console.log(user);
+  }, [user]);
+
 
   const services = [
     {
@@ -48,7 +53,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <PageLayout
+    <PageLayoutWrapper
       title={`Welcome back, ${user?.name || "User"}! 👋`}
       subtitle="Explore the amazing services we provide"
     >
@@ -68,7 +73,7 @@ export default function Dashboard() {
             whileTap={{ scale: 0.98 }}
           >
             <Link to={service.path} className="block group">
-              <Card 
+              <CustomCard 
                 variant="elevated" 
                 className="h-full hover:shadow-xl transition-all duration-300 group-hover:border-indigo-200 dark:group-hover:border-indigo-800"
               >
@@ -85,11 +90,11 @@ export default function Dashboard() {
                     </p>
                   </div>
                 </div>
-              </Card>
+              </CustomCard>
             </Link>
           </motion.div>
         ))}
       </motion.div>
-    </PageLayout>
+    </PageLayoutWrapper>
   );
 }

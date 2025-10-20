@@ -28,7 +28,8 @@ class DocumentErrorBoundary extends React.Component {
           <button
             onClick={() => {
               this.setState({ hasError: false, error: null });
-              window.location.reload();
+              // Use React navigation instead of page reload
+              window.history.go(0);
             }}
             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >

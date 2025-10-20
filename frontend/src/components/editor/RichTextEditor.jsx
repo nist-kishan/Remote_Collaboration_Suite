@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useTextSelection } from "../../hook/useTextSelection";
 import { 
   Bold, 
   Italic, 
@@ -47,6 +48,18 @@ const RichTextEditor = forwardRef((props, ref) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
 
+  // Use text selection hook
+  const {
+    getCurrentRange,
+    hasSelection,
+    insertAtCursor,
+    insertHTMLAtCursor,
+    wrapSelection,
+    getSelectedText,
+    clearSelection,
+    focusEditor
+  } = useTextSelection();
+
   // Expose editor element to parent component
   useImperativeHandle(ref, () => ({
     getEditorElement: () => editorRef.current,
@@ -85,16 +98,10 @@ const RichTextEditor = forwardRef((props, ref) => {
         };
         
         // Insert at cursor position
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          range.insertNode(img);
-          range.setStartAfter(img);
-          range.setEndAfter(img);
-          selection.removeAllRanges();
-          selection.addRange(range);
+        if (insertAtCursor(img)) {
+          // Successfully inserted
         } else {
+          // Fallback: append to editor
           editorRef.current.appendChild(img);
         }
         
@@ -105,28 +112,11 @@ const RichTextEditor = forwardRef((props, ref) => {
     },
     insertLink: (url) => {
       if (editorRef.current) {
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0 && !selection.isCollapsed) {
-          const range = selection.getRangeAt(0);
-          const link = document.createElement('a');
-          link.href = url;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          link.textContent = selection.toString();
-          range.deleteContents();
-          range.insertNode(link);
-          range.setStartAfter(link);
-          range.setEndAfter(link);
-          selection.removeAllRanges();
-          selection.addRange(range);
+        if (hasSelection()) {
+          wrapSelection('a', { href: url, target: '_blank', rel: 'noopener noreferrer' });
         } else {
-          // If no text is selected, insert the URL as text
-          const link = document.createElement('a');
-          link.href = url;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          link.textContent = url;
-          editorRef.current.appendChild(link);
+          // Insert link at cursor position
+          insertHTMLAtCursor(`<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
         }
         
         // Trigger content change
@@ -173,22 +163,12 @@ const RichTextEditor = forwardRef((props, ref) => {
         }
         
         // Insert at cursor position
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          range.insertNode(table);
-          
+        if (insertAtCursor(table)) {
           // Add a line break after the table
           const br = document.createElement('br');
-          range.setStartAfter(table);
-          range.setEndAfter(table);
-          range.insertNode(br);
-          range.setStartAfter(br);
-          range.setEndAfter(br);
-          selection.removeAllRanges();
-          selection.addRange(range);
+          insertAtCursor(br);
         } else {
+          // Fallback: append to editor
           editorRef.current.appendChild(table);
           // Add line break after table
           const br = document.createElement('br');
@@ -209,146 +189,136 @@ const RichTextEditor = forwardRef((props, ref) => {
     },
     insertUnorderedList: () => {
       if (editorRef.current) {
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          const list = document.createElement('ul');
-          list.style.margin = '10px 0';
-          list.style.paddingLeft = '20px';
-          
-          // Create a list item
-          const listItem = document.createElement('li');
-          listItem.style.marginBottom = '5px';
-          listItem.innerHTML = '&nbsp;';
-          listItem.contentEditable = 'true';
-          
-          // Handle focus for list items
-          listItem.addEventListener('focus', () => {
-            if (listItem.innerHTML === '&nbsp;') {
-              listItem.innerHTML = '';
-            }
-          });
-          
-          listItem.addEventListener('blur', () => {
-            if (listItem.innerHTML === '') {
-              listItem.innerHTML = '&nbsp;';
-            }
-          });
-          
-          // Handle Enter key to create new list items
-          listItem.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              const newListItem = document.createElement('li');
-              newListItem.style.marginBottom = '5px';
-              newListItem.innerHTML = '&nbsp;';
-              newListItem.contentEditable = 'true';
-              
-              // Add the same event listeners
-              newListItem.addEventListener('focus', () => {
-                if (newListItem.innerHTML === '&nbsp;') {
-                  newListItem.innerHTML = '';
-                }
-              });
-              
-              newListItem.addEventListener('blur', () => {
-                if (newListItem.innerHTML === '') {
-                  newListItem.innerHTML = '&nbsp;';
-                }
-              });
-              
-              list.insertBefore(newListItem, listItem.nextSibling);
-              newListItem.focus();
-              newListItem.innerHTML = '';
-            }
-          });
-          
-          list.appendChild(listItem);
-          
-          // Insert the list
-          range.deleteContents();
-          range.insertNode(list);
-          
+        const list = document.createElement('ul');
+        list.style.margin = '10px 0';
+        list.style.paddingLeft = '20px';
+        
+        // Create a list item
+        const listItem = document.createElement('li');
+        listItem.style.marginBottom = '5px';
+        listItem.innerHTML = '&nbsp;';
+        listItem.contentEditable = 'true';
+        
+        // Handle focus for list items
+        listItem.addEventListener('focus', () => {
+          if (listItem.innerHTML === '&nbsp;') {
+            listItem.innerHTML = '';
+          }
+        });
+        
+        listItem.addEventListener('blur', () => {
+          if (listItem.innerHTML === '') {
+            listItem.innerHTML = '&nbsp;';
+          }
+        });
+        
+        // Handle Enter key to create new list items
+        listItem.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const newListItem = document.createElement('li');
+            newListItem.style.marginBottom = '5px';
+            newListItem.innerHTML = '&nbsp;';
+            newListItem.contentEditable = 'true';
+            
+            // Add the same event listeners
+            newListItem.addEventListener('focus', () => {
+              if (newListItem.innerHTML === '&nbsp;') {
+                newListItem.innerHTML = '';
+              }
+            });
+            
+            newListItem.addEventListener('blur', () => {
+              if (newListItem.innerHTML === '') {
+                newListItem.innerHTML = '&nbsp;';
+              }
+            });
+            
+            list.insertBefore(newListItem, listItem.nextSibling);
+            newListItem.focus();
+            newListItem.innerHTML = '';
+          }
+        });
+        
+        list.appendChild(listItem);
+        
+        // Insert the list at cursor position
+        if (insertAtCursor(list)) {
           // Focus the first list item
           listItem.focus();
           listItem.innerHTML = '';
-          
-          // Trigger content change
-          const event = new Event('input', { bubbles: true });
-          editorRef.current.dispatchEvent(event);
         }
+        
+        // Trigger content change
+        const event = new Event('input', { bubbles: true });
+        editorRef.current.dispatchEvent(event);
       }
     },
     insertOrderedList: () => {
       if (editorRef.current) {
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          const list = document.createElement('ol');
-          list.style.margin = '10px 0';
-          list.style.paddingLeft = '20px';
-          
-          // Create a list item
-          const listItem = document.createElement('li');
-          listItem.style.marginBottom = '5px';
-          listItem.innerHTML = '&nbsp;';
-          listItem.contentEditable = 'true';
-          
-          // Handle focus for list items
-          listItem.addEventListener('focus', () => {
-            if (listItem.innerHTML === '&nbsp;') {
-              listItem.innerHTML = '';
-            }
-          });
-          
-          listItem.addEventListener('blur', () => {
-            if (listItem.innerHTML === '') {
-              listItem.innerHTML = '&nbsp;';
-            }
-          });
-          
-          // Handle Enter key to create new list items
-          listItem.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              const newListItem = document.createElement('li');
-              newListItem.style.marginBottom = '5px';
-              newListItem.innerHTML = '&nbsp;';
-              newListItem.contentEditable = 'true';
-              
-              // Add the same event listeners
-              newListItem.addEventListener('focus', () => {
-                if (newListItem.innerHTML === '&nbsp;') {
-                  newListItem.innerHTML = '';
-                }
-              });
-              
-              newListItem.addEventListener('blur', () => {
-                if (newListItem.innerHTML === '') {
-                  newListItem.innerHTML = '&nbsp;';
-                }
-              });
-              
-              list.insertBefore(newListItem, listItem.nextSibling);
-              newListItem.focus();
-              newListItem.innerHTML = '';
-            }
-          });
-          
-          list.appendChild(listItem);
-          
-          // Insert the list
-          range.deleteContents();
-          range.insertNode(list);
-          
+        const list = document.createElement('ol');
+        list.style.margin = '10px 0';
+        list.style.paddingLeft = '20px';
+        
+        // Create a list item
+        const listItem = document.createElement('li');
+        listItem.style.marginBottom = '5px';
+        listItem.innerHTML = '&nbsp;';
+        listItem.contentEditable = 'true';
+        
+        // Handle focus for list items
+        listItem.addEventListener('focus', () => {
+          if (listItem.innerHTML === '&nbsp;') {
+            listItem.innerHTML = '';
+          }
+        });
+        
+        listItem.addEventListener('blur', () => {
+          if (listItem.innerHTML === '') {
+            listItem.innerHTML = '&nbsp;';
+          }
+        });
+        
+        // Handle Enter key to create new list items
+        listItem.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const newListItem = document.createElement('li');
+            newListItem.style.marginBottom = '5px';
+            newListItem.innerHTML = '&nbsp;';
+            newListItem.contentEditable = 'true';
+            
+            // Add the same event listeners
+            newListItem.addEventListener('focus', () => {
+              if (newListItem.innerHTML === '&nbsp;') {
+                newListItem.innerHTML = '';
+              }
+            });
+            
+            newListItem.addEventListener('blur', () => {
+              if (newListItem.innerHTML === '') {
+                newListItem.innerHTML = '&nbsp;';
+              }
+            });
+            
+            list.insertBefore(newListItem, listItem.nextSibling);
+            newListItem.focus();
+            newListItem.innerHTML = '';
+          }
+        });
+        
+        list.appendChild(listItem);
+        
+        // Insert the list at cursor position
+        if (insertAtCursor(list)) {
           // Focus the first list item
           listItem.focus();
           listItem.innerHTML = '';
-          
-          // Trigger content change
-          const event = new Event('input', { bubbles: true });
-          editorRef.current.dispatchEvent(event);
         }
+        
+        // Trigger content change
+        const event = new Event('input', { bubbles: true });
+        editorRef.current.dispatchEvent(event);
       }
     }
   }));
@@ -437,23 +407,7 @@ const RichTextEditor = forwardRef((props, ref) => {
     const pastedData = clipboardData.getData('text/html') || clipboardData.getData('text/plain');
     
     if (editorRef.current) {
-      const selection = window.getSelection();
-      if (selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = pastedData;
-        const fragment = document.createDocumentFragment();
-        
-        while (tempDiv.firstChild) {
-          fragment.appendChild(tempDiv.firstChild);
-        }
-        
-        range.insertNode(fragment);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        
+      if (insertHTMLAtCursor(pastedData)) {
         onChange(editorRef.current.innerHTML);
       }
     }
@@ -465,20 +419,7 @@ const RichTextEditor = forwardRef((props, ref) => {
       
       // Handle insertHTML command specially
       if (command === 'insertHTML') {
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = value;
-          const fragment = document.createDocumentFragment();
-          while (tempDiv.firstChild) {
-            fragment.appendChild(tempDiv.firstChild);
-          }
-          range.insertNode(fragment);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
+        insertHTMLAtCursor(value);
       } else {
         document.execCommand(command, false, value);
       }
@@ -560,19 +501,7 @@ const RichTextEditor = forwardRef((props, ref) => {
           
           // Insert HTML at cursor position
           if (editorRef.current) {
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-              const range = selection.getRangeAt(0);
-              range.deleteContents();
-              const tempDiv = document.createElement('div');
-              tempDiv.innerHTML = img;
-              const fragment = document.createDocumentFragment();
-              while (tempDiv.firstChild) {
-                fragment.appendChild(tempDiv.firstChild);
-              }
-              range.insertNode(fragment);
-              selection.removeAllRanges();
-              selection.addRange(range);
+            if (insertHTMLAtCursor(img)) {
               onChange(editorRef.current.innerHTML);
             }
           }

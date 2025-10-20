@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import MediaViewer from '../components/media/MediaViewer';
+import MediaViewerModal from '../components/media/MediaViewerModal';
 import { useQuery } from '@tanstack/react-query';
 
 const MediaViewerPage = () => {
@@ -83,7 +83,7 @@ const MediaViewerPage = () => {
     // Update URL to reflect current media
     if (mediaItems[newIndex]) {
       const newUrl = `/media/${chatId}/${mediaItems[newIndex].messageId}`;
-      window.history.replaceState(null, '', newUrl);
+      navigate(newUrl, { replace: true });
     }
   };
 
@@ -114,7 +114,7 @@ const MediaViewerPage = () => {
   }
 
   return (
-    <MediaViewer
+    <MediaViewerModal
       isOpen={true}
       mediaItems={mediaItems}
       currentIndex={currentIndex}

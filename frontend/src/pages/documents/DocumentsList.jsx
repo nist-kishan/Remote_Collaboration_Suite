@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FileText, Users, Edit } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import DocumentListOptimized from '../../components/documents/DocumentListOptimized';
+import DocumentList from '../../components/documents/DocumentList';
 import DocumentErrorBoundary from '../../components/documents/DocumentErrorBoundary';
-import Button from '../../components/ui/Button';
-import Card from '../../components/ui/Card';
-import ConfirmationModal from '../../components/ui/ConfirmationModal';
-import AuthGuard from '../../components/AuthGuard';
+import CustomButton from '../../components/ui/CustomButton';
+import CustomCard from '../../components/ui/CustomCard';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { getUserDocuments, deleteDocument } from '../../api/documentApi';
 import { useSelector } from 'react-redux';
 
@@ -131,23 +130,22 @@ export default function DocumentsList() {
   if (documentsError) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <Card className="p-8 text-center max-w-md">
+        <CustomCard className="p-8 text-center max-w-md">
           <div className="text-red-500 mb-4">
             <FileText className="h-12 w-12 mx-auto" />
           </div>
           <h2 className="text-xl font-semibold mb-2">Failed to Load Documents</h2>
           <p className="text-gray-600 mb-4">{documentsError || 'An error occurred while loading documents.'}</p>
-          <Button onClick={() => refetch()} variant="primary">
+          <CustomButton onClick={() => refetch()} variant="primary">
             Try Again
-          </Button>
-        </Card>
+          </CustomButton>
+        </CustomCard>
       </div>
     );
   }
 
   return (
-    <AuthGuard>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
@@ -158,13 +156,13 @@ export default function DocumentsList() {
                 Create, edit, and collaborate on your documents
               </p>
             </div>
-            <Button
+            <CustomButton
               onClick={handleCreateDocument}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
             >
               <Plus className="h-4 w-4" />
               <span>New Document</span>
-            </Button>
+            </CustomButton>
           </div>
 
           {/* Tabs */}
@@ -202,7 +200,7 @@ export default function DocumentsList() {
 
         {/* Documents List */}
         <DocumentErrorBoundary>
-          <DocumentListOptimized
+          <DocumentList
             documents={documents}
             onCreateDocument={handleCreateDocument}
             onEditDocument={handleEditDocument}
@@ -215,7 +213,7 @@ export default function DocumentsList() {
       </div>
 
       {/* Delete Confirmation Modal */}
-      <ConfirmationModal
+      <ConfirmationDialog
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal({ isOpen: false, document: null })}
         onConfirm={confirmDeleteDocument}
@@ -226,6 +224,5 @@ export default function DocumentsList() {
         type="danger"
       />
       </div>
-    </AuthGuard>
   );
 }

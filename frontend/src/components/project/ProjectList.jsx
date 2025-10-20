@@ -10,7 +10,7 @@ import {
   AlertCircle,
   Pause
 } from 'lucide-react';
-import Card from '../ui/Card';
+import CustomCard from '../ui/CustomCard';
 
 const ProjectList = ({ projects, isLoading, workspaceId }) => {
   const navigate = useNavigate();
@@ -68,7 +68,7 @@ const ProjectList = ({ projects, isLoading, workspaceId }) => {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {[...Array(6)].map((_, i) => (
-          <Card key={i} className="p-6 animate-pulse">
+          <CustomCard key={i} className="p-6 animate-pulse">
             <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
             <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
             <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3 mb-4"></div>
@@ -76,7 +76,7 @@ const ProjectList = ({ projects, isLoading, workspaceId }) => {
               <div className="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded"></div>
               <div className="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
             </div>
-          </Card>
+          </CustomCard>
         ))}
       </div>
     );
@@ -101,7 +101,7 @@ const ProjectList = ({ projects, isLoading, workspaceId }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {projects.map((project) => (
-        <Card 
+        <CustomCard 
           key={project._id} 
           className="p-6 hover:shadow-lg transition-shadow cursor-pointer group"
           onClick={() => handleProjectClick(project)}
@@ -173,7 +173,7 @@ const ProjectList = ({ projects, isLoading, workspaceId }) => {
               </div>
             </div>
           )}
-        </Card>
+        </CustomCard>
       ))}
     </div>
   );

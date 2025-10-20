@@ -4,9 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Users, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import DocumentList from '../../components/documents/DocumentList';
-import DocumentLoading from '../../components/documents/DocumentLoading';
-import DocumentError from '../../components/documents/DocumentError';
-import Button from '../../components/ui/Button';
+import DocumentLoadingSpinner from '../../components/documents/DocumentLoadingSpinner';
+import DocumentErrorDisplay from '../../components/documents/DocumentErrorDisplay';
+import CustomButton from '../../components/ui/CustomButton';
 import { getUserDocuments } from '../../api/documentApi';
 
 export default function SharedDocumentsList() {
@@ -39,12 +39,12 @@ export default function SharedDocumentsList() {
   };
 
   if (isLoading) {
-    return <DocumentLoading message="Loading shared documents..." />;
+    return <DocumentLoadingSpinner message="Loading shared documents..." />;
   }
 
   if (error) {
     return (
-      <DocumentError 
+      <DocumentErrorDisplay 
         message="Failed to load shared documents. Please try again." 
         onRetry={() => refetch()} 
       />
@@ -69,14 +69,14 @@ export default function SharedDocumentsList() {
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
-              <Button
+              <CustomButton
                 variant="outline"
                 onClick={handleBack}
                 className="flex items-center gap-2"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back to Documents
-              </Button>
+              </CustomButton>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-3">
                   <Users className="w-8 h-8 text-indigo-600" />
@@ -109,12 +109,12 @@ export default function SharedDocumentsList() {
               <p className="text-gray-600 dark:text-gray-400 mb-6">
                 You don't have any documents shared with you yet.
               </p>
-              <Button
+              <CustomButton
                 onClick={handleBack}
                 variant="outline"
               >
                 Go to My Documents
-              </Button>
+              </CustomButton>
             </div>
           )}
         </div>

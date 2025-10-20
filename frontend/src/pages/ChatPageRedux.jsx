@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
@@ -6,13 +6,8 @@ import EnhancedChatList from '../components/chat/EnhancedChatList';
 import ChatWindow from '../components/chat/ChatWindow';
 import CreateGroupModal from '../components/chat/CreateGroupModal';
 import NewChatModal from '../components/chat/NewChatModal';
-import { useCallManager } from '../hook/useCallManager';
-import { 
-  useChatManager, 
-  useCreateGroupChat, 
-  useCreateOneToOneChat,
-  useChatQuery 
-} from '../hook/useChatManager';
+import { useCall } from '../hook/useCall';
+import { useChat } from '../hook/useChat';
 import IncomingCallModal from '../components/call/IncomingCallModal';
 import OutgoingCallModal from '../components/call/OutgoingCallModal';
 import ActiveCallWindow from '../components/call/ActiveCallWindow';
@@ -24,6 +19,7 @@ import { X } from 'lucide-react';
 const ChatPage = () => {
   const { receiverId, groupId } = useParams();
   const navigate = useNavigate();
+  const messageInputRef = useRef(null);
   const { user } = useSelector((state) => state.auth);
   
   // Redux-based chat management
@@ -60,7 +56,7 @@ const ChatPage = () => {
     declineCall,
     cancelCall,
     endActiveCall
-  } = useCallManager();
+  } = useCall();
 
   // Handle URL parameters
   useEffect(() => {
@@ -161,9 +157,8 @@ const ChatPage = () => {
     }
 
     setTimeout(() => {
-      const messageInput = document.querySelector('textarea[placeholder*="Type a message"]');
-      if (messageInput) {
-        messageInput.focus();
+      if (messageInputRef.current) {
+        messageInputRef.current.focus();
       }
     }, 100);
   };
@@ -213,6 +208,7 @@ const ChatPage = () => {
       <div className="flex-1 hidden md:flex chat-window-container">
         {currentChat ? (
           <ChatWindow
+            ref={messageInputRef}
             chat={currentChat}
             onVideoCall={handleVideoCall}
             onCallHistory={handleCallHistory}
@@ -241,6 +237,7 @@ const ChatPage = () => {
       <div className="flex-1 md:hidden chat-window-container">
         {currentChat ? (
           <ChatWindow
+            ref={messageInputRef}
             chat={currentChat}
             onVideoCall={handleVideoCall}
             onCallHistory={handleCallHistory}

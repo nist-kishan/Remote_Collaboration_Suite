@@ -4,20 +4,31 @@ import {
   useUpdateProfile,
   useUpdateAvatar,
 } from "../hook/useAuth";
+import { useSelector } from "react-redux";
 import { ShieldCheck, UserCheck } from "lucide-react";
-import PageLayout from "../components/ui/PageLayout";
-import Card from "../components/ui/Card";
-import Button from "../components/ui/Button";
-import AvatarUpdate from "../components/Profile/AvatarUpdate";
-import AvatarForm from "../components/Profile/AvatarForm";
-import EditableField from "../components/Profile/EditableField";
+import PageLayoutWrapper from "../components/ui/PageLayoutWrapper";
+import CustomCard from "../components/ui/CustomCard";
+import CustomButton from "../components/ui/CustomButton";
+import ProfileAvatarUpdater from "../components/Profile/ProfileAvatarUpdater";
+import ProfileAvatarForm from "../components/Profile/ProfileAvatarForm";
+import ProfileEditableField from "../components/Profile/ProfileEditableField";
 
 export default function Profile() {
   const { data: userData, isLoading } = useCurrentUser();
-  const user = useMemo(
-    () => (userData?.user ? userData.user : userData),
-    [userData]
-  );
+  const { user: reduxUser } = useSelector((state) => state.auth);
+  
+  const user = useMemo(() => {
+    // Handle different data structures from API
+    if (userData?.user) {
+      return userData.user;
+    } else if (userData && typeof userData === 'object' && userData._id) {
+      return userData;
+    } else if (reduxUser) {
+      // Fallback to Redux state
+      return reduxUser;
+    }
+    return null;
+  }, [userData, reduxUser]);
 
   const [editMode, setEditMode] = useState({
     name: false,
@@ -128,29 +139,46 @@ export default function Profile() {
 
   if (isLoading) {
     return (
-      <PageLayout>
+      <PageLayoutWrapper>
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-gray-600 dark:text-gray-300">
             Loading profile...
           </div>
         </div>
-      </PageLayout>
+      </PageLayoutWrapper>
+    );
+  }
+
+  if (!user) {
+    return (
+      <PageLayoutWrapper>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="text-gray-600 dark:text-gray-300 mb-4">
+              No user data found
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              Debug info: {JSON.stringify({ userData, reduxUser, isLoading })}
+            </div>
+          </div>
+        </div>
+      </PageLayoutWrapper>
     );
   }
 
   return (
-    <PageLayout title="Your Profile">
+    <PageLayoutWrapper title="Your Profile">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         {/* Avatar Section */}
         <div className="lg:col-span-1">
-          <Card className="text-center">
-            <AvatarUpdate
+          <CustomCard className="text-center">
+            <ProfileAvatarUpdater
               avatarPreview={avatarPreview}
               name={user.name}
               setAvatarFile={setAvatarFile}
             />
             {avatarFile && (
-              <AvatarForm
+              <ProfileAvatarForm
                 handleAvatarSubmit={handleAvatarSubmit}
                 updatingAvatar={updatingAvatar}
                 setAvatarFile={setAvatarFile}
@@ -178,14 +206,14 @@ export default function Profile() {
                 </div>
               )}
             </div>
-          </Card>
+          </CustomCard>
         </div>
 
         {/* Profile Fields */}
         <div className="lg:col-span-2">
-          <Card>
+          <CustomCard>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <EditableField
+              <ProfileEditableField
                 label="Name"
                 value={form.name}
                 editMode={editMode.name}
@@ -195,7 +223,7 @@ export default function Profile() {
                 onCancel={() => cancelEdit("name")}
               />
 
-              <EditableField
+              <ProfileEditableField
                 label="Username"
                 value={form.username}
                 editMode={editMode.username}
@@ -205,13 +233,13 @@ export default function Profile() {
                 onCancel={() => cancelEdit("username")}
               />
 
-              <EditableField 
+              <ProfileEditableField 
                 label="Email" 
                 value={user.email} 
                 readOnly 
               />
 
-              <EditableField
+              <ProfileEditableField
                 label="Phone"
                 value={`${user.countrycode || ""} ${user.phone || ""}`}
                 readOnly
@@ -219,18 +247,18 @@ export default function Profile() {
             </div>
 
             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-              <Button
+              <CustomButton
                 onClick={handleSaveAll}
                 loading={updatingProfile}
                 disabled={updatingProfile}
                 className="w-full sm:w-auto"
               >
                 Save All Changes
-              </Button>
+              </CustomButton>
             </div>
-          </Card>
+          </CustomCard>
         </div>
       </div>
-    </PageLayout>
+    </PageLayoutWrapper>
   );
 }

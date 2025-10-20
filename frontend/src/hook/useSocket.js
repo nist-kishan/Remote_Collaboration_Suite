@@ -17,7 +17,7 @@ export const useSocket = () => {
       
       // Log connection attempt
       if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-        console.log('🔌 Connecting to Socket.IO server:', SOCKET_CONFIG.URL);
+        // console.log('🔌 Connecting to Socket.IO server:', SOCKET_CONFIG.URL);
       }
       
       socketRef.current = io(SOCKET_CONFIG.URL, {
@@ -33,7 +33,7 @@ export const useSocket = () => {
       });
 
       socketRef.current.on('connect', () => {
-        console.log('Socket.IO connected successfully');
+        // console.log('Socket.IO connected successfully');
         setIsConnected(true);
         setConnectionError(null);
       });
@@ -49,21 +49,21 @@ export const useSocket = () => {
 
       socketRef.current.on('messages_read', (data) => {
         // Handle messages read status updates
-        console.log('Messages read event received:', data);
+        // console.log('Messages read event received:', data);
       });
 
       socketRef.current.on('message_delivered', (data) => {
         // Handle message delivery status updates
-        console.log('Message delivered event received:', data);
+        // console.log('Message delivered event received:', data);
       });
 
       socketRef.current.on('chat_updated', (data) => {
         // Handle chat updates (unread count, last message, etc.)
-        console.log('Chat updated event received:', data);
+        // console.log('Chat updated event received:', data);
       });
 
       socketRef.current.on('disconnect', (reason) => {
-        console.log('Socket.IO disconnected:', reason);
+        // console.log('Socket.IO disconnected:', reason);
         setIsConnected(false);
         if (reason === 'io server disconnect') {
           // Server disconnected, try to reconnect

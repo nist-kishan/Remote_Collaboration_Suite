@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { Plus, ArrowLeft } from 'lucide-react';
-import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
-import Card from '../../components/ui/Card';
+import CustomButton from '../../components/ui/CustomButton';
+import CustomInput from '../../components/ui/CustomInput';
+import CustomCard from '../../components/ui/CustomCard';
 import { createWhiteboard } from '../../api/whiteboardApi';
 
 export default function NewWhiteboard() {
@@ -95,14 +95,14 @@ export default function NewWhiteboard() {
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="flex items-center gap-4 mb-8">
-            <Button
+            <CustomButton
               variant="outline"
               onClick={handleBack}
               className="flex items-center gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
               Back
-            </Button>
+            </CustomButton>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                 Create New Whiteboard
@@ -114,14 +114,14 @@ export default function NewWhiteboard() {
           </div>
 
           {/* Form */}
-          <Card className="p-8">
+          <CustomCard className="p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Title */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Whiteboard Title *
                 </label>
-                <Input
+                <CustomInput
                   type="text"
                   value={formData.title}
                   onChange={(e) => handleInputChange('title', e.target.value)}
@@ -149,7 +149,7 @@ export default function NewWhiteboard() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Tags
                 </label>
-                <Input
+                <CustomInput
                   type="text"
                   value={formData.tags}
                   onChange={(e) => handleInputChange('tags', e.target.value)}
@@ -172,7 +172,7 @@ export default function NewWhiteboard() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Width (px)
                     </label>
-                    <Input
+                    <CustomInput
                       type="number"
                       value={formData.canvasSettings.width}
                       onChange={(e) => handleInputChange('canvasSettings.width', parseInt(e.target.value))}
@@ -186,7 +186,7 @@ export default function NewWhiteboard() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Height (px)
                     </label>
-                    <Input
+                    <CustomInput
                       type="number"
                       value={formData.canvasSettings.height}
                       onChange={(e) => handleInputChange('canvasSettings.height', parseInt(e.target.value))}
@@ -207,7 +207,7 @@ export default function NewWhiteboard() {
                         onChange={(e) => handleInputChange('canvasSettings.backgroundColor', e.target.value)}
                         className="w-12 h-10 rounded border border-gray-300 dark:border-gray-600"
                       />
-                      <Input
+                      <CustomInput
                         type="text"
                         value={formData.canvasSettings.backgroundColor}
                         onChange={(e) => handleInputChange('canvasSettings.backgroundColor', e.target.value)}
@@ -222,7 +222,7 @@ export default function NewWhiteboard() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Grid Size (px)
                     </label>
-                    <Input
+                    <CustomInput
                       type="number"
                       value={formData.canvasSettings.gridSize}
                       onChange={(e) => handleInputChange('canvasSettings.gridSize', parseInt(e.target.value))}
@@ -250,24 +250,24 @@ export default function NewWhiteboard() {
 
               {/* Actions */}
               <div className="flex items-center justify-end gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <Button
+                <CustomButton
                   type="button"
                   variant="outline"
                   onClick={handleBack}
                 >
                   Cancel
-                </Button>
-                <Button
+                </CustomButton>
+                <CustomButton
                   type="submit"
                   loading={createWhiteboardMutation.isPending}
                   className="flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
                   Create Whiteboard
-                </Button>
+                </CustomButton>
               </div>
             </form>
-          </Card>
+          </CustomCard>
         </div>
       </div>
     </div>

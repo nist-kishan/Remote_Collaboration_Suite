@@ -10,13 +10,13 @@ import {
   MoreVertical,
 } from "lucide-react";
 import { projectApi } from "../../api/projectApi";
-import PageLayout from "../../components/ui/PageLayout";
-import Card from "../../components/ui/Card";
-import Button from "../../components/ui/Button";
-import KanbanBoard from "../../components/kanban/KanbanBoard";
-import ProjectOverview from "../../components/project/ProjectOverview";
-import ProjectMembers from "../../components/project/ProjectMembers";
-import ProjectMeetings from "../../components/project/ProjectMeetings";
+import PageLayoutWrapper from "../../components/ui/PageLayoutWrapper";
+import CustomCard from "../../components/ui/CustomCard";
+import CustomButton from "../../components/ui/CustomButton";
+import ProjectKanbanBoard from "../../components/kanban/ProjectKanbanBoard";
+import ProjectDashboard from "../../components/project/ProjectDashboard";
+import ProjectMemberList from "../../components/project/ProjectMemberList";
+import ProjectMeetingList from "../../components/project/ProjectMeetingList";
 
 const ProjectPage = () => {
   const { workspaceId, projectId } = useParams();
@@ -80,19 +80,19 @@ const ProjectPage = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case "overview":
-        return <ProjectOverview project={project} />;
+        return <ProjectDashboard project={project} />;
 
       case "board":
-        return <KanbanBoard projectId={projectId} />;
+        return <ProjectKanbanBoard projectId={projectId} />;
 
       case "members":
-        return <ProjectMembers project={project} />;
+        return <ProjectMemberList project={project} />;
 
       case "meetings":
-        return <ProjectMeetings project={project} />;
+        return <ProjectMeetingList project={project} />;
 
       default:
-        return <ProjectOverview project={project} />;
+        return <ProjectDashboard project={project} />;
     }
   };
 

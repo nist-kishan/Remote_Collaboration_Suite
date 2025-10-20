@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
 import { io } from 'socket.io-client';
-import WhiteboardCanvas from '../../components/whiteboard/WhiteboardCanvas';
-import WhiteboardLoading from '../../components/whiteboard/WhiteboardLoading';
-import WhiteboardError from '../../components/whiteboard/WhiteboardError';
-import ShareModal from '../../components/documents/ShareModal';
-import ConfirmationModal from '../../components/ui/ConfirmationModal';
+import WhiteboardDrawingCanvas from '../../components/whiteboard/WhiteboardDrawingCanvas';
+import WhiteboardLoadingSpinner from '../../components/whiteboard/WhiteboardLoadingSpinner';
+import WhiteboardErrorDisplay from '../../components/whiteboard/WhiteboardErrorDisplay';
+import DocumentShareModal from '../../components/documents/DocumentShareModal';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 import { 
   getWhiteboard, 
   updateWhiteboard, 
@@ -22,6 +23,7 @@ export default function WhiteboardEditor() {
   const { whiteboardId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useSelector((state) => state.auth);
   const [socket, setSocket] = useState(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState({
@@ -121,12 +123,9 @@ export default function WhiteboardEditor() {
 
   // Initialize Socket.IO connection
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (token && whiteboardId) {
+    if (user && whiteboardId) {
       const newSocket = io(process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000', {
-        auth: {
-          token: token
-        }
+        withCredentials: true,
       });
 
       newSocket.on('connect', () => {
@@ -145,7 +144,7 @@ export default function WhiteboardEditor() {
         newSocket.disconnect();
       };
     }
-  }, [whiteboardId]);
+  }, [whiteboardId, user]);
 
   const handleSave = (canvasData) => {
     updateWhiteboardMutation.mutate({
@@ -203,21 +202,23 @@ export default function WhiteboardEditor() {
   };
 
   if (isLoading) {
-    return <WhiteboardLoading message="Loading whiteboard..." />;
+    return <WhiteboardLoadingSpinner message="Loading whiteboard..." />;
   }
 
   if (error) {
     return (
-      <WhiteboardError 
+      <WhiteboardErrorDisplay 
         message="Failed to load whiteboard. You may not have access to this whiteboard." 
-        onRetry={() => window.location.reload()} 
+        onRetry={() => {
+          queryClient.invalidateQueries(['whiteboard', whiteboardId]);
+        }} 
       />
     );
   }
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
-      <WhiteboardCanvas
+      <WhiteboardDrawingCanvas
         whiteboard={whiteboardData?.data?.whiteboard}
         onSave={handleSave}
         onShare={handleShare}
@@ -226,7 +227,7 @@ export default function WhiteboardEditor() {
         loading={updateWhiteboardMutation.isPending}
       />
 
-      <ShareModal
+      <DocumentShareModal
         document={whiteboardData?.data?.whiteboard}
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
@@ -242,7 +243,7 @@ export default function WhiteboardEditor() {
         loading={shareWhiteboardMutation.isPending || shareViaEmailMutation.isPending}
       />
 
-      <ConfirmationModal
+      <ConfirmationDialog
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
         onConfirm={confirmModal.onConfirm}

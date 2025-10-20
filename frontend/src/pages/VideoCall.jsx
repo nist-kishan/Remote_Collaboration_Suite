@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useCallManager } from '../hook/useCallManager';
+import { useCall } from '../hook/useCall';
 import { useSocket } from '../hook/useSocket';
-import IncomingCallModal from '../components/call/IncomingCallModal';
-import OutgoingCallModal from '../components/call/OutgoingCallModal';
-import ActiveCallWindow from '../components/call/ActiveCallWindow';
+import IncomingVideoCallModal from '../components/call/IncomingVideoCallModal';
+import OutgoingVideoCallModal from '../components/call/OutgoingVideoCallModal';
+import VideoCallInterface from '../components/call/VideoCallInterface';
 import { toast } from 'react-hot-toast';
 
 export default function VideoCall() {
@@ -23,7 +23,7 @@ export default function VideoCall() {
     acceptCall,
     rejectCall,
     endActiveCall
-  } = useCallManager();
+  } = useCall();
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -50,52 +50,8 @@ export default function VideoCall() {
         console.log('Active call found, showing call interface');
         setIsInitialized(true);
       } else {
-        // Check localStorage for call data
-        const savedIncomingCall = localStorage.getItem('currentIncomingCall');
-        const savedOutgoingCall = localStorage.getItem('currentOutgoingCall');
-        const savedActiveCall = localStorage.getItem('currentActiveCall');
-
-        if (savedIncomingCall) {
-          try {
-            const callData = JSON.parse(savedIncomingCall);
-            if (callData.callId === callId) {
-              console.log('Found incoming call data in localStorage:', callData);
-              setIsInitialized(true);
-              return;
-            }
-          } catch (error) {
-            console.error('Error parsing saved incoming call:', error);
-          }
-        }
-
-        if (savedOutgoingCall) {
-          try {
-            const callData = JSON.parse(savedOutgoingCall);
-            if (callData.callId === callId) {
-              console.log('Found outgoing call data in localStorage:', callData);
-              setIsInitialized(true);
-              return;
-            }
-          } catch (error) {
-            console.error('Error parsing saved outgoing call:', error);
-          }
-        }
-
-        if (savedActiveCall) {
-          try {
-            const callData = JSON.parse(savedActiveCall);
-            if (callData._id === callId) {
-              console.log('Found active call data in localStorage:', callData);
-              setIsInitialized(true);
-              return;
-            }
-          } catch (error) {
-            console.error('Error parsing saved active call:', error);
-          }
-        }
-
-        // If we don't have the call data, try to get it from socket events
-        console.log('Call data not found, waiting for socket events...');
+        console.log('No active call found, initializing call interface');
+        setIsInitialized(true);
         
         // Listen for call events to get the call data
         const handleIncomingCall = (data) => {
@@ -157,7 +113,7 @@ export default function VideoCall() {
   // Show incoming call modal
   if (showIncomingCall && incomingCall) {
     return (
-      <IncomingCallModal
+      <IncomingVideoCallModal
         call={incomingCall}
         onAccept={acceptCall}
         onReject={rejectCall}
@@ -168,7 +124,7 @@ export default function VideoCall() {
   // Show outgoing call modal
   if (showOutgoingCall && outgoingCall) {
     return (
-      <OutgoingCallModal
+      <OutgoingVideoCallModal
         call={outgoingCall}
         onCancel={() => {
           console.log('Canceling outgoing call');
@@ -181,7 +137,7 @@ export default function VideoCall() {
   // Show active call window
   if (showActiveCall && activeCall) {
     return (
-      <ActiveCallWindow
+      <VideoCallInterface
         call={activeCall}
         onEndCall={handleEndCall}
         onToggleChat={handleToggleChat}

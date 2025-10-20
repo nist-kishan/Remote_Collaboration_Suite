@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useSignIn } from "../../hook/useAuth";
-import AuthForm from "../../components/auth/AuthForm";
-import Input from "../../components/ui/Input";
-import AuthLink from "../../components/auth/AuthLink";
+import LoginSignupForm from "../../components/auth/LoginSignupForm";
+import CustomInput from "../../components/ui/CustomInput";
+import AuthNavigationLink from "../../components/auth/AuthNavigationLink";
 
 export default function Login() {
   const { mutate: signin, isLoading } = useSignIn();
@@ -23,17 +23,17 @@ export default function Login() {
 
   const footer = (
     <div className="flex flex-col sm:flex-row justify-between items-center gap-2 text-xs sm:text-sm">
-      <AuthLink to="/signup">
+      <AuthNavigationLink to="/signup">
         Create Account
-      </AuthLink>
-      <AuthLink to="/reset-password">
+      </AuthNavigationLink>
+      <AuthNavigationLink to="/reset-password">
         Forgot Password?
-      </AuthLink>
+      </AuthNavigationLink>
     </div>
   );
 
   return (
-    <AuthForm
+    <LoginSignupForm
       title="Sign In"
       onSubmit={handleSubmit}
       submitText={isLoading ? "Signing in..." : "Sign In"}
@@ -41,7 +41,7 @@ export default function Login() {
       error={formError}
       footer={footer}
     >
-      <Input
+      <CustomInput
         type="text"
         placeholder="Email or Username"
         value={data.credential}
@@ -49,13 +49,13 @@ export default function Login() {
         disabled={isLoading}
       />
 
-      <Input
+      <CustomInput
         type="password"
         placeholder="Password"
         value={data.password}
         onChange={(e) => setData({ ...data, password: e.target.value })}
         disabled={isLoading}
       />
-    </AuthForm>
+      </LoginSignupForm>
   );
 }
