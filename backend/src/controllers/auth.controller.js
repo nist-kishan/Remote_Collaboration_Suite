@@ -277,12 +277,26 @@ export const resetPasswordHandler = asyncHandle(async (req, res) => {
       .status(200)
       .json(new ApiResponse(200, "Password reset email sent successfully"));
   } catch (error) {
+    console.error('❌ Password reset email failed:', error);
+    
+    // Clean up the reset token
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save({ validateBeforeSave: false });
+    
+    // Provide more specific error messages
+    let errorMessage = "Failed to send password reset email";
+    if (error.code === 'ETIMEDOUT') {
+      errorMessage = "Email service is temporarily unavailable. Please try again later.";
+    } else if (error.code === 'ECONNREFUSED') {
+      errorMessage = "Email service connection failed. Please try again later.";
+    } else if (error.responseCode === 535) {
+      errorMessage = "Email authentication failed. Please contact support.";
+    }
+    
     return res
       .status(500)
-      .json(new ApiResponse(500, "Failed to send password reset email"));
+      .json(new ApiResponse(500, errorMessage));
   }
 });
 
