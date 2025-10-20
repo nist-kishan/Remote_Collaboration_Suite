@@ -39,9 +39,11 @@ export default defineConfig({
         drop_debugger: process.env.NODE_ENV === 'production',
       },
     },
-    // Ensure proper MIME types
+    // Ensure proper MIME types and module loading
     assetsInlineLimit: 0,
     cssCodeSplit: true,
+    // Force proper file extensions
+    assetsDir: 'assets',
     rollupOptions: {
       output: {
         manualChunks: (id) => {
