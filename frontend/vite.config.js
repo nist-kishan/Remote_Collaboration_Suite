@@ -31,7 +31,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: process.env.NODE_ENV !== 'production',
-    minify: 'terser',
+    minify: process.env.NODE_ENV === 'production' ? 'terser' : false,
     terserOptions: {
       compress: {
         drop_console: process.env.NODE_ENV === 'production',
@@ -40,13 +40,30 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          router: ['react-router-dom'],
-          ui: ['framer-motion', 'lucide-react'],
-          state: ['@reduxjs/toolkit', 'react-redux'],
-          query: ['@tanstack/react-query'],
-          fabric: ['fabric'],
+        manualChunks: (id) => {
+          // Vendor chunks
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor';
+            }
+            if (id.includes('react-router-dom')) {
+              return 'router';
+            }
+            if (id.includes('framer-motion') || id.includes('lucide-react')) {
+              return 'ui';
+            }
+            if (id.includes('@reduxjs/toolkit') || id.includes('react-redux')) {
+              return 'state';
+            }
+            if (id.includes('@tanstack/react-query')) {
+              return 'query';
+            }
+            if (id.includes('fabric')) {
+              return 'canvas';
+            }
+            // Default vendor chunk for other node_modules
+            return 'vendor';
+          }
         },
       },
     },
@@ -70,8 +87,8 @@ export default defineConfig({
       'axios',
       'lucide-react',
       'framer-motion',
-      'fabric',
     ],
+    exclude: ['fabric'], // Exclude fabric to prevent empty chunk issues
   },
   
   // CSS configuration
