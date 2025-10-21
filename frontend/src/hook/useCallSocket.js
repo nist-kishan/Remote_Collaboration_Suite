@@ -465,8 +465,11 @@ export const useCallSocket = () => {
       setHasShownIncomingToast(true);
     }
     
-    // Navigate to receiver page for incoming calls
+    // Navigate to receiver page for incoming calls only if not already on a video call page
     if (!location.pathname.includes('/video-call/')) {
+      navigate(`/video-call/receiver/${receiverId}`, { replace: true });
+    } else if (location.pathname.includes('/video-call/caller/')) {
+      // If we're on a caller page, navigate to receiver page for incoming call
       navigate(`/video-call/receiver/${receiverId}`, { replace: true });
     }
     
@@ -565,6 +568,9 @@ export const useCallSocket = () => {
     dispatch(setShowOutgoingCallModal(false));
     dispatch(setShowCallWindow(true));
     
+    // Explicitly clear incoming call state to prevent re-triggering
+    dispatch(setIncomingCall(null));
+    
     console.log('🔇 Stopping call sounds...');
     stopCallSounds();
     
@@ -601,9 +607,19 @@ export const useCallSocket = () => {
       const receiverId = data.call.receiverId || data.call.chatId;
       console.log('🎯 Outgoing call joined - navigating to caller page with receiver ID:', receiverId);
       navigate(`/video-call/caller/${receiverId}`, { replace: true });
-    } else if (!isOutgoingCall && location.pathname.includes('/video-call/receiver/')) {
-      // For incoming calls, stay on receiver page or navigate to connected state
-      console.log('🎯 Incoming call joined - staying on receiver page');
+    } else if (!isOutgoingCall) {
+      // For incoming calls, navigate to the generic video call route for connected state
+      if (location.pathname.includes('/video-call/receiver/')) {
+        // Navigate to generic video call route for connected state
+        console.log('🎯 Incoming call joined - navigating to connected video call page');
+        navigate(`/video-call`, { replace: true });
+      } else if (!location.pathname.includes('/video-call')) {
+        // If not on any video call page, navigate to generic video call route
+        console.log('🎯 Call joined - navigating to video call page');
+        navigate(`/video-call`, { replace: true });
+      } else {
+        console.log('🎯 Call joined - staying on current page');
+      }
     }
   }, [dispatch, navigate, location.pathname, saveCallData, startParticipantCheck, outgoingCall]);
 

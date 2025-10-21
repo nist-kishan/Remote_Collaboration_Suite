@@ -1051,12 +1051,9 @@ export const useCall = () => {
       console.log('📡 Joining call socket with callId:', callId);
       await joinCallSocket(callId);
 
-      // Navigate to the correct receiver page
-      const receiverId = incomingCall.fromUserId || incomingCall.caller?._id;
-      console.log('🧭 Navigating to receiver page with receiverId:', receiverId);
-      if (receiverId && !location.pathname.includes('/video-call/')) {
-        navigate(`/video-call/receiver/${receiverId}`, { replace: true });
-      }
+      // Don't navigate when accepting a call - stay on current page
+      // The handleCallJoined function will handle the proper state transition
+      console.log('🎯 Call accepted - staying on current page for state transition');
       
       console.log('✅ Call accepted successfully');
     } catch (error) {
