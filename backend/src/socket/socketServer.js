@@ -49,6 +49,7 @@ class SocketServer {
     this.whiteboardRooms = new Map(); // whiteboardId -> Set of socketIds
     this.chatRooms = new Map(); // chatId -> Set of socketIds
     this.activeCalls = new Map(); // callId -> { participants, status }
+    this.callTimeouts = new Map(); // callId -> timeoutId for tracking call timeouts
     this.documentRooms = new Map(); // documentId -> Set of socketIds
     this.documentCollaborators = new Map(); // documentId -> Map of userId -> { cursor, selection, userInfo }
 
@@ -1089,7 +1090,7 @@ class SocketServer {
 
           // Set timeout to mark call as missed if not answered
           const timeoutDuration = 30000; // 30 seconds
-          setTimeout(async () => {
+          const timeoutId = setTimeout(async () => {
             try {
               const currentCall = await Call.findById(call._id);
               if (currentCall && currentCall.status === 'ringing') {
@@ -1108,6 +1109,9 @@ class SocketServer {
                 // Remove from active calls
                 this.activeCalls.delete(call._id.toString());
                 
+                // Clear timeout from tracking
+                this.callTimeouts.delete(call._id.toString());
+                
                 // Notify all participants
                 this.io.to(`call:${call._id}`).emit("call_missed", {
                   callId: call._id,
@@ -1118,6 +1122,9 @@ class SocketServer {
               // Error handling call timeout
             }
           }, timeoutDuration);
+          
+          // Store timeout ID for potential cancellation
+          this.callTimeouts.set(call._id.toString(), timeoutId);
 
         } catch (error) {
           socket.emit("error", "Failed to start call");
@@ -1133,6 +1140,13 @@ class SocketServer {
           if (!call) {
             socket.emit("error", { message: "Call not found" });
             return;
+          }
+
+          // Clear any existing timeouts for this call since someone joined
+          if (this.callTimeouts && this.callTimeouts.has(callId)) {
+            clearTimeout(this.callTimeouts.get(callId));
+            this.callTimeouts.delete(callId);
+            console.log(`Cleared timeout for joined call ${callId}`);
           }
 
           const participant = call.participants.find(
@@ -1187,12 +1201,19 @@ class SocketServer {
       socket.on("end_call", async (data) => {
         try {
           const { callId } = data;
-          // console.log(`Call ended by ${socket.userId} for call ${callId}`);
+          console.log(`Call ended by ${socket.userId} for call ${callId}`);
           
           const call = await Call.findById(callId);
           if (!call) {
-            // console.log('Call not found:', callId);
+            console.log('Call not found:', callId);
             return;
+          }
+
+          // Clear any existing timeouts for this call
+          if (this.callTimeouts && this.callTimeouts.has(callId)) {
+            clearTimeout(this.callTimeouts.get(callId));
+            this.callTimeouts.delete(callId);
+            console.log(`Cleared timeout for ended call ${callId}`);
           }
 
           const participant = call.participants.find(
@@ -1212,7 +1233,13 @@ class SocketServer {
 
           const allLeft = call.participants.every(p => p.status === 'left');
 
-          if (allLeft) {
+          // If call is still ringing and caller ends it, mark as ended
+          if (call.status === 'ringing') {
+            call.status = 'ended';
+            call.endedAt = new Date();
+            call.duration = Math.floor((call.endedAt - call.startedAt) / 1000);
+            this.activeCalls.delete(callId);
+          } else if (allLeft) {
             call.status = 'ended';
             call.endedAt = new Date();
             call.duration = Math.floor((call.endedAt - call.startedAt) / 1000);
@@ -1230,6 +1257,16 @@ class SocketServer {
               reason: 'ended'
             });
           });
+
+          // Also notify the caller if they're not in participants (for ringing calls)
+          if (call.startedBy && call.status === 'ringing') {
+            this.io.to(`user:${call.startedBy}`).emit("call_ended", {
+              callId,
+              call,
+              endedBy: socket.userId,
+              reason: 'ended'
+            });
+          }
 
           // Also notify the call room
           this.io.to(`call:${callId}`).emit("call_ended", {
@@ -1254,12 +1291,19 @@ class SocketServer {
       socket.on("reject_call", async (data) => {
         try {
           const { callId } = data;
-          // console.log(`Call rejected by ${socket.userId} for call ${callId}`);
+          console.log(`Call rejected by ${socket.userId} for call ${callId}`);
           
           const call = await Call.findById(callId);
           if (!call) {
-            // console.log('Call not found:', callId);
+            console.log('Call not found:', callId);
             return;
+          }
+
+          // Clear any existing timeouts for this call
+          if (this.callTimeouts && this.callTimeouts.has(callId)) {
+            clearTimeout(this.callTimeouts.get(callId));
+            this.callTimeouts.delete(callId);
+            console.log(`Cleared timeout for rejected call ${callId}`);
           }
 
           const participant = call.participants.find(

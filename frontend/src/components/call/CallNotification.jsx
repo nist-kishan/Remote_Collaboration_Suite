@@ -183,9 +183,10 @@ const CallNotification = ({
               <button
                 onClick={onJoinCall}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                title="Join Call"
               >
                 <Maximize2 className="w-4 h-4" />
-                <span className="text-sm font-medium">Join Call</span>
+                <span className="text-sm font-medium">Join</span>
               </button>
               <button
                 onClick={onEndCall}

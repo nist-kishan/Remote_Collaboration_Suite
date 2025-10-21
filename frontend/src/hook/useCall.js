@@ -70,7 +70,7 @@ export const useCall = () => {
   const queryClient = useQueryClient();
   const { user } = useSelector((state) => state.auth);
   
-  // Use the new useCallSocket hook
+  // Use the new useCallSocket hook with cleanup callback
   const {
     socket,
     callStatus: socketCallStatus,
@@ -141,7 +141,7 @@ export const useCall = () => {
   const [webrtcIsVideoEnabled, setWebrtcIsVideoEnabled] = useState(true);
   const [webrtcIsScreenSharing, setWebrtcIsScreenSharing] = useState(false);
   const [webrtcIsMuted, setWebrtcIsMuted] = useState(false);
-
+  const [timeElapsed, setTimeElapsed] = useState(0);
 
   // Fetch call history with React Query
   const { data: callHistoryData, isLoading: isLoadingHistory, error: historyError, refetch } = useQuery({
@@ -198,15 +198,27 @@ export const useCall = () => {
         setWebrtcLocalStream(null);
       }
       
+      // Also stop any remaining tracks from localStream (from Redux state)
+      if (localStream && localStream.getTracks) {
+        console.log('📹 Stopping Redux local stream tracks...');
+        const tracks = localStream.getTracks();
+        tracks.forEach(track => {
+          console.log(`🛑 Stopping Redux track: ${track.kind} - ${track.label}`);
+          track.stop();
+        });
+      }
+      
       // Clear video elements
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = null;
         localVideoRef.current.load(); // Force reload
+        localVideoRef.current.pause();
       }
       
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = null;
         remoteVideoRef.current.load(); // Force reload
+        remoteVideoRef.current.pause();
       }
       
       // Close peer connection
@@ -226,7 +238,7 @@ export const useCall = () => {
       }
       
       // Wait a bit for devices to be released
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Verify devices are released
       try {
@@ -240,7 +252,7 @@ export const useCall = () => {
     } catch (error) {
       console.error('❌ Error releasing tracks:', error);
     }
-  }, []);
+  }, [localStream]);
 
   const checkDeviceAvailability = useCallback(async () => {
     try {
@@ -407,6 +419,32 @@ export const useCall = () => {
       throw error;
     }
   }, [releaseAllTracks, checkDeviceInUse, deviceInUseRetryCount]);
+
+  // Enhanced end call function that includes media cleanup
+  const endCallWithCleanup = useCallback(async (callId) => {
+    console.log('🧹 Ending call with media cleanup...');
+    try {
+      // First release all media tracks
+      await releaseAllTracks();
+      console.log('✅ Media tracks released');
+      
+      // Then call the socket end call function
+      if (callId) {
+        endCallSocketFunction(callId);
+      } else {
+        endCallSocketFunction();
+      }
+      console.log('✅ Call ended via socket');
+    } catch (error) {
+      console.error('❌ Error during call cleanup:', error);
+      // Still try to end the call even if cleanup fails
+      if (callId) {
+        endCallSocketFunction(callId);
+      } else {
+        endCallSocketFunction();
+      }
+    }
+  }, [releaseAllTracks, endCallSocketFunction]);
 
   const createPeerConnection = useCallback(() => {
     if (peerConnectionRef.current) {
@@ -789,6 +827,22 @@ export const useCall = () => {
     } catch (error) {
       console.error('❌ Error starting call:', error);
       
+      // Handle socket reconnection errors
+      if (error.message.includes('Socket reconnection timeout') || error.message.includes('Socket not available')) {
+        console.log('🔄 Socket reconnection failed, showing user-friendly message...');
+        toast.error('Connection lost. Please check your internet connection and try again.', {
+          duration: 5000,
+          action: {
+            label: 'Retry',
+            onClick: () => {
+              // Retry the call
+              startCall(chatId);
+            }
+          }
+        });
+        throw error;
+      }
+      
       // Handle different types of media device errors
       if (error.message.includes('Device in use') || error.name === 'NotReadableError') {
         console.log('🔄 Device in use, attempting to release...');
@@ -863,10 +917,18 @@ export const useCall = () => {
   };
 
   const acceptCall = async () => {
-    if (!socket || !incomingCall) return;
+    if (!socket || !incomingCall) {
+      console.error('❌ Cannot accept call: missing socket or incomingCall', { socket: !!socket, incomingCall: !!incomingCall });
+      return;
+    }
+
+    console.log('📞 Accepting call with data:', incomingCall);
 
     try {
+      console.log('🔇 Stopping call sounds...');
       stopCallSounds();
+      
+      console.log('🔧 Initializing WebRTC...');
       await initializeWebRTC();
 
       // Use the correct callId from incomingCall
@@ -875,11 +937,17 @@ export const useCall = () => {
         throw new Error('Call ID not found in incoming call data');
       }
 
+      console.log('📡 Joining call socket with callId:', callId);
       await joinCallSocket(callId);
 
-      if (!location.pathname.includes('/call/')) {
-        navigate(`/call/${callId}`, { replace: true });
+      // Navigate to the correct receiver page
+      const receiverId = incomingCall.fromUserId || incomingCall.caller?._id;
+      console.log('🧭 Navigating to receiver page with receiverId:', receiverId);
+      if (receiverId && !location.pathname.includes('/video-call/')) {
+        navigate(`/video-call/receiver/${receiverId}`, { replace: true });
       }
+      
+      console.log('✅ Call accepted successfully');
     } catch (error) {
       if (error.message.includes('Device in use') || error.name === 'NotReadableError') {
         toast.error('Camera or microphone is being used by another application. Please close other apps and try again.', {
@@ -907,7 +975,7 @@ export const useCall = () => {
     }
   };
 
-  const rejectCall = () => {
+  const rejectCall = async () => {
     if (!socket || !incomingCall) return;
 
     const callId = incomingCall.callId || incomingCall._id;
@@ -921,10 +989,13 @@ export const useCall = () => {
     // Reset initialization attempts counter
     setInitializationAttempts(0);
     
+    // Release media tracks before rejecting
+    await releaseAllTracks();
+    
     rejectCallSocket(callId);
   };
 
-  const cancelCall = () => {
+  const cancelCall = async () => {
     if (!socket || !outgoingCall) return;
 
     const callId = outgoingCall.callId || outgoingCall._id;
@@ -938,7 +1009,11 @@ export const useCall = () => {
     // Reset initialization attempts counter
     setInitializationAttempts(0);
     
-    endCallSocket(callId);
+    // Release media tracks before cancelling
+    await releaseAllTracks();
+    
+    // Use the enhanced end call function that includes media cleanup
+    endCallWithCleanup(callId);
   };
 
   const endActiveCall = async () => {
@@ -955,11 +1030,8 @@ export const useCall = () => {
     // Reset initialization attempts counter
     setInitializationAttempts(0);
     
-    // End the call via socket
-    endCallSocket(callId);
-    
-    // Ensure all media tracks are released
-    await releaseAllTracks();
+    // Use the enhanced end call function that includes media cleanup
+    await endCallWithCleanup(callId);
     
     console.log('✅ Call ended and cleanup completed');
   };
@@ -1047,11 +1119,50 @@ export const useCall = () => {
     return `${statusText[status]} with ${otherParticipant.name}`;
   };
 
-  // Cleanup on unmount
+  // Timer for call duration
   useEffect(() => {
+    let interval;
+    if (socketCallStatus === 'connected') {
+      interval = setInterval(() => {
+        setTimeElapsed(prev => prev + 1);
+      }, 1000);
+    } else {
+      setTimeElapsed(0);
+    }
+    return () => clearInterval(interval);
+  }, [socketCallStatus]);
+
+  // Auto cleanup when call status changes to idle or ends
+  useEffect(() => {
+    if (socketCallStatus === 'idle' || !socketCallStatus || socketCallStatus === 'ended') {
+      console.log('🧹 Call status changed to idle/ended, releasing media tracks...');
+      releaseAllTracks();
+    }
+  }, [socketCallStatus, releaseAllTracks]);
+
+  // Cleanup on unmount and page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      console.log('🧹 Page unloading, releasing media tracks...');
+      releaseAllTracks();
+    };
+
+    const handlePageHide = () => {
+      console.log('🧹 Page hidden, releasing media tracks...');
+      releaseAllTracks();
+    };
+
+    // Add event listeners for page unload
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+
     return () => {
       console.log('🧹 useCall hook unmounting, cleaning up...');
       releaseAllTracks();
+      
+      // Remove event listeners
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
     };
   }, [releaseAllTracks]);
 
@@ -1067,6 +1178,7 @@ export const useCall = () => {
     isMuted: isMuted || webrtcIsMuted,
     isVideoEnabled: isVideoEnabled || webrtcIsVideoEnabled,
     isScreenSharing: isScreenSharing || webrtcIsScreenSharing,
+    timeElapsed,
     participants,
     errors,
     showIncomingCallModal,
@@ -1094,6 +1206,7 @@ export const useCall = () => {
     cancelCall,
     endActiveCall,
     endCall: endCallSocketFunction,
+    endCallWithCleanup,
     toggleMute,
     toggleVideo,
     

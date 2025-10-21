@@ -45,10 +45,188 @@ export const useCallSocket = () => {
   const [callStatus, setCallStatus] = useState('idle');
   const [callPersistData, setCallPersistData] = useState(null);
   const [hasShownIncomingToast, setHasShownIncomingToast] = useState(false);
+  const [hasShownOutgoingToast, setHasShownOutgoingToast] = useState(false);
   
+  // State to prevent duplicate event handling
+  const [processedCallIds, setProcessedCallIds] = useState(new Set());
+  const [lastEventTime, setLastEventTime] = useState({});
+  
+  // Helper function to ensure socket connection
+  const ensureSocketConnection = async () => {
+    if (!socket) {
+      throw new Error('Socket not available');
+    }
+
+    if (socket.disconnected) {
+      console.warn('⚠️ Socket is disconnected, attempting to reconnect...');
+      
+      // Attempt to reconnect
+      socket.connect();
+      
+      // Wait for reconnection
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Socket reconnection timeout'));
+        }, 5000);
+        
+        const onConnect = () => {
+          clearTimeout(timeout);
+          socket.off('connect', onConnect);
+          socket.off('connect_error', onError);
+          resolve();
+        };
+        
+        const onError = (error) => {
+          clearTimeout(timeout);
+          socket.off('connect', onConnect);
+          socket.off('connect_error', onError);
+          reject(error);
+        };
+        
+        socket.on('connect', onConnect);
+        socket.on('connect_error', onError);
+      });
+      
+      console.log('✅ Socket reconnected successfully');
+    }
+  };
+
+  // Helper function to start connecting timeout
+  const startConnectingTimeout = useCallback(() => {
+    // Clear any existing timeout
+    if (connectingTimeoutRef.current) {
+      clearTimeout(connectingTimeoutRef.current);
+    }
+    
+    // Set a 30-second timeout for connecting state
+    connectingTimeoutRef.current = setTimeout(() => {
+      console.warn('⚠️ Call stuck in connecting state, cleaning up...');
+      
+      // Reset call status
+      setCallStatus('idle');
+      
+      // Clear localStorage
+      localStorage.removeItem('activeCallData');
+      
+      // Clear Redux state
+      dispatch(setActiveCall(null));
+      dispatch(setIncomingCall(null));
+      dispatch(setOutgoingCall(null));
+      dispatch(setShowIncomingCallModal(false));
+      dispatch(setShowOutgoingCallModal(false));
+      dispatch(setShowCallWindow(false));
+      
+      // Clear processed call IDs
+      setProcessedCallIds(new Set());
+      setLastEventTime({});
+      
+      console.log('✅ Call state cleaned up due to timeout');
+    }, 30000); // 30 seconds timeout
+  }, [dispatch]);
+
+  // Helper function to clear connecting timeout
+  const clearConnectingTimeout = useCallback(() => {
+    if (connectingTimeoutRef.current) {
+      clearTimeout(connectingTimeoutRef.current);
+      connectingTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Clear all timers
+  const clearAllTimers = useCallback(() => {
+    if (callTimeoutRef.current) {
+      clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = null;
+    }
+    if (participantCheckIntervalRef.current) {
+      clearInterval(participantCheckIntervalRef.current);
+      participantCheckIntervalRef.current = null;
+    }
+    if (connectingTimeoutRef.current) {
+      clearTimeout(connectingTimeoutRef.current);
+      connectingTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Save call data to localStorage
+  const saveCallData = (callData) => {
+    if (callData) {
+      localStorage.setItem('activeCallData', JSON.stringify(callData));
+      setCallPersistData(callData);
+    } else {
+      localStorage.removeItem('activeCallData');
+      setCallPersistData(null);
+    }
+  };
+
+  // Helper functions
+  const stopCallSounds = () => {
+    try {
+      if (incomingCallAudioRef.current) {
+        // Web Audio API doesn't have pause method, just stop the current sound
+        console.log('🔇 Stopping incoming call audio');
+      }
+    } catch (error) {
+      console.log('🔇 Error stopping incoming call audio:', error.message);
+    }
+    
+    try {
+      if (outgoingCallAudioRef.current) {
+        // Web Audio API doesn't have pause method, just stop the current sound
+        console.log('🔇 Stopping outgoing call audio');
+      }
+    } catch (error) {
+      console.log('🔇 Error stopping outgoing call audio:', error.message);
+    }
+  };
+
+  // Function to end call and clear all state
+  const endCall = useCallback(() => {
+    console.log('🧹 Ending call and clearing all state...');
+    
+    // Clear all timers
+    clearAllTimers();
+    
+    // Reset call status
+    setCallStatus('idle');
+    
+    // Clear localStorage
+    localStorage.removeItem('activeCallData');
+    
+    // Clear Redux state
+    dispatch(setActiveCall(null));
+    dispatch(setIncomingCall(null));
+    dispatch(setOutgoingCall(null));
+    dispatch(setShowIncomingCallModal(false));
+    dispatch(setShowOutgoingCallModal(false));
+    dispatch(setShowCallWindow(false));
+    
+    // Clear processed call IDs
+    setProcessedCallIds(new Set());
+    setLastEventTime({});
+    
+    // Reset toast flags
+    setHasShownIncomingToast(false);
+    setHasShownOutgoingToast(false);
+    
+    // Clear persisted call data
+    saveCallData(null);
+    
+    // Stop call sounds
+    stopCallSounds();
+    
+    // Navigate if on call page
+    if (location.pathname.includes('/call/')) {
+      navigate(-1);
+    }
+    
+    console.log('✅ Call state completely cleared');
+  }, [dispatch, clearAllTimers, saveCallData, stopCallSounds, location.pathname, navigate]);
+
   // Auto-cancel timeout refs
   const callTimeoutRef = useRef(null);
   const participantCheckIntervalRef = useRef(null);
+  const connectingTimeoutRef = useRef(null);
 
   // Audio refs for call sounds
   const incomingCallAudioRef = useRef(null);
@@ -123,38 +301,6 @@ export const useCallSocket = () => {
       }
     }
   }, []);
-
-  // Save call data to localStorage
-  const saveCallData = (callData) => {
-    if (callData) {
-      localStorage.setItem('activeCallData', JSON.stringify(callData));
-      setCallPersistData(callData);
-    } else {
-      localStorage.removeItem('activeCallData');
-      setCallPersistData(null);
-    }
-  };
-
-  // Helper functions
-  const stopCallSounds = () => {
-    try {
-      if (incomingCallAudioRef.current) {
-        // Web Audio API doesn't have pause method, just stop the current sound
-        console.log('🔇 Stopping incoming call audio');
-      }
-    } catch (error) {
-      console.log('🔇 Error stopping incoming call audio:', error.message);
-    }
-    
-    try {
-      if (outgoingCallAudioRef.current) {
-        // Web Audio API doesn't have pause method, just stop the current sound
-        console.log('🔇 Stopping outgoing call audio');
-      }
-    } catch (error) {
-      console.log('🔇 Error stopping outgoing call audio:', error.message);
-    }
-  };
 
   // Auto-cancel call after timeout
   const startCallTimeout = useCallback((callId, timeoutMs = 60000) => {
@@ -237,45 +383,48 @@ export const useCallSocket = () => {
     }, 5000); // Check every 5 seconds
   }, [socket]);
 
-  // Clear all timers
-  const clearAllTimers = useCallback(() => {
-    if (callTimeoutRef.current) {
-      clearTimeout(callTimeoutRef.current);
-      callTimeoutRef.current = null;
+  // Helper function to check for duplicate events
+  const isDuplicateEvent = useCallback((eventType, callId, data) => {
+    const eventKey = `${eventType}_${callId}`;
+    const now = Date.now();
+    const lastTime = lastEventTime[eventKey] || 0;
+    
+    // If same event happened within 2 seconds, consider it duplicate
+    if (now - lastTime < 2000) {
+      console.log(`🚫 Duplicate ${eventType} event ignored for call ${callId}`);
+      return true;
     }
-    if (participantCheckIntervalRef.current) {
-      clearInterval(participantCheckIntervalRef.current);
-      participantCheckIntervalRef.current = null;
+    
+    // Check if this call ID is already being processed
+    if (processedCallIds.has(callId)) {
+      console.log(`🚫 Call ${callId} already being processed, ignoring duplicate ${eventType}`);
+      return true;
     }
-  }, []);
-
-  const endCall = () => {
-    dispatch(setIncomingCall(null));
-    dispatch(setOutgoingCall(null));
-    dispatch(setActiveCall(null));
-    setCallStatus('idle');
-    setHasShownIncomingToast(false); // Reset toast flag
-    dispatch(setShowIncomingCallModal(false));
-    dispatch(setShowOutgoingCallModal(false));
-    dispatch(setShowCallWindow(false));
     
-    // Clear persisted call data
-    saveCallData(null);
+    // Mark this call ID as being processed
+    setProcessedCallIds(prev => new Set([...prev, callId]));
     
-    // Clear all timers
-    clearAllTimers();
+    // Update last event time
+    setLastEventTime(prev => ({
+      ...prev,
+      [eventKey]: now
+    }));
     
-    stopCallSounds();
-    
-    if (location.pathname.includes('/call/')) {
-      navigate(-1);
-    }
-  };
+    return false;
+  }, [lastEventTime, processedCallIds]);
 
   // Socket event handlers
   const handleIncomingCall = useCallback((data) => {
     console.log('📞 Incoming call data:', data);
     console.log('🔍 Available fields:', Object.keys(data));
+    
+    // Extract call ID for duplicate checking
+    const callId = data.callId || data._id || `incoming_${Date.now()}`;
+    
+    // Check for duplicate event
+    if (isDuplicateEvent('incoming_call', callId, data)) {
+      return;
+    }
     
     dispatch(setIncomingCall(data));
     dispatch(setShowIncomingCallModal(true));
@@ -330,6 +479,14 @@ export const useCallSocket = () => {
     console.log('📞 Call started data:', data);
     console.log('🔍 Available fields:', Object.keys(data));
     
+    // Extract call ID for duplicate checking
+    const callId = data.call?._id || data.callId || `started_${Date.now()}`;
+    
+    // Check for duplicate event
+    if (isDuplicateEvent('call_started', callId, data)) {
+      return;
+    }
+    
     dispatch(setOutgoingCall(data));
     dispatch(setShowOutgoingCallModal(true));
     setCallStatus('connecting');
@@ -378,12 +535,33 @@ export const useCallSocket = () => {
   }, [dispatch]);
 
   const handleCallJoined = useCallback((data) => {
+    console.log('📞 handleCallJoined called with data:', data);
+    
+    // Extract call ID for duplicate checking
+    const callId = data.call?._id || data.callId || `joined_${Date.now()}`;
+    console.log('🆔 Extracted callId for duplicate check:', callId);
+    
+    // Check for duplicate event
+    if (isDuplicateEvent('call_joined', callId, data)) {
+      console.log('🚫 Duplicate call_joined event ignored');
+      return;
+    }
+    
+    console.log('✅ Processing call_joined event...');
     dispatch(setActiveCall(data.call));
+    console.log('🔄 Setting call status to connected...');
     setCallStatus('connected');
+    
+    // Clear connecting timeout since call is now connected
+    console.log('⏰ Clearing connecting timeout...');
+    clearConnectingTimeout();
+    
+    console.log('🎭 Updating UI state...');
     dispatch(setShowIncomingCallModal(false));
     dispatch(setShowOutgoingCallModal(false));
     dispatch(setShowCallWindow(true));
     
+    console.log('🔇 Stopping call sounds...');
     stopCallSounds();
     
     // Update call data with connected status
@@ -420,32 +598,60 @@ export const useCallSocket = () => {
   }, [dispatch, navigate, location.pathname, saveCallData, startParticipantCheck]);
 
   const handleCallEnded = useCallback((data) => {
+    console.log('📞 Call ended data:', data);
+    
+    // Clear duplicate tracking for this call
+    const callId = data.callId;
+    if (callId) {
+      setProcessedCallIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(callId);
+        return newSet;
+      });
+    }
+    
     endCall();
-    toast.success('Call ended');
+    
+    // Show appropriate message based on reason
+    if (data.reason === 'rejected') {
+      toast.error(`Call was rejected by ${data.rejectedByName || 'the receiver'}`);
+    } else if (data.reason === 'insufficient_participants') {
+      toast.error('Call ended - insufficient participants');
+    } else {
+      toast.success('Call ended');
+    }
     
     if (location.pathname.includes('/video-call/')) {
       navigate('/video-call/ended', { 
         state: { 
-          message: 'Call ended',
-          caller: data?.caller || data?.user 
+          message: data.reason === 'rejected' ? 'Call rejected' : 'Call ended',
+          caller: data?.caller || data?.user,
+          reason: data.reason,
+          rejectedBy: data.rejectedByName
         } 
       });
     }
-  }, [navigate, location.pathname]);
+  }, [navigate, location.pathname, endCall]);
 
   const handleCallRejected = useCallback((data) => {
-    endCall();
-    toast.error('Call was rejected');
+    console.log('📞 Call rejected data:', data);
     
-    if (location.pathname.includes('/video-call/')) {
-      navigate('/video-call/ended', { 
-        state: { 
-          message: 'Call rejected',
-          caller: data?.caller || data?.user 
-        } 
+    // Clear duplicate tracking for this call
+    const callId = data.callId;
+    if (callId) {
+      setProcessedCallIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(callId);
+        return newSet;
       });
     }
-  }, [navigate, location.pathname]);
+    
+    // Note: We don't call endCall() here because handleCallEnded will also be called
+    // and will handle the cleanup. This prevents duplicate handling.
+    
+    // Just show the rejection toast - the call_ended event will handle the rest
+    toast.error(`Call was rejected by ${data.rejectedByName || 'the receiver'}`);
+  }, []);
 
   const handleSDPOffer = useCallback(async (data, createAnswer) => {
     try {
@@ -523,16 +729,8 @@ export const useCallSocket = () => {
 
   // Socket actions
   const startCallSocket = useCallback(async (chatId, type = 'one-to-one') => {
-    if (!socket) {
-      console.error('❌ Socket not connected');
-      throw new Error('Socket not connected');
-    }
-
-    // Check socket connection status
-    if (socket.disconnected) {
-      console.error('❌ Socket is disconnected');
-      throw new Error('Socket is disconnected');
-    }
+    // Ensure socket connection
+    await ensureSocketConnection();
 
     console.log('📡 Emitting start_call event...');
     console.log('🔍 Socket connected:', socket.connected);
@@ -545,24 +743,36 @@ export const useCallSocket = () => {
 
     setCallStatus('connecting');
     console.log('✅ Call status set to connecting');
+    
+    // Start connecting timeout
+    startConnectingTimeout();
   }, [socket]);
 
   const joinCallSocket = useCallback(async (callId) => {
-    if (!socket) {
-      throw new Error('Socket not connected');
-    }
+    console.log('📡 joinCallSocket called with callId:', callId);
+    
+    // Ensure socket connection
+    console.log('🔌 Ensuring socket connection...');
+    await ensureSocketConnection();
 
+    console.log('📤 Emitting join_call event with callId:', callId);
     socket.emit('join_call', { 
       callId 
     });
 
+    console.log('🔄 Setting call status to connecting...');
     setCallStatus('connecting');
+    
+    // Start connecting timeout
+    console.log('⏰ Starting connecting timeout...');
+    startConnectingTimeout();
+    
+    console.log('✅ joinCallSocket completed');
   }, [socket]);
 
   const rejectCallSocket = useCallback(async (callId) => {
-    if (!socket) {
-      throw new Error('Socket not connected');
-    }
+    // Ensure socket connection
+    await ensureSocketConnection();
 
     socket.emit('reject_call', { 
       callId 
@@ -579,21 +789,19 @@ export const useCallSocket = () => {
   }, [socket, dispatch]);
 
   const endCallSocket = useCallback(async (callId) => {
-    if (!socket) {
-      throw new Error('Socket not connected');
-    }
+    // Ensure socket connection
+    await ensureSocketConnection();
 
     socket.emit('end_call', { 
       callId 
     });
     
     endCall();
-  }, [socket]);
+  }, [socket, endCall]);
 
   const sendSDPOffer = useCallback(async (callId, offer) => {
-    if (!socket) {
-      throw new Error('Socket not connected');
-    }
+    // Ensure socket connection
+    await ensureSocketConnection();
 
     socket.emit('sdp_offer', {
       callId: callId,
@@ -602,9 +810,8 @@ export const useCallSocket = () => {
   }, [socket]);
 
   const sendSDPAnswer = useCallback(async (callId, answer) => {
-    if (!socket) {
-      throw new Error('Socket not connected');
-    }
+    // Ensure socket connection
+    await ensureSocketConnection();
 
     socket.emit('sdp_answer', {
       callId: callId,
@@ -613,9 +820,8 @@ export const useCallSocket = () => {
   }, [socket]);
 
   const sendICECandidate = useCallback(async (candidate) => {
-    if (!socket) {
-      throw new Error('Socket not connected');
-    }
+    // Ensure socket connection
+    await ensureSocketConnection();
 
     socket.emit('ice_candidate', {
       candidate: candidate

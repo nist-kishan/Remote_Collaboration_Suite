@@ -5,7 +5,6 @@ import { setNavigateFunction } from "./utils/navigation";
 import ApplicationLayout from "./components/ApplicationLayout";
 import ToastNotification from "./components/ui/ToastNotification";
 import ApplicationLoadingSpinner from "./components/ui/ApplicationLoadingSpinner";
-import ChatNotificationToast from "./components/chat/ChatNotificationToast";
 import BrowserExtensionNotification from "./components/ui/BrowserExtensionNotification";
 import { setupGlobalErrorHandling } from "./utils/errorHandler";
 import Login from "./pages/authenication/Login";
@@ -178,7 +177,6 @@ export default function App() {
 
       <div className="relative z-[9999] pointer-events-auto">
         <ToastNotification />
-        <ChatNotificationToast />
         <BrowserExtensionNotification />
       </div>
     </>

@@ -3,7 +3,6 @@ import ApplicationHeader from "./ApplicationHeader";
 import ApplicationFooter from "./ApplicationFooter";
 import DocumentStateManager from "./documents/DocumentStateManager";
 import GlobalCallNotification from "./call/GlobalCallNotification";
-import VideoCallNotification from "./call/VideoCallNotification";
 
 export default function Layout() {
   const location = useLocation();
@@ -19,8 +18,7 @@ export default function Layout() {
           <Outlet />
         </main>
         {/* No footer for chat pages to maximize space */}
-        <GlobalCallNotification />
-        <VideoCallNotification />
+        <GlobalCallNotification key="chat-layout" />
       </div>
     );
   }
@@ -34,8 +32,7 @@ export default function Layout() {
         <Outlet />
       </main>
       <ApplicationFooter />
-      <GlobalCallNotification />
-      <VideoCallNotification />
+      <GlobalCallNotification key="standard-layout" />
     </div>
   );
 }
