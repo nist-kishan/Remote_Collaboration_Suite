@@ -76,8 +76,7 @@ export const useSocket = () => {
         if (error.message.includes('WebSocket is closed before the connection is established')) {
           return;
         }
-        
-        console.log('Socket.IO connection error:', error.message);
+
         setConnectionError(error.message);
         setIsConnected(false);
       });

@@ -1,31 +1,47 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { useParams, useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Search, X } from 'lucide-react';
+// import '../components/chat/chat-styles.css';
 import ChatConversationList from '../components/chat/ChatConversationList';
 import ChatConversationWindow from '../components/chat/ChatConversationWindow';
 import CreateNewChatModal from '../components/chat/CreateNewChatModal';
-import { createGroupChat } from '../api/chatApi';
-import { useCall } from '../hook/useCall';
+import CreateChatGroupModal from '../components/chat/CreateChatGroupModal';
+import { useChatPage } from '../hook/useChat';
+import { useChatCallIntegration } from '../hook/useChatCallIntegration';
 import IncomingVideoCallModal from '../components/call/IncomingVideoCallModal';
 import OutgoingVideoCallModal from '../components/call/OutgoingVideoCallModal';
 import VideoCallInterface from '../components/call/VideoCallInterface';
 import CustomButton from '../components/ui/CustomButton';
-import CustomInput from '../components/ui/CustomInput';
 import NetworkConnectionStatus from '../components/ui/NetworkConnectionStatus';
-import { X } from 'lucide-react';
 
 const ChatPage = () => {
-  const { receiverId, groupId } = useParams();
-  const navigate = useNavigate();
   const messageInputRef = useRef(null);
-  const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [showNewChat, setShowNewChat] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const [selectedMembers, setSelectedMembers] = useState([]);
-  const [showChat, setShowChat] = useState(false);
 
-  // Call manager
+  // Chat page business logic
+  const {
+    showCreateGroup,
+    showNewChat,
+    selectedChat,
+    showChatList,
+    searchQuery,
+    isChatLoading,
+    chatError,
+    handleStartChat,
+    handleLoadGroupChat,
+    handleNewChatCreated,
+    handleBackToChatList,
+    handleSelectChat,
+    handleVideoCall,
+    handleCallHistory,
+    handleCreateGroup,
+    handleCloseModal,
+    handleOpenModal,
+    handleUrlParams,
+    handleDelete,
+    handleInfo,
+    setSelectedChat,
+  } = useChatPage();
+
+  // Enhanced chat-call integration
   const {
     incomingCall,
     outgoingCall,
@@ -33,275 +49,174 @@ const ChatPage = () => {
     showIncomingCall,
     showOutgoingCall,
     showActiveCall,
-    startCall,
-    acceptCall,
-    rejectCall,
-    declineCall,
+    integrationState,
+    callStatus,
+    initiateVideoCall,
+    handleCallAccept,
+    handleCallReject,
+    handleCallEnd,
     cancelCall,
-    endActiveCall
-  } = useCall();
+    declineCall,
+    isVideoCallAvailable,
+    callHistory
+  } = useChatCallIntegration(selectedChat);
 
-  // Handle URL parameters
+  // Handle URL parameters on mount
   useEffect(() => {
-    if (receiverId) {
-      // If receiverId is provided, automatically start a chat with that user
-      handleStartChatWithUser(receiverId);
-    } else if (groupId) {
-      // If groupId is provided, load the group chat
-      handleLoadGroupChat(groupId);
-    }
-  }, [receiverId, groupId]);
-
-  const handleStartChatWithUser = async (userId) => {
-    try {
-      // Import the getOrCreateOneToOneChat function
-      const { getOrCreateOneToOneChat } = await import('../api/chatApi');
-      const response = await getOrCreateOneToOneChat(userId);
-      const chat = response.data?.data?.chat || response.data?.chat || response.data;
-      
-      if (chat && chat._id) {
-        setSelectedChat(chat);
-        // Update URL to show the receiver ID
-        navigate(`/chat/${userId}`, { replace: true });
-      } else {
-        toast.error('Failed to start chat with user');
-      }
-    } catch (error) {
-      toast.error('Failed to start chat with user');
-    }
-  };
-
-  const handleLoadGroupChat = async (groupId) => {
-    try {
-      // Import the getChatById function
-      const { getChatById } = await import('../api/chatApi');
-      const response = await getChatById(groupId);
-      const chat = response.data?.data?.chat || response.data?.chat || response.data;
-      
-      if (chat && chat._id) {
-        setSelectedChat(chat);
-        // Update URL to show the group ID
-        navigate(`/chats/group/${groupId}`, { replace: true });
-      } else {
-        toast.error('Failed to load group chat');
-      }
-    } catch (error) {
-      toast.error('Failed to load group chat');
-    }
-  };
-
-
-  const createGroupMutation = useMutation({
-    mutationFn: createGroupChat,
-    onSuccess: (data) => {
-      toast.success('Group created successfully!');
-      const chat = data.data?.data?.chat || data.data?.chat || data.data;
-      setSelectedChat(chat);
-      setShowCreateGroup(false);
-      setGroupName('');
-      setSelectedMembers([]);
-      
-      // Navigate to the group chat URL
-      if (chat && chat._id) {
-        navigate(`/chats/group/${chat._id}`, { replace: true });
-      }
-    },
-    onError: (error) => {
-      toast.error(error?.data?.message || 'Failed to create group');
-    }
-  });
-
-  const handleCreateGroup = () => {
-    if (!groupName.trim() || selectedMembers.length < 2) {
-      toast.error('Please provide a group name and select at least 2 members');
-      return;
-    }
-
-    createGroupMutation.mutate({
-      name: groupName,
-      participantIds: selectedMembers
-    });
-  };
-
-  const handleVideoCall = (chat) => {
-    // Start video call using call manager
-    startCall(chat._id);
-  };
-
-  const handleEndCall = () => {
-    endActiveCall();
-  };
-
-  const handleToggleChat = () => {
-    setShowChat(!showChat);
-  };
-
-  const handleCallHistory = (chat) => {
-    // Navigate to call history page
-    navigate('/call-history');
-  };
-
-  const handleNewChatCreated = (chat) => {
-    setSelectedChat(chat);
-    setShowNewChat(false);
-    
-    // Navigate based on chat type
-    if (chat.type === 'one-to-one') {
-      // Get the receiver ID from the chat participants
-      const receiver = chat.participants?.find(p => p.user._id !== user?._id);
-      if (receiver) {
-        // Update URL to show the receiver ID
-        navigate(`/chat/${receiver.user._id}`, { replace: true });
-      }
-    } else if (chat.type === 'group') {
-      // Navigate to group chat URL
-      navigate(`/chats/group/${chat._id}`, { replace: true });
-    }
-    
-    // Focus on the message input for immediate typing
-    setTimeout(() => {
-      if (messageInputRef.current) {
-        messageInputRef.current.focus();
-      }
-    }, 100);
-  };
+    handleUrlParams();
+  }, [handleUrlParams]);
 
   return (
-    <>
-      {/* Call Modals */}
-      <IncomingVideoCallModal
-        incomingCall={incomingCall}
-        onAccept={acceptCall}
-        onReject={rejectCall}
-        onDecline={declineCall}
-        isVisible={showIncomingCall}
-      />
+    <div className="h-full w-full flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden relative z-10">
+      {/* Network Connection Status */}
+      <NetworkConnectionStatus className="fixed right-2 z-40 max-w-xs" style={{ top: '80px' }} />
 
-      <OutgoingVideoCallModal
-        outgoingCall={outgoingCall}
-        onCancel={cancelCall}
-        isVisible={showOutgoingCall}
-      />
-
-      {/* Active Call Window */}
-      {showActiveCall && activeCall && (
-        <VideoCallInterface
-          call={activeCall}
-          onEndCall={handleEndCall}
-          onToggleChat={handleToggleChat}
+      {/* Incoming Call Modal */}
+      {showIncomingCall && incomingCall && (
+        <IncomingVideoCallModal
+          call={incomingCall}
+          onAccept={handleCallAccept}
+          onReject={handleCallReject}
+          chatContext={selectedChat}
         />
       )}
 
-      {/* Connection Status */}
-      <NetworkConnectionStatus className="fixed top-4 right-4 z-50 max-w-sm" />
+      {/* Outgoing Call Modal */}
+      {showOutgoingCall && outgoingCall && (
+        <OutgoingVideoCallModal
+          call={outgoingCall}
+          onCancel={cancelCall}
+          chatContext={selectedChat}
+        />
+      )}
+
+      {/* Active Call Interface */}
+      {showActiveCall && activeCall && (
+        <div className="absolute inset-0 z-40 bg-black overflow-hidden">
+          <VideoCallInterface
+            call={activeCall}
+            onEndCall={handleCallEnd}
+            onDeclineCall={declineCall}
+            chatContext={selectedChat}
+            callDuration={callStatus.duration * 1000}
+          />
+        </div>
+      )}
+
+      {/* Enhanced Call Status Indicator */}
+      {callStatus.status === 'active' && (
+        <div className="bg-indigo-600 text-white px-4 py-2 text-center text-sm flex items-center justify-center flex-shrink-0">
+          <span className="animate-pulse mr-2">📞</span>
+          Video call with {callStatus.chatName}
+          <span className="ml-2 bg-indigo-500 px-2 py-1 rounded text-xs">
+            {callStatus.duration}s
+          </span>
+        </div>
+      )}
+      
+      {callStatus.status === 'connecting' && (
+        <div className="bg-yellow-600 text-white px-4 py-2 text-center text-sm flex items-center justify-center flex-shrink-0">
+          <span className="animate-spin mr-2">⏳</span>
+          Connecting to {callStatus.chatName}...
+        </div>
+      )}
 
       {/* Main Chat Interface */}
       {!showActiveCall && (
-        <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
-          {/* Chat List - Hidden on mobile when chat is selected */}
-          <div className={`${selectedChat ? 'hidden md:block' : 'block'} w-full md:w-96`}>
-            <ChatConversationList
-              onSelectChat={setSelectedChat}
-              onVideoCall={handleVideoCall}
-            />
+        <div className="flex-1 flex overflow-hidden min-h-0 relative">
+          {/* Chat List - Responsive visibility */}
+          <div className={`${showChatList ? 'flex' : 'hidden lg:flex'} w-full sm:w-80 md:w-96 lg:w-80 xl:w-96 flex-col min-h-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 relative z-10`}>
+            <div className="flex-1 overflow-hidden min-h-0">
+              <ChatConversationList
+                onSelectChat={handleSelectChat}
+                onVideoCall={initiateVideoCall}
+                onNewChat={() => handleOpenModal('newChat')}
+                onCreateGroup={() => handleOpenModal('createGroup')}
+                selectedChat={selectedChat}
+                callStatus={callStatus}
+                isVideoCallAvailable={isVideoCallAvailable}
+              />
+            </div>
           </div>
 
-          {/* Chat Window */}
-          {selectedChat ? (
-            <div className="flex-1 h-screen">
+          {/* Chat Window - Always visible on larger screens */}
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0 bg-white dark:bg-gray-900 relative z-10">
+            {selectedChat ? (
               <ChatConversationWindow
                 ref={messageInputRef}
                 chat={selectedChat}
-                onVideoCall={handleVideoCall}
-                onCallHistory={handleCallHistory}
+                onVideoCall={initiateVideoCall}
                 onChatSelect={setSelectedChat}
+                onDelete={handleDelete}
+                onInfo={handleInfo}
                 isMobile={true}
+                callStatus={callStatus}
+                isVideoCallAvailable={isVideoCallAvailable}
+                integrationState={integrationState}
               />
-            </div>
-          ) : (
-            <div className="hidden md:flex flex-1 items-center justify-center">
-              <div className="text-center text-gray-500 dark:text-gray-400">
-                <p className="text-xl font-semibold mb-2">Select a chat to start messaging</p>
-                <p className="text-sm">Or create a new group chat</p>
-              </div>
-            </div>
-          )}
+            ) : (
+              <>
+                {/* Chat Header - Always visible on larger screens */}
+                <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between p-3 md:p-4">
+                    <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                      <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                        <Search className="w-4 h-4 md:w-6 md:h-6 text-gray-400" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-sm md:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+                          Select a Chat
+                        </h2>
+                        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 truncate">
+                          Choose a conversation to start messaging
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Chat Content Area */}
+                <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-800 min-h-0 overflow-hidden">
+                  <div className="text-center text-gray-500 dark:text-gray-400 p-8 max-w-md">
+                    <div className="w-24 h-24 mx-auto mb-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                      <Search size={32} className="text-gray-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2">Select a chat to start messaging</h3>
+                    <p className="text-sm mb-6">Choose from your existing conversations or start a new one</p>
+                    <CustomButton
+                      onClick={() => handleOpenModal('newChat')}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    >
+                      Start New Chat
+                    </CustomButton>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
+      )}
+
+      {/* Create New Chat Modal */}
+      {showNewChat && (
+        <CreateNewChatModal
+          isOpen={showNewChat}
+          onClose={() => handleCloseModal('newChat')}
+          onChatCreated={handleNewChatCreated}
+          onCreateGroup={() => handleOpenModal('createGroup')}
+        />
       )}
 
       {/* Create Group Modal */}
       {showCreateGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                Create Group Chat
-              </h2>
-              <button
-                onClick={() => setShowCreateGroup(false)}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-              >
-                <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Group Name
-                </label>
-                <CustomInput
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  placeholder="Enter group name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Select Members (at least 2)
-                </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  Selected: {selectedMembers.length} members
-                </p>
-                <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-900 max-h-48 overflow-y-auto">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Member selection will be implemented with user search
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <CustomButton
-                  onClick={() => setShowCreateGroup(false)}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Cancel
-                </CustomButton>
-                <CustomButton
-                  onClick={handleCreateGroup}
-                  disabled={createGroupMutation.isPending || !groupName.trim() || selectedMembers.length < 2}
-                  loading={createGroupMutation.isPending}
-                  className="flex-1"
-                >
-                  Create Group
-                </CustomButton>
-              </div>
-            </div>
-          </div>
-        </div>
+        <CreateChatGroupModal
+          isOpen={showCreateGroup}
+          onClose={() => handleCloseModal('createGroup')}
+          onGroupCreated={handleNewChatCreated}
+        />
       )}
-
-      {/* New Chat Modal */}
-      <CreateNewChatModal
-        isOpen={showNewChat}
-        onClose={() => setShowNewChat(false)}
-        onChatCreated={handleNewChatCreated}
-      />
-    </>
+    </div>
   );
 };
 
 export default ChatPage;
-

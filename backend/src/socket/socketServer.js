@@ -6,6 +6,7 @@ import Chat from "../models/chat.model.js";
 import Message from "../models/Message.model.js";
 import Call from "../models/call.model.js";
 import Document from "../models/document.model.js";
+import { retryableUserUpdate, retryableUserFind, retryableChatUpdate, retryableMessageCreate, retryableMessageFind, waitForConnection } from "../utils/databaseRetry.js";
 
 class SocketServer {
   constructor(server) {
@@ -106,12 +107,21 @@ class SocketServer {
   setupEventHandlers() {
     this.io.on("connection", async (socket) => {
 
+      // Ensure database connection is ready before proceeding
+      try {
+        await waitForConnection();
+      } catch (error) {
+        console.error('❌ Database not ready for socket operations:', error.message);
+        socket.emit('error', { message: 'Database not ready' });
+        return;
+      }
+
       // Join user's personal room for notifications
       socket.join(`user:${socket.userId}`);
       
-      // Update user online status
+      // Update user online status with retry logic
       try {
-        await User.findByIdAndUpdate(socket.userId, {
+        await retryableUserUpdate(socket.userId, {
           isOnline: true,
           lastSeen: new Date()
         });
@@ -619,14 +629,17 @@ class SocketServer {
 
       // Send message
       socket.on("send_message", async (data) => {
-      // console.log('Socket.IO send_message received:', {
-      //   chatId: data.chatId,
-      //   content: data.content,
-      //   type: data.type,
-      //   media: data.media ? 'present' : 'not present',
-      //   replyTo: data.replyTo,
-      //   replyToType: typeof data.replyTo
-      // });
+        console.log('🔍 Socket.IO send_message received:', {
+          chatId: data.chatId,
+          chatIdType: typeof data.chatId,
+          content: data.content,
+          type: data.type,
+          media: data.media ? 'present' : 'not present',
+          replyTo: data.replyTo,
+          replyToType: typeof data.replyTo,
+          sender: socket.userId,
+          senderType: typeof socket.userId
+        });
         
         try {
           const { chatId, content, type, media, replyTo } = data;
@@ -635,8 +648,13 @@ class SocketServer {
           const cleanReplyTo = (replyTo && replyTo !== 'undefined' && replyTo !== 'null') ? replyTo : null;
           const cleanMedia = (media && media !== 'undefined' && media !== 'null') ? media : null;
           
+          // Ensure ObjectId fields are strings
+          const cleanChatId = typeof chatId === 'object' ? chatId.toString() : chatId;
+          const cleanSenderId = typeof socket.userId === 'object' ? socket.userId.toString() : socket.userId;
+          const cleanReplyToId = cleanReplyTo && typeof cleanReplyTo === 'object' ? cleanReplyTo.toString() : cleanReplyTo;
+          
           // Validate required fields
-          if (!chatId) {
+          if (!cleanChatId) {
             socket.emit("error", "Chat ID is required");
             return;
           }
@@ -653,7 +671,7 @@ class SocketServer {
           }
           
           // Verify chat exists and user is participant
-          const chat = await Chat.findById(chatId).populate('participants.user', 'name email');
+          const chat = await Chat.findById(cleanChatId).populate('participants.user', 'name email');
           if (!chat) {
             socket.emit("error", "Chat not found");
             return;
@@ -661,7 +679,7 @@ class SocketServer {
 
           // Check if user is a participant
           const isParticipant = chat.participants.some(
-            p => p.user && p.user._id.toString() === socket.userId.toString()
+            p => p.user && p.user._id.toString() === cleanSenderId.toString()
           );
 
           if (!isParticipant) {
@@ -670,14 +688,28 @@ class SocketServer {
           }
 
           // Create message in database
-          const message = await Message.create({
-            chat: chatId,
-            sender: socket.userId,
+          const messageData = {
+            chat: cleanChatId,
+            sender: cleanSenderId,
             content,
             type: type || 'text',
             media: cleanMedia,
-            replyTo: cleanReplyTo
+            replyTo: cleanReplyToId
+          };
+          
+          console.log('🔍 Creating message with data:', {
+            chat: messageData.chat,
+            chatType: typeof messageData.chat,
+            sender: messageData.sender,
+            senderType: typeof messageData.sender,
+            content: messageData.content,
+            type: messageData.type,
+            media: messageData.media,
+            replyTo: messageData.replyTo,
+            replyToType: typeof messageData.replyTo
           });
+          
+          const message = await Message.create(messageData);
 
           await message.populate('sender', 'name avatar');
           await message.populate('replyTo');
@@ -702,7 +734,7 @@ class SocketServer {
               // Increment unread count for all participants except the sender
               chat.participants.forEach(participant => {
                 const participantUserId = participant.user._id ? participant.user._id.toString() : participant.user.toString();
-                if (participantUserId !== socket.userId.toString()) {
+                if (participantUserId !== cleanSenderId.toString()) {
                   const currentCount = chat.unreadCount.get(participantUserId) || 0;
                   chat.unreadCount.set(participantUserId, currentCount + 1);
                 }
@@ -728,11 +760,11 @@ class SocketServer {
           socket.emit("message_confirmed", {
             messageId: message._id,
             content: message.content,
-            chatId
+            chatId: cleanChatId
           });
 
           // Broadcast to all users in the chat
-          // console.log(`Broadcasting message to chat room: chat:${chatId}`);
+          // console.log(`Broadcasting message to chat room: chat:${cleanChatId}`);
           // console.log(`Message details:`, {
           //   messageId: message._id,
           //   content: message.content,
@@ -742,26 +774,26 @@ class SocketServer {
           
           const broadcastData = {
             message,
-            chatId,
+            chatId: cleanChatId,
             sender: {
-              _id: socket.userId,
+              _id: cleanSenderId,
               name: socket.user.name,
               avatar: socket.user.avatar
             }
           };
           
-          // console.log(`Broadcasting to room chat:${chatId} with data:`, broadcastData);
+          // console.log(`Broadcasting to room chat:${cleanChatId} with data:`, broadcastData);
           
           // Get the number of clients in the room
-          const room = this.io.sockets.adapter.rooms.get(`chat:${chatId}`);
+          const room = this.io.sockets.adapter.rooms.get(`chat:${cleanChatId}`);
           const clientCount = room ? room.size : 0;
-          // console.log(`Number of clients in room chat:${chatId}:`, clientCount);
+          // console.log(`Number of clients in room chat:${cleanChatId}:`, clientCount);
           
-          this.io.to(`chat:${chatId}`).emit("new_message", broadcastData);
+          this.io.to(`chat:${cleanChatId}`).emit("new_message", broadcastData);
           
           // Also emit to individual users as backup
           chat.participants.forEach(participant => {
-            if (participant.user._id.toString() !== socket.userId.toString()) {
+            if (participant.user._id.toString() !== cleanSenderId.toString()) {
               // console.log(`Sending message to individual user: ${participant.user._id}`);
               this.io.to(`user:${participant.user._id}`).emit("new_message", broadcastData);
             }
@@ -769,7 +801,7 @@ class SocketServer {
 
           // Broadcast updated chat data to all connected users for chat list updates
           this.io.emit("chat_updated", {
-            chatId,
+            chatId: cleanChatId,
             updatedFields: {
               lastMessage: message,
               unreadCount: chat.unreadCount,
@@ -1141,6 +1173,11 @@ class SocketServer {
           call.participants.forEach(participant => {
             this.io.to(`user:${participant.user._id}`).emit("call_joined", { call });
           });
+
+          // Start participant count monitoring for ongoing calls
+          if (call.status === 'ongoing') {
+            this.startParticipantMonitoring(callId);
+          }
         } catch (error) {
           socket.emit("error", "Failed to join call");
         }
@@ -1419,9 +1456,9 @@ class SocketServer {
       // Handle disconnect
       socket.on("disconnect", async () => {
         
-        // Update user offline status
+        // Update user offline status with retry logic
         try {
-          await User.findByIdAndUpdate(socket.userId, {
+          await retryableUserUpdate(socket.userId, {
             isOnline: false,
             lastSeen: new Date()
           });
@@ -1599,6 +1636,80 @@ class SocketServer {
         }
       }
     }
+  }
+
+  // Start participant count monitoring for a call
+  startParticipantMonitoring(callId) {
+    // Clear any existing monitoring for this call
+    if (this.participantMonitoringIntervals) {
+      const existingInterval = this.participantMonitoringIntervals.get(callId);
+      if (existingInterval) {
+        clearInterval(existingInterval);
+      }
+    } else {
+      this.participantMonitoringIntervals = new Map();
+    }
+
+    console.log(`👥 Starting participant monitoring for call: ${callId}`);
+    
+    const interval = setInterval(async () => {
+      try {
+        const call = await Call.findById(callId);
+        if (!call || call.status !== 'ongoing') {
+          // Call ended or not found, stop monitoring
+          clearInterval(interval);
+          this.participantMonitoringIntervals.delete(callId);
+          return;
+        }
+
+        // Count active participants (joined and not left)
+        const activeParticipants = call.participants.filter(p => 
+          p.status === 'joined' && !p.leftAt
+        );
+
+        console.log(`👥 Call ${callId} has ${activeParticipants.length} active participants`);
+
+        // If less than 2 participants, end the call
+        if (activeParticipants.length < 2) {
+          console.log(`📞 Auto-ending call ${callId} - insufficient participants`);
+          
+          // Update call status
+          call.status = 'ended';
+          call.endedAt = new Date();
+          call.duration = Math.floor((call.endedAt - call.startedAt) / 1000);
+          await call.save();
+
+          // Remove from active calls
+          this.activeCalls.delete(callId);
+
+          // Notify all participants
+          this.io.to(`call:${callId}`).emit("call_ended", {
+            callId,
+            reason: 'insufficient_participants',
+            message: 'Call ended - insufficient participants'
+          });
+
+          // Also notify individual participants
+          call.participants.forEach(participant => {
+            this.io.to(`user:${participant.user._id}`).emit("call_ended", {
+              callId,
+              reason: 'insufficient_participants',
+              message: 'Call ended - insufficient participants'
+            });
+          });
+
+          // Stop monitoring
+          clearInterval(interval);
+          this.participantMonitoringIntervals.delete(callId);
+        }
+      } catch (error) {
+        console.error('Error in participant monitoring:', error);
+        clearInterval(interval);
+        this.participantMonitoringIntervals.delete(callId);
+      }
+    }, 5000); // Check every 5 seconds
+
+    this.participantMonitoringIntervals.set(callId, interval);
   }
 }
 

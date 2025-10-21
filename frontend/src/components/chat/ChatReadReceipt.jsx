@@ -54,4 +54,3 @@ const ReadReceipt = ({ chatId, messageId, senderId, className = '' }) => {
 
 export default ReadReceipt;
 
-

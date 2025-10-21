@@ -4,6 +4,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandle } from '../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../utils/uploadOnCloudinary.js';
+import { upload, optimizeMedia, handleUploadError } from '../middleware/compression.middleware.js';
 
 // Test endpoint to verify API is working
 export const testMessage = asyncHandle(async (req, res) => {
@@ -568,7 +569,11 @@ export const getTotalUnreadCount = asyncHandle(async (req, res) => {
 });
 
 // Upload file for chat
-export const uploadFile = asyncHandle(async (req, res) => {
+export const uploadFile = [
+  upload.single('file'),
+  optimizeMedia,
+  handleUploadError,
+  asyncHandle(async (req, res) => {
   const userId = req.user._id;
   const { chatId } = req.params;
   const { type } = req.body;
@@ -677,5 +682,6 @@ export const uploadFile = asyncHandle(async (req, res) => {
     console.error('Upload error details:', error);
     throw new ApiError(500, 'Failed to upload file: ' + error.message);
   }
-});
+  })
+];
 

@@ -149,10 +149,8 @@ const MessageNotification = () => {
               
               // Trigger the accept call function via socket
               if (socket) {
-                console.log('Triggering acceptCall via socket from notification');
                 socket.emit('join_call', { callId });
               } else {
-                console.warn('Socket not available for call acceptance');
               }
             }}
             className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 focus:outline-none focus:ring-2 focus:ring-green-500"

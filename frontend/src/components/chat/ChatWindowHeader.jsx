@@ -6,21 +6,18 @@ import {
   MoreVertical, 
   Users, 
   Settings,
-  Archive,
   Trash2,
-  Info,
-  History
+  Info
 } from 'lucide-react';
 import UserAvatar from '../ui/UserAvatar';
 import { useChat } from '../../hook/useChat';
+import { useUserStatus } from '../../hook/useUserStatus';
 
 const ChatHeader = ({ 
   chat, 
   onVideoCall, 
-  onArchive, 
   onDelete,
   onInfo,
-  onCallHistory,
   isMobile = false,
   className = '' 
 }) => {
@@ -65,12 +62,6 @@ const ChatHeader = ({
     
     // Use real-time status from useUserStatus hook
     const isOnline = isUserOnline(otherParticipant.user._id);
-    console.log('ChatHeader: User status check:', {
-      userId: otherParticipant.user._id,
-      userName: otherParticipant.user.name,
-      isOnline: isOnline
-    });
-    
     return isOnline;
   };
 
@@ -94,7 +85,7 @@ const ChatHeader = ({
   }
 
   return (
-    <div className={`flex items-center justify-between p-3 md:p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ${className}`}>
+    <div className={`flex items-center justify-between p-3 md:p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 relative z-50 ${className}`}>
       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
         {chat.type === 'group' ? (
           <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center flex-shrink-0">
@@ -104,7 +95,7 @@ const ChatHeader = ({
           <UserAvatar 
             user={getChatAvatar()} 
             size={isMobile ? "sm" : "md"} 
-            showOnlineStatus={true}
+            showOnlineStatus={false}
             isOnline={getOnlineStatus()}
           />
         )}
@@ -135,14 +126,6 @@ const ChatHeader = ({
             <Video className="w-4 h-4 md:w-5 md:h-5" />
           </button>
         )}
-        
-        <button
-          onClick={() => onCallHistory?.(chat)}
-          className="p-1.5 md:p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-          title="Call history"
-        >
-          <History className="w-4 h-4 md:w-5 md:h-5" />
-        </button>
 
         <button
           onClick={() => onInfo?.(chat)}
@@ -162,16 +145,6 @@ const ChatHeader = ({
 
           {showMenu && (
             <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-10 min-w-[150px]">
-              <button
-                onClick={() => {
-                  onArchive?.(chat);
-                  setShowMenu(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-              >
-                <Archive className="w-4 h-4" />
-                Archive
-              </button>
               
               <button
                 onClick={() => {

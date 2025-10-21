@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Send, 
   Image as ImageIcon, 
@@ -6,10 +6,21 @@ import {
   FileText, 
   Mic,
   Smile,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import Button from '../ui/Button';
 import MediaPreview from './MediaPreview';
+import { 
+  optimizeFiles, 
+  validateFile, 
+  formatFileSize,
+  UploadProgressTracker 
+} from '../../utils/mediaOptimizer';
+import { 
+  createOptimizedMessageSender,
+  validateMessage 
+} from '../../utils/messageOptimizer';
 
 const MessageInput = ({ 
   onSendMessage, 
@@ -23,48 +34,73 @@ const MessageInput = ({
   const [isTyping, setIsTyping] = useState(false);
   const [previewFiles, setPreviewFiles] = useState([]);
   const [fileCaptions, setFileCaptions] = useState({});
+  const [uploadProgress, setUploadProgress] = useState({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
+  const uploadTrackerRef = useRef(new UploadProgressTracker());
+  const messageSenderRef = useRef(createOptimizedMessageSender());
 
-  const handleInputChange = (e) => {
-    setMessage(e.target.value);
+  const handleInputChange = useCallback((e) => {
+    const value = e.target.value;
+    setMessage(value);
     
-    if (!isTyping) {
-      onTyping(true);
-      setIsTyping(true);
-    }
+    // Optimized typing detection
+    messageSenderRef.current.typingOptimizer.startTyping((isTyping) => {
+      onTyping(isTyping);
+      setIsTyping(isTyping);
+    });
+  }, [onTyping]);
 
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
+  const handleSend = useCallback(async () => {
+    if (!message.trim() && !replyTo && previewFiles.length === 0) return;
 
-    // Set new timeout to stop typing indicator
-    typingTimeoutRef.current = setTimeout(() => {
-      onTyping(false);
-      setIsTyping(false);
-    }, 1000);
-  };
-
-  const handleSend = () => {
-    if (message.trim() || replyTo) {
+    const startTime = Date.now();
+    
+    try {
+      // Validate message
       const messageData = {
-        content: message.trim()
+        content: message.trim(),
+        replyTo: replyTo?._id || null,
+        type: previewFiles.length > 0 ? 'media' : 'text'
       };
-      
-      // Only include replyTo if it exists and has an _id
-      if (replyTo && replyTo._id) {
-        messageData.replyTo = replyTo._id;
+
+      const validation = validateMessage(messageData);
+      if (!validation.valid) {
+        return;
       }
-      
-      onSendMessage(messageData);
+
+      // Optimize and send message
+      await messageSenderRef.current.messageOptimizer.sendMessage(
+        messageData,
+        onSendMessage
+      );
+
+      // Record performance
+      const duration = Date.now() - startTime;
+      messageSenderRef.current.performanceMonitor.recordSendTime(duration);
+
+      // Clear state
       setMessage('');
       if (replyTo) {
         onCancelReply();
       }
+      
+      // Clear preview files
+      previewFiles.forEach(file => {
+        if (file.url) {
+          URL.revokeObjectURL(file.url);
+        }
+      });
+      setPreviewFiles([]);
+      setFileCaptions({});
+
+    } catch (error) {
+      messageSenderRef.current.performanceMonitor.recordFailure();
     }
-  };
+  }, [message, replyTo, previewFiles, onSendMessage, onCancelReply]);
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -107,32 +143,55 @@ const MessageInput = ({
           URL.revokeObjectURL(file.url);
         }
       });
+      messageSenderRef.current.clear();
     };
   }, [previewFiles]);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  // Upload progress effect
+  useEffect(() => {
+    const unsubscribe = uploadTrackerRef.current.addListener((progress) => {
+      setUploadProgress(new Map(progress));
+    });
+    return unsubscribe;
+  }, []);
+
+  const handleFileChange = useCallback(async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
 
     const type = e.target.getAttribute('data-type');
-    
-    // Create file URL for preview
-    const fileUrl = URL.createObjectURL(file);
-    
-    // Add file to preview instead of sending immediately
-    const newFile = {
-      url: fileUrl,
-      type,
-      name: file.name,
-      size: file.size,
-      file: file // Keep the actual file object for sending
-    };
-    
-    setPreviewFiles(prev => [...prev, newFile]);
+    setIsOptimizing(true);
 
-    // Reset input
-    e.target.value = '';
-  };
+    try {
+      // Validate files
+      files.forEach(file => {
+        validateFile(file, type);
+      });
+
+      // Optimize files
+      const optimizedFiles = await optimizeFiles(files, {
+        maxImageSize: 1920,
+        quality: 0.8,
+        maxFileSize: type === 'image' ? 5 * 1024 * 1024 : 10 * 1024 * 1024
+      });
+
+      // Create preview objects
+      const newPreviewFiles = optimizedFiles.map(optimizedFile => ({
+        ...optimizedFile,
+        originalFile: files.find(f => f.name === optimizedFile.name),
+        optimized: true,
+        compressionRatio: optimizedFile.compressionRatio
+      }));
+
+      setPreviewFiles(prev => [...prev, ...newPreviewFiles]);
+
+    } catch (error) {
+      alert(`File error: ${error.message}`);
+    } finally {
+      setIsOptimizing(false);
+      e.target.value = '';
+    }
+  }, []);
 
   const handleRemovePreviewFile = (index) => {
     const fileToRemove = previewFiles[index];
@@ -168,37 +227,98 @@ const MessageInput = ({
     }));
   };
 
-  const handleSendMedia = () => {
+  const handleSendMedia = useCallback(async () => {
     if (previewFiles.length === 0) return;
 
-    // Send each file as a separate message or batch them
-    previewFiles.forEach((previewFile, index) => {
-      const caption = fileCaptions[index] || '';
-      
-      onSendMessage({
-        content: caption,
-        type: previewFile.type,
-        media: [{
-          url: previewFile.url,
-          type: previewFile.type,
-          name: previewFile.name,
-          size: previewFile.size
-        }]
-      });
-    });
+    setIsUploading(true);
+    const startTime = Date.now();
 
-    // Clear preview state
-    previewFiles.forEach(file => {
-      if (file.url) {
-        URL.revokeObjectURL(file.url);
-      }
-    });
-    setPreviewFiles([]);
-    setFileCaptions({});
-  };
+    try {
+      // Send files in parallel
+      const sendPromises = previewFiles.map(async (previewFile, index) => {
+        const caption = fileCaptions[index] || '';
+        
+        // Update upload progress
+        uploadTrackerRef.current.setProgress(index, 0);
+        
+        const messageData = {
+          content: caption,
+          type: previewFile.type,
+          media: [{
+            url: previewFile.url,
+            type: previewFile.type,
+            name: previewFile.name,
+            size: previewFile.size,
+            optimized: previewFile.optimized,
+            compressionRatio: previewFile.compressionRatio
+          }]
+        };
+
+        // Simulate upload progress
+        for (let progress = 0; progress <= 100; progress += 10) {
+          uploadTrackerRef.current.setProgress(index, progress);
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        await messageSenderRef.current.messageOptimizer.sendMessage(
+          messageData,
+          onSendMessage
+        );
+
+        uploadTrackerRef.current.setProgress(index, 100);
+      });
+
+      await Promise.all(sendPromises);
+
+      // Record performance
+      const duration = Date.now() - startTime;
+      messageSenderRef.current.performanceMonitor.recordSendTime(duration);
+
+      // Clear state
+      previewFiles.forEach(file => {
+        if (file.url) {
+          URL.revokeObjectURL(file.url);
+        }
+      });
+      setPreviewFiles([]);
+      setFileCaptions({});
+      uploadTrackerRef.current.clear();
+
+    } catch (error) {
+      messageSenderRef.current.performanceMonitor.recordFailure();
+    } finally {
+      setIsUploading(false);
+    }
+  }, [previewFiles, fileCaptions, onSendMessage]);
 
   return (
-    <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
+    <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900 relative z-20">
+      {/* Upload Progress */}
+      {isUploading && (
+        <div className="mb-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+            <span className="text-sm text-blue-600 dark:text-blue-400">
+              Uploading {previewFiles.length} file{previewFiles.length > 1 ? 's' : ''}...
+            </span>
+          </div>
+          {Array.from(uploadProgress.entries()).map(([index, progress]) => (
+            <div key={index} className="mb-1">
+              <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400">
+                <span>{previewFiles[index]?.name}</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+                <div 
+                  className="bg-blue-600 h-1 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Media Preview */}
       {previewFiles.length > 0 && (
         <MediaPreview
@@ -297,6 +417,14 @@ const MessageInput = ({
           <Send className="w-5 h-5" />
         </Button>
       </div>
+
+      {/* Optimization Status */}
+      {isOptimizing && (
+        <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>Optimizing files for faster upload...</span>
+        </div>
+      )}
     </div>
   );
 };

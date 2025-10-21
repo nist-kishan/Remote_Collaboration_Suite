@@ -6,7 +6,7 @@ import ChatUserSearch from './ChatUserSearch';
 import { X, MessageCircle, Users } from 'lucide-react';
 import CustomButton from '../ui/CustomButton';
 
-const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
+const NewChatModal = ({ isOpen, onClose, onChatCreated, onCreateGroup }) => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [chatType, setChatType] = useState('one-to-one'); // 'one-to-one' or 'group'
   const queryClient = useQueryClient();
@@ -14,9 +14,12 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
   const createChatMutation = useMutation({
     mutationFn: (userId) => getOrCreateOneToOneChat(userId),
     onSuccess: (data) => {
-      
-      // Don't show success toast for seamless experience
+      // For one-to-one chats, invalidate queries since they should appear immediately
+      // For groups, don't invalidate since they have no messages yet
       queryClient.invalidateQueries(['chats']);
+      queryClient.invalidateQueries(['recentChats']);
+      queryClient.invalidateQueries(['groupChats']);
+      
       if (onChatCreated) {
         // Handle Axios response structure: response.data.data.chat
         const chat = data?.data?.data?.chat || data?.data?.chat || data?.chat || data;
@@ -45,16 +48,17 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
   };
 
   const handleCreateGroup = () => {
-    // This should trigger the CreateGroupModal
-    // For now, just close this modal and let the parent handle group creation
+    if (onCreateGroup) {
+      onCreateGroup();
+    }
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-xl shadow-2xl max-w-md w-full border border-white/20 dark:border-gray-700/50">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
@@ -76,15 +80,15 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
           </button>
         </div>
 
-        {/* Chat Type Selection */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        {/* Chat Type Selection - Opaque tabs */}
+        <div className="p-6 border-b border-gray-200/50 dark:border-gray-700/50">
           <div className="flex gap-2">
             <button
               onClick={() => setChatType('one-to-one')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-colors ${
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-all duration-200 ${
                 chatType === 'one-to-one'
-                  ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                  : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                  ? 'bg-indigo-500 text-white border-indigo-500 shadow-lg transform scale-[1.02]'
+                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600'
               }`}
             >
               <MessageCircle className="w-5 h-5" />
@@ -92,10 +96,10 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated }) => {
             </button>
             <button
               onClick={() => setChatType('group')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-colors ${
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-all duration-200 ${
                 chatType === 'group'
-                  ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                  : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                  ? 'bg-indigo-500 text-white border-indigo-500 shadow-lg transform scale-[1.02]'
+                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600'
               }`}
             >
               <Users className="w-5 h-5" />

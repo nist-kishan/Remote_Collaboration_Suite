@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSocket } from './useSocket';
+import { useCallSocket } from './useCallSocket';
 import { toast } from 'react-hot-toast';
 import { isExtensionError } from '../utils/errorHandler';
 import { 
@@ -16,17 +16,16 @@ import {
   getCallHistory,
   deleteCallHistory,
   clearCallHistory,
-  startCallApi,
-  endCallApi,
-  answerCallApi,
-  rejectCallApi
+  startCall,
+  endCall,
+  joinCall,
+  rejectCall
 } from '../api/callApi';
 import {
   // Redux actions
   setActiveCall,
   setOutgoingCall,
   setIncomingCall,
-  clearCall,
   setLocalStream,
   setRemoteStream,
   toggleMute,
@@ -39,6 +38,7 @@ import {
   setShowIncomingCallModal,
   setShowOutgoingCallModal,
   setShowCallWindow,
+  addError,
   clearError,
   clearAllErrors,
   resetCallState,
@@ -53,9 +53,7 @@ import {
   selectIsVideoEnabled,
   selectIsScreenSharing,
   selectParticipants,
-  selectCallLoading,
   selectCallErrors,
-  selectCallPagination,
   selectShowIncomingCallModal,
   selectShowOutgoingCallModal,
   selectShowCallWindow
@@ -71,7 +69,24 @@ export const useCall = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { user } = useSelector((state) => state.auth);
-  const { socket } = useSocket();
+  
+  // Use the new useCallSocket hook
+  const {
+    socket,
+    callStatus: socketCallStatus,
+    callPersistData,
+    startCallSocket,
+    joinCallSocket,
+    rejectCallSocket,
+    endCallSocket,
+    sendSDPOffer,
+    sendSDPAnswer,
+    sendICECandidate,
+    setupWebRTCListeners,
+    saveCallData,
+    stopCallSounds,
+    endCall: endCallSocketFunction
+  } = useCallSocket();
 
   // Redux state selectors
   const activeCall = useSelector(selectActiveCall);
@@ -84,9 +99,7 @@ export const useCall = () => {
   const isVideoEnabled = useSelector(selectIsVideoEnabled);
   const isScreenSharing = useSelector(selectIsScreenSharing);
   const participants = useSelector(selectParticipants);
-  const loading = useSelector(selectCallLoading);
   const errors = useSelector(selectCallErrors);
-  const pagination = useSelector(selectCallPagination);
   const showIncomingCallModal = useSelector(selectShowIncomingCallModal);
   const showOutgoingCallModal = useSelector(selectShowOutgoingCallModal);
   const showCallWindow = useSelector(selectShowCallWindow);
@@ -94,6 +107,21 @@ export const useCall = () => {
   // Local state for call management
   const [callStatus, setCallStatus] = useState('idle');
   const [isNegotiating, setIsNegotiating] = useState(false);
+  const [isInitializingWebRTC, setIsInitializingWebRTC] = useState(false);
+  const [initializationAttempts, setInitializationAttempts] = useState(0);
+  const [deviceInUseRetryCount, setDeviceInUseRetryCount] = useState(0);
+  
+  // Reset attempts counter after timeout
+  useEffect(() => {
+    if (initializationAttempts > 0) {
+      const timeout = setTimeout(() => {
+        console.log('🔄 Resetting initialization attempts counter after timeout');
+        setInitializationAttempts(0);
+      }, 30000); // Reset after 30 seconds
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [initializationAttempts]);
   const [filter, setFilter] = useState('all'); // all, missed, outgoing, incoming
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [selectedCallId, setSelectedCallId] = useState(null);
@@ -104,10 +132,8 @@ export const useCall = () => {
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
   const originalCameraStreamRef = useRef(null);
-
-  // Audio refs for call sounds
-  const incomingCallAudioRef = useRef(null);
-  const outgoingCallAudioRef = useRef(null);
+  const initializationLockRef = useRef(false);
+  
 
   // WebRTC state
   const [webrtcLocalStream, setWebrtcLocalStream] = useState(null);
@@ -116,27 +142,6 @@ export const useCall = () => {
   const [webrtcIsScreenSharing, setWebrtcIsScreenSharing] = useState(false);
   const [webrtcIsMuted, setWebrtcIsMuted] = useState(false);
 
-  // Initialize audio elements
-  useEffect(() => {
-    incomingCallAudioRef.current = new Audio('/sounds/incoming-call.mp3');
-    outgoingCallAudioRef.current = new Audio('/sounds/outgoing-call.mp3');
-    
-    [incomingCallAudioRef.current, outgoingCallAudioRef.current].forEach(audio => {
-      audio.loop = true;
-      audio.volume = 0.5;
-    });
-
-    return () => {
-      if (incomingCallAudioRef.current) {
-        incomingCallAudioRef.current.pause();
-        incomingCallAudioRef.current = null;
-      }
-      if (outgoingCallAudioRef.current) {
-        outgoingCallAudioRef.current.pause();
-        outgoingCallAudioRef.current = null;
-      }
-    };
-  }, []);
 
   // Fetch call history with React Query
   const { data: callHistoryData, isLoading: isLoadingHistory, error: historyError, refetch } = useQuery({
@@ -177,32 +182,64 @@ export const useCall = () => {
   });
 
   // WebRTC Functions
-  const releaseAllTracks = useCallback(() => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
-        track.stop();
-        localStreamRef.current.removeTrack(track);
-      });
-      localStreamRef.current = null;
-      setWebrtcLocalStream(null);
-    }
+  const releaseAllTracks = useCallback(async () => {
+    console.log('🧹 Releasing all media tracks...');
     
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
+    try {
+      // Stop all local stream tracks
+      if (localStreamRef.current) {
+        console.log('📹 Stopping local stream tracks...');
+        const tracks = localStreamRef.current.getTracks();
+        tracks.forEach(track => {
+          console.log(`🛑 Stopping track: ${track.kind} - ${track.label}`);
+          track.stop();
+        });
+        localStreamRef.current = null;
+        setWebrtcLocalStream(null);
+      }
+      
+      // Clear video elements
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+        localVideoRef.current.load(); // Force reload
+      }
+      
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = null;
+        remoteVideoRef.current.load(); // Force reload
+      }
+      
+      // Close peer connection
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+        peerConnectionRef.current = null;
+      }
+      
+      // Reset state
+      setWebrtcRemoteStream(null);
+      setWebrtcIsVideoEnabled(true);
+      setWebrtcIsScreenSharing(false);
+      
+      // Force garbage collection of media streams
+      if (window.gc) {
+        window.gc();
+      }
+      
+      // Wait a bit for devices to be released
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Verify devices are released
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        console.log('🔍 Found devices after cleanup:', devices.length);
+      } catch (error) {
+        console.log('🔍 Device enumeration failed:', error.message);
+      }
+      
+      console.log('✅ All tracks released');
+    } catch (error) {
+      console.error('❌ Error releasing tracks:', error);
     }
-    
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
-    
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
-    
-    setWebrtcRemoteStream(null);
-    setWebrtcIsVideoEnabled(true);
-    setWebrtcIsScreenSharing(false);
   }, []);
 
   const checkDeviceAvailability = useCallback(async () => {
@@ -219,15 +256,72 @@ export const useCall = () => {
     }
   }, []);
 
+  // Check if devices are currently in use
+  const checkDeviceInUse = useCallback(async () => {
+    try {
+      // Try to get a test stream to see if devices are available
+      const testStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1, height: 1 }, // Minimal video
+        audio: false
+      });
+      
+      // If we can get a stream, devices are available
+      testStream.getTracks().forEach(track => track.stop());
+      console.log('✅ Devices are available');
+      return false;
+    } catch (error) {
+      if (error.name === 'NotReadableError') {
+        console.log('⚠️ Devices are in use by another application');
+        return true;
+      }
+      console.log('⚠️ Device check failed:', error.message);
+      return false;
+    }
+  }, []);
+
   const startLocalStream = useCallback(async () => {
     try {
-      releaseAllTracks();
+      console.log('🎬 Starting local stream...');
+      
+      // Check if devices are in use first
+      const devicesInUse = await checkDeviceInUse();
+      if (devicesInUse) {
+        throw new Error('Camera or microphone is being used by another application. Please close other applications and try again.');
+      }
+      
+      // More aggressive cleanup
+      await releaseAllTracks();
+      
+      // Wait a bit longer for devices to be fully released
       await new Promise(resolve => setTimeout(resolve, 500));
       
+      // Check if we already have a valid stream
+      if (localStreamRef.current && localStreamRef.current.active) {
+        console.log('✅ Reusing existing active stream');
+        return localStreamRef.current;
+      }
+      
+      console.log('🔍 Checking device availability...');
       const deviceInfo = await checkDeviceAvailability();
       
       if (!deviceInfo.hasVideo) {
         throw new Error('No video devices found');
+      }
+      
+      console.log('📱 Device info:', deviceInfo);
+      
+      // If device is in use, try to force release it
+      if (deviceInUseRetryCount > 0) {
+        console.log('🔄 Device in use detected, attempting force release...');
+        try {
+          // Try to get a test stream and immediately release it
+          const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          testStream.getTracks().forEach(track => track.stop());
+          console.log('✅ Test stream released successfully');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (testError) {
+          console.log('⚠️ Test stream failed:', testError.message);
+        }
       }
       
       const strategies = [
@@ -235,7 +329,8 @@ export const useCall = () => {
         createFallbackConstraints(),
         { video: true, audio: true },
         { video: { facingMode: 'user' }, audio: true },
-        { video: true, audio: false }
+        { video: true, audio: false },
+        { video: { width: 640, height: 480 }, audio: true }
       ];
       
       let stream = null;
@@ -243,18 +338,26 @@ export const useCall = () => {
       
       for (let i = 0; i < strategies.length; i++) {
         try {
+          console.log(`🎯 Trying strategy ${i + 1}/${strategies.length}:`, strategies[i]);
           stream = await navigator.mediaDevices.getUserMedia(strategies[i]);
+          console.log(`✅ Strategy ${i + 1} successful`);
           break;
         } catch (error) {
+          console.log(`❌ Strategy ${i + 1} failed:`, error.name, error.message);
           lastError = error;
           
           if (error.name === 'NotReadableError' && i < strategies.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            console.log('⏳ Waiting before trying next strategy...');
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Increased delay
           }
         }
       }
       
       if (!stream) {
+        console.error('❌ All strategies failed, last error:', lastError);
+        if (lastError && lastError.name === 'NotReadableError') {
+          setDeviceInUseRetryCount(prev => prev + 1);
+        }
         throw lastError || new Error('All media constraint strategies failed');
       }
       
@@ -262,6 +365,9 @@ export const useCall = () => {
       
       localStreamRef.current = stream;
       originalCameraStreamRef.current = stream;
+      
+      // Reset retry count on success
+      setDeviceInUseRetryCount(0);
       setWebrtcLocalStream(stream);
       
       if (localVideoRef.current) {
@@ -273,18 +379,14 @@ export const useCall = () => {
           const playPromise = localVideoRef.current.play();
           if (playPromise !== undefined) {
             playPromise.then(() => {
-              console.log('Local video playing successfully');
             }).catch(error => {
-              console.error('Error playing local video:', error);
               setTimeout(() => {
                 localVideoRef.current?.play().catch(err => {
-                  console.error('Local video retry failed:', err);
                 });
               }, 1000);
             });
           }
         } catch (error) {
-          console.error('Error setting local video stream:', error);
         }
       }
       
@@ -304,7 +406,7 @@ export const useCall = () => {
       
       throw error;
     }
-  }, [releaseAllTracks, checkDeviceAvailability]);
+  }, [releaseAllTracks, checkDeviceInUse, deviceInUseRetryCount]);
 
   const createPeerConnection = useCallback(() => {
     if (peerConnectionRef.current) {
@@ -342,18 +444,14 @@ export const useCall = () => {
             const playPromise = remoteVideoRef.current.play();
             if (playPromise !== undefined) {
               playPromise.then(() => {
-                console.log('Remote video playing successfully');
               }).catch(error => {
-                console.error('Error playing remote video:', error);
                 setTimeout(() => {
                   remoteVideoRef.current?.play().catch(err => {
-                    console.error('Retry failed:', err);
                   });
                 }, 1000);
               });
             }
           } catch (error) {
-            console.error('Error setting remote video stream:', error);
           }
         }
       }
@@ -372,15 +470,62 @@ export const useCall = () => {
   }, [socket]);
 
   const initializeWebRTC = useCallback(async () => {
+    // Prevent multiple simultaneous initializations using ref lock
+    if (initializationLockRef.current) {
+      console.log('⏳ WebRTC initialization already in progress (ref lock), waiting...');
+      // Wait a bit and try again
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (peerConnectionRef.current && localStreamRef.current) {
+        console.log('✅ WebRTC already initialized after wait, reusing existing connection');
+        return { stream: localStreamRef.current, pc: peerConnectionRef.current };
+      }
+      return null;
+    }
+
+    // Prevent multiple simultaneous initializations using state
+    if (isInitializingWebRTC) {
+      console.log('⏳ WebRTC initialization already in progress (state lock), waiting...');
+      // Wait a bit and try again
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (peerConnectionRef.current && localStreamRef.current) {
+        console.log('✅ WebRTC already initialized after wait, reusing existing connection');
+        return { stream: localStreamRef.current, pc: peerConnectionRef.current };
+      }
+      return null;
+    }
+
+    // Limit initialization attempts to prevent infinite loops
+    if (initializationAttempts >= 5) { // Increased limit
+      console.error('❌ Too many WebRTC initialization attempts, giving up');
+      // Reset attempts counter to allow future calls
+      setInitializationAttempts(0);
+      throw new Error('Too many initialization attempts. Please refresh the page.');
+    }
+
+    if (peerConnectionRef.current && localStreamRef.current) {
+      console.log('✅ WebRTC already initialized, reusing existing connection');
+      return { stream: localStreamRef.current, pc: peerConnectionRef.current };
+    }
+
     try {
+      // Set both locks
+      initializationLockRef.current = true;
+      setIsInitializingWebRTC(true);
+      setInitializationAttempts(prev => prev + 1);
+      console.log(`🎬 Initializing WebRTC... (Attempt ${initializationAttempts + 1}/3)`);
+      
+      console.log('📹 Getting local media stream...');
       const stream = await startLocalStream();
       if (!stream) {
         throw new Error('Failed to get local media stream');
       }
+      console.log('✅ Local media stream obtained');
       
+      console.log('🔗 Creating peer connection...');
       const pc = createPeerConnection();
       
       if (localStreamRef.current && pc.getSenders().length === 0) {
+        console.log('📤 Adding tracks to peer connection...');
         localStreamRef.current.getTracks().forEach(track => {
           pc.addTrack(track, localStreamRef.current);
         });
@@ -390,12 +535,38 @@ export const useCall = () => {
         throw new Error('Peer connection was not created successfully');
       }
       
+      console.log('✅ WebRTC initialized successfully');
+      setInitializationAttempts(0); // Reset on success
       return { stream, pc: peerConnectionRef.current };
     } catch (error) {
-      console.error('WebRTC initialization failed:', error);
+      console.error('❌ WebRTC initialization failed:', error);
+      
+      // Handle specific device errors
+      if (error.name === 'NotReadableError') {
+        console.log('🔧 Device in use error detected, attempting recovery...');
+        
+        // Force cleanup and wait longer
+        await releaseAllTracks();
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Try one more time with a longer delay
+        if (initializationAttempts < 4) { // Increased retry limit
+          console.log('🔄 Retrying WebRTC initialization after device cleanup...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          // Don't increment attempts here, let the main loop handle it
+          return initializeWebRTC();
+        }
+        
+        throw new Error('Camera or microphone is being used by another application. Please close other applications and try again.');
+      }
+      
       throw error;
+    } finally {
+      // Release both locks
+      initializationLockRef.current = false;
+      setIsInitializingWebRTC(false);
     }
-  }, [startLocalStream, createPeerConnection]);
+  }, [startLocalStream, createPeerConnection, isInitializingWebRTC, initializationAttempts]);
 
   const createOffer = useCallback(async () => {
     try {
@@ -428,7 +599,6 @@ export const useCall = () => {
       
       return offer;
     } catch (error) {
-      console.error('Error creating offer:', error);
       throw error;
     }
   }, []);
@@ -466,7 +636,6 @@ export const useCall = () => {
       
       return answer;
     } catch (error) {
-      console.error('Error creating answer:', error);
       throw error;
     }
   }, []);
@@ -485,7 +654,6 @@ export const useCall = () => {
 
       await pc.setRemoteDescription(description);
     } catch (error) {
-      console.error('Error setting remote description:', error);
       throw error;
     }
   }, []);
@@ -541,198 +709,18 @@ export const useCall = () => {
     return hasPeerConnection && hasLocalStream;
   }, []);
 
-  // Socket event listeners
+  // WebRTC socket event listeners setup
   useEffect(() => {
     if (!socket) return;
 
-    window.currentSocket = socket;
-
-    const handleIncomingCall = (data) => {
-      console.log('Incoming call received:', data);
-      dispatch(setIncomingCall(data));
-      dispatch(setShowIncomingCallModal(true));
-      setCallStatus('ringing');
-      
-      if (incomingCallAudioRef.current) {
-        incomingCallAudioRef.current.play().catch(() => {});
-      }
-      
-      toast.success(`Incoming video call from ${data.fromUserName}`);
-      
-      window.acceptCall = async () => {
-        try {
-          await acceptCall();
-        } catch (error) {
-          console.error('Error accepting call from notification:', error);
-        }
-      };
-    };
-
-    const handleCallStarted = (data) => {
-      console.log('Call started (outgoing):', data);
-      dispatch(setOutgoingCall(data));
-      dispatch(setShowOutgoingCallModal(true));
-      setCallStatus('connecting');
-      
-      if (outgoingCallAudioRef.current) {
-        outgoingCallAudioRef.current.play().catch(() => {});
-      }
-    };
-
-    const handleCallJoined = (data) => {
-      console.log('Call joined/answered:', data);
-      dispatch(setActiveCall(data.call));
-      setCallStatus('active');
-      dispatch(setShowIncomingCallModal(false));
-      dispatch(setShowOutgoingCallModal(false));
-      dispatch(setShowCallWindow(true));
-      
-      stopCallSounds();
-      
-      const initAndNegotiate = async () => {
-        try {
-          await initializeWebRTC();
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          let retryCount = 0;
-          const maxRetries = 3;
-          
-          while (!isWebRTCReady() && retryCount < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            retryCount++;
-          }
-          
-          if (isWebRTCReady()) {
-            startWebRTCNegotiation();
-          }
-        } catch (error) {
-          console.error('Failed to initialize WebRTC:', error);
-        }
-      };
-      
-      setTimeout(initAndNegotiate, 2000);
-      
-      if (!location.pathname.includes('/call/')) {
-        navigate(`/call/${data.call._id}`, { replace: true });
-      }
-    };
-
-    const handleCallEnded = (data) => {
-      console.log('Call ended:', data);
-      endCall();
-      toast.success('Call ended');
-      
-      dispatch(setShowIncomingCallModal(false));
-      dispatch(setShowOutgoingCallModal(false));
-      dispatch(setShowCallWindow(false));
-      dispatch(setIncomingCall(null));
-      dispatch(setOutgoingCall(null));
-      dispatch(setActiveCall(null));
-      
-      if (location.pathname.includes('/call/')) {
-        navigate(-1);
-      }
-    };
-
-    const handleCallRejected = (data) => {
-      console.log('Call rejected:', data);
-      endCall();
-      toast.error('Call was rejected');
-      
-      dispatch(setShowIncomingCallModal(false));
-      dispatch(setShowOutgoingCallModal(false));
-      dispatch(setShowCallWindow(false));
-      dispatch(setIncomingCall(null));
-      dispatch(setOutgoingCall(null));
-      dispatch(setActiveCall(null));
-      
-      if (location.pathname.includes('/call/')) {
-        navigate(-1);
-      }
-    };
-
-    const handleSDPOffer = async (data) => {
-      try {
-        const answer = await createAnswer(data.offer);
-        
-        socket.emit('sdp_answer', {
-          callId: data.callId,
-          answer: answer
-        });
-      } catch (error) {
-        console.error('Error handling SDP offer:', error);
-      }
-    };
-
-    const handleSDPAnswer = async (data) => {
-      try {
-        await setRemoteDescription(data.answer);
-      } catch (error) {
-        console.error('Error handling SDP answer:', error);
-      }
-    };
-
-    const handleICECandidate = async (data) => {
-      try {
-        if (data.candidate) {
-          await addIceCandidate(data.candidate);
-        }
-      } catch (error) {
-        console.error('Error handling ICE candidate:', error);
-      }
-    };
-
-    // Register event listeners
-    socket.on('incoming_call', handleIncomingCall);
-    socket.on('call_started', handleCallStarted);
-    socket.on('call_joined', handleCallJoined);
-    socket.on('call_ended', handleCallEnded);
-    socket.on('call_rejected', handleCallRejected);
-    socket.on('sdp_offer', handleSDPOffer);
-    socket.on('sdp_answer', handleSDPAnswer);
-    socket.on('ice_candidate', handleICECandidate);
-
-    return () => {
-      socket.off('incoming_call', handleIncomingCall);
-      socket.off('call_started', handleCallStarted);
-      socket.off('call_joined', handleCallJoined);
-      socket.off('call_ended', handleCallEnded);
-      socket.off('call_rejected', handleCallRejected);
-      socket.off('sdp_offer', handleSDPOffer);
-      socket.off('sdp_answer', handleSDPAnswer);
-      socket.off('ice_candidate', handleICECandidate);
-      
-      delete window.acceptCall;
-    };
-  }, [socket, activeCall, dispatch, navigate, location.pathname, initializeWebRTC, isWebRTCReady, createAnswer, setRemoteDescription, addIceCandidate]);
+    const cleanup = setupWebRTCListeners(createAnswer, setRemoteDescription, addIceCandidate);
+    
+    return cleanup;
+  }, [socket, setupWebRTCListeners, createAnswer, setRemoteDescription, addIceCandidate]);
 
   // Helper functions
-  const stopCallSounds = () => {
-    if (incomingCallAudioRef.current) {
-      incomingCallAudioRef.current.pause();
-      incomingCallAudioRef.current.currentTime = 0;
-    }
-    if (outgoingCallAudioRef.current) {
-      outgoingCallAudioRef.current.pause();
-      outgoingCallAudioRef.current.currentTime = 0;
-    }
-  };
-
-  const endCall = () => {
-    dispatch(setIncomingCall(null));
-    dispatch(setOutgoingCall(null));
-    dispatch(setActiveCall(null));
-    setCallStatus('idle');
-    dispatch(setShowIncomingCallModal(false));
-    dispatch(setShowOutgoingCallModal(false));
-    dispatch(setShowCallWindow(false));
-    
+  const stopCallSoundsWrapper = () => {
     stopCallSounds();
-    releaseAllTracks();
-    
-    if (location.pathname.includes('/call/')) {
-      navigate(-1);
-    }
   };
 
   const startWebRTCNegotiation = async () => {
@@ -752,7 +740,6 @@ export const useCall = () => {
             return;
           }
         } catch (error) {
-          console.error('Error force initializing WebRTC:', error);
           return;
         }
       }
@@ -765,13 +752,10 @@ export const useCall = () => {
       }
       
       if (socket && activeCall?._id) {
-        socket.emit('sdp_offer', {
-          callId: activeCall._id,
-          offer: offer
-        });
+        await sendSDPOffer(activeCall._id, offer);
       }
     } catch (error) {
-      console.error('WebRTC negotiation failed:', error);
+      console.error('Error in WebRTC negotiation:', error);
     } finally {
       setIsNegotiating(false);
     }
@@ -780,44 +764,101 @@ export const useCall = () => {
   // Call actions
   const startCall = async (chatId) => {
     try {
+      console.log('🎥 Starting video call for chat:', chatId);
+      console.log('🔍 Chat ID type and value:', typeof chatId, chatId);
+      
       if (!socket) {
         throw new Error('Socket not connected');
       }
 
+      // Navigate to caller page immediately
+      if (!location.pathname.includes('/video-call/')) {
+        navigate(`/video-call/caller/${chatId}`, { replace: true });
+      }
+
+      console.log('🔌 Socket connected, initializing WebRTC...');
       await initializeWebRTC();
 
-      socket.emit('start_call', {
-        chatId,
-        type: 'one-to-one'
-      });
+      console.log('📡 Starting call via socket...');
+      await startCallSocket(chatId, 'one-to-one');
 
-      setCallStatus('connecting');
+      console.log('✅ Call started successfully');
+      
+      // Don't save temporary call data - wait for real call ID from server
+      console.log('⏳ Waiting for real call ID from server...');
     } catch (error) {
+      console.error('❌ Error starting call:', error);
+      
+      // Handle different types of media device errors
       if (error.message.includes('Device in use') || error.name === 'NotReadableError') {
+        console.log('🔄 Device in use, attempting to release...');
+        
+        // Increment device in use retry count
+        setDeviceInUseRetryCount(prev => prev + 1);
+        
+        // If we've tried too many times, give up
+        if (deviceInUseRetryCount >= 2) {
+          toast.error('Camera or microphone is being used by another application. Please close other apps and refresh the page.', {
+            duration: 5000,
+            action: {
+              label: 'Refresh Page',
+              onClick: () => window.location.reload()
+            }
+          });
+          endCallSocket();
+          return;
+        }
+        
         toast.error('Camera or microphone is being used by another application. Trying to release devices...', {
           duration: 3000,
         });
         
         try {
+          // More aggressive cleanup
           releaseAllTracks();
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          toast.success('Devices released. Please try starting the call again.', {
-            duration: 3000,
-          });
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Try to get media again after cleanup
+          try {
+            const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            testStream.getTracks().forEach(track => track.stop());
+            console.log('✅ Devices released successfully');
+            toast.success('Devices released. Please try starting the call again.', {
+              duration: 3000,
+            });
+          } catch (testError) {
+            console.error('❌ Devices still in use:', testError);
+            toast.error('Please close other applications using camera/microphone and refresh the page if needed.', {
+              duration: 5000,
+              action: {
+                label: 'Refresh Page',
+                onClick: () => window.location.reload()
+              }
+            });
+          }
         } catch (releaseError) {
-          toast.error('Please close other applications using camera/microphone and try again.', {
+          console.error('❌ Failed to release devices:', releaseError);
+          toast.error('Please close other applications using camera/microphone and refresh the page if needed.', {
             duration: 5000,
+            action: {
+              label: 'Refresh Page',
+              onClick: () => window.location.reload()
+            }
           });
         }
-      } else if (error.message.includes('permission denied')) {
+      } else if (error.message.includes('permission denied') || error.name === 'NotAllowedError') {
         toast.error('Camera and microphone access denied. Please allow access and try again.');
-      } else if (error.message.includes('not found')) {
+      } else if (error.message.includes('not found') || error.name === 'NotFoundError') {
         toast.error('No camera or microphone found. Please check your devices.');
+      } else if (error.name === 'AbortError') {
+        toast.error('Camera or microphone access was interrupted. Please try again.');
+      } else if (error.name === 'OverconstrainedError') {
+        toast.error('Camera settings are not supported. Please try again.');
       } else {
         toast.error('Failed to start call: ' + error.message);
       }
       
-      endCall();
+      endCallSocket();
     }
   };
 
@@ -828,18 +869,18 @@ export const useCall = () => {
       stopCallSounds();
       await initializeWebRTC();
 
-      socket.emit('join_call', { 
-        callId: incomingCall.callId 
-      });
+      // Use the correct callId from incomingCall
+      const callId = incomingCall.callId || incomingCall._id;
+      if (!callId) {
+        throw new Error('Call ID not found in incoming call data');
+      }
 
-      setCallStatus('connecting');
+      await joinCallSocket(callId);
 
       if (!location.pathname.includes('/call/')) {
-        navigate(`/call/${incomingCall.callId}`, { replace: true });
+        navigate(`/call/${callId}`, { replace: true });
       }
     } catch (error) {
-      console.error('Error accepting call:', error);
-      
       if (error.message.includes('Device in use') || error.name === 'NotReadableError') {
         toast.error('Camera or microphone is being used by another application. Please close other apps and try again.', {
           duration: 5000,
@@ -862,45 +903,65 @@ export const useCall = () => {
         });
       }
       
-      endCall();
+      endCallSocket();
     }
   };
 
   const rejectCall = () => {
     if (!socket || !incomingCall) return;
 
-    socket.emit('reject_call', { 
-      callId: incomingCall.callId 
-    });
+    const callId = incomingCall.callId || incomingCall._id;
+    if (!callId) {
+      console.error('❌ Call ID not found in incoming call data');
+      return;
+    }
+
+    console.log('📞 Rejecting call...');
     
-    dispatch(setShowIncomingCallModal(false));
-    dispatch(setShowOutgoingCallModal(false));
-    dispatch(setShowCallWindow(false));
-    dispatch(setIncomingCall(null));
-    dispatch(setOutgoingCall(null));
-    dispatch(setActiveCall(null));
+    // Reset initialization attempts counter
+    setInitializationAttempts(0);
     
-    endCall();
+    rejectCallSocket(callId);
   };
 
   const cancelCall = () => {
     if (!socket || !outgoingCall) return;
 
-    socket.emit('end_call', { 
-      callId: outgoingCall.callId 
-    });
+    const callId = outgoingCall.callId || outgoingCall._id;
+    if (!callId) {
+      console.error('❌ Call ID not found in outgoing call data');
+      return;
+    }
+
+    console.log('📞 Cancelling call...');
     
-    endCall();
+    // Reset initialization attempts counter
+    setInitializationAttempts(0);
+    
+    endCallSocket(callId);
   };
 
-  const endActiveCall = () => {
+  const endActiveCall = async () => {
     if (!socket || !activeCall) return;
 
-    socket.emit('end_call', { 
-      callId: activeCall._id 
-    });
+    const callId = activeCall._id || activeCall.callId;
+    if (!callId) {
+      console.error('❌ Call ID not found in active call data');
+      return;
+    }
+
+    console.log('📞 Ending active call and cleaning up...');
     
-    endCall();
+    // Reset initialization attempts counter
+    setInitializationAttempts(0);
+    
+    // End the call via socket
+    endCallSocket(callId);
+    
+    // Ensure all media tracks are released
+    await releaseAllTracks();
+    
+    console.log('✅ Call ended and cleanup completed');
   };
 
   // Call history functions
@@ -989,27 +1050,25 @@ export const useCall = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      console.log('🧹 useCall hook unmounting, cleaning up...');
       releaseAllTracks();
     };
   }, [releaseAllTracks]);
 
-  // Return consolidated interface
   return {
     // State
     user,
     activeCall,
     outgoingCall,
     incomingCall,
-    callStatus,
+    callStatus: socketCallStatus,
     localStream: localStream || webrtcLocalStream,
     remoteStream: remoteStream || webrtcRemoteStream,
     isMuted: isMuted || webrtcIsMuted,
     isVideoEnabled: isVideoEnabled || webrtcIsVideoEnabled,
     isScreenSharing: isScreenSharing || webrtcIsScreenSharing,
     participants,
-    loading,
     errors,
-    pagination,
     showIncomingCallModal,
     showOutgoingCallModal,
     showCallWindow,
@@ -1034,7 +1093,7 @@ export const useCall = () => {
     rejectCall,
     cancelCall,
     endActiveCall,
-    endCall,
+    endCall: endCallSocketFunction,
     toggleMute,
     toggleVideo,
     
@@ -1062,6 +1121,16 @@ export const useCall = () => {
     addIceCandidate,
     isWebRTCReady,
     releaseAllTracks,
+    
+    // Socket functions
+    socket,
+    startCallSocket,
+    joinCallSocket,
+    rejectCallSocket,
+    endCallSocket,
+    sendSDPOffer,
+    sendSDPAnswer,
+    sendICECandidate,
     
     // Mutation states
     isDeleting: deleteCallMutation.isPending,

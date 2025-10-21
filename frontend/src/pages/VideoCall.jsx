@@ -20,9 +20,18 @@ export default function VideoCall() {
     showOutgoingCall,
     showActiveCall,
     callStatus,
+    localStream,
+    remoteStream,
+    isMuted,
+    isVideoEnabled,
+    isScreenSharing,
+    participants,
     acceptCall,
     rejectCall,
-    endActiveCall
+    endActiveCall,
+    toggleMute,
+    toggleVideo,
+    toggleScreenShare
   } = useCall();
 
   const [isInitialized, setIsInitialized] = useState(false);
@@ -138,9 +147,20 @@ export default function VideoCall() {
   if (showActiveCall && activeCall) {
     return (
       <VideoCallInterface
-        call={activeCall}
+        localStream={localStream}
+        remoteStream={remoteStream}
+        isMuted={isMuted}
+        isVideoEnabled={isVideoEnabled}
+        isScreenSharing={isScreenSharing}
+        participants={participants}
+        callStatus={callStatus}
+        onToggleMute={toggleMute}
+        onToggleVideo={toggleVideo}
+        onToggleScreenShare={toggleScreenShare}
         onEndCall={handleEndCall}
-        onToggleChat={handleToggleChat}
+        onMinimize={() => navigate('/chat')}
+        onMaximize={() => window.focus()}
+        isMinimized={false}
       />
     );
   }

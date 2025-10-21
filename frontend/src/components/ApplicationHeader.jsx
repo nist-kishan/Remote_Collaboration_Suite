@@ -36,7 +36,7 @@ const Header = memo(() => {
   const toggleMenu = useCallback(() => setMenuOpen((prev) => !prev), []);
 
   return (
-    <header className="fixed top-0 left-0 w-full bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 z-50">
+    <header className="fixed top-0 left-0 w-full bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
         <ApplicationBrandName />
         <MainNavigationBar navLinks={navLinks} />

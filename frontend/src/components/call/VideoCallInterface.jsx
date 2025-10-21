@@ -1,463 +1,423 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useSelector } from 'react-redux';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  PhoneOff, 
   Mic, 
   MicOff, 
   Video, 
   VideoOff, 
-  Monitor, 
-  MonitorOff,
-  Settings,
+  Phone, 
+  PhoneOff, 
+  Settings, 
+  Maximize2, 
+  Minimize2,
   Users,
   MessageSquare,
-  Phone,
-  RefreshCw
+  Volume2,
+  VolumeX,
+  Camera,
+  CameraOff,
+  MoreVertical
 } from 'lucide-react';
-import { useSocket } from '../../hook/useSocket';
-import { useCall } from '../../hook/useCall';
-import CustomButton from '../ui/CustomButton';
-import UserProfileAvatar from '../ui/UserProfileAvatar';
 import { toast } from 'react-hot-toast';
 
-const ActiveCallWindow = ({ 
-  call, 
-  onEndCall, 
-  onToggleChat
+const VideoCallInterface = ({
+  localStream,
+  remoteStream,
+  isMuted,
+  isVideoEnabled,
+  isScreenSharing,
+  participants = [],
+  callStatus,
+  onToggleMute,
+  onToggleVideo,
+  onToggleScreenShare,
+  onEndCall,
+  onMinimize,
+  onMaximize,
+  isMinimized = false,
+  className = ''
 }) => {
-  const { user } = useSelector((state) => state.auth);
-  const { socket } = useSocket();
-  const {
-    localVideoRef,
-    remoteVideoRef,
-    localStream,
-    remoteStream,
-    isVideoEnabled,
-    isScreenSharing,
-    isMuted,
-    toggleVideo,
-    toggleMute,
-    startScreenShare,
-    stopScreenShare,
-    initializeWebRTC,
-    debugWebRTCStatus,
-    forceRestartWebRTC,
-    isWebRTCConnected,
-    hasRemoteStream,
-    isWebRTCReady
-  } = useCall();
-
-  const [callDuration, setCallDuration] = useState(0);
-  const [participants, setParticipants] = useState([]);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const [showControls, setShowControls] = useState(true);
   const [showParticipants, setShowParticipants] = useState(false);
-  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
-  const durationIntervalRef = useRef(null);
+  const [localVideoSize, setLocalVideoSize] = useState('small');
+
+  // Auto-hide controls after 3 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [showControls]);
+
+  // Set video streams
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
 
   useEffect(() => {
-    if (call) {
-      setParticipants(call.participants || []);
-      
-      // Start duration timer
-      durationIntervalRef.current = setInterval(() => {
-        setCallDuration(prev => prev + 1);
-      }, 1000);
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
     }
+  }, [remoteStream]);
 
-    return () => {
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
-    };
-  }, [call]);
-
-  // Initialize WebRTC when component mounts
-  useEffect(() => {
-    const initWebRTC = async () => {
-      try {
-        await initializeWebRTC();
-      } catch (error) {
-        console.error('Failed to initialize WebRTC:', error);
-      }
-    };
-
-    initWebRTC();
-  }, [initializeWebRTC]);
-
-  const formatDuration = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const handleToggleControls = () => {
+    setShowControls(!showControls);
   };
 
-  const handleEndCall = async () => {
-    try {
-      if (socket && call) {
-        socket.emit('end_call', { callId: call._id });
-      }
-      
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
-      
-      if (onEndCall) {
-        onEndCall();
-      }
-    } catch (error) {
-      console.error('Error ending call:', error);
-      toast.error('Failed to end call');
+  const handleToggleLocalVideoSize = () => {
+    setLocalVideoSize(localVideoSize === 'small' ? 'large' : 'small');
+  };
+
+  const getCallStatusColor = () => {
+    switch (callStatus) {
+      case 'connecting':
+        return 'bg-yellow-500';
+      case 'connected':
+        return 'bg-green-500';
+      case 'ended':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-500';
     }
   };
 
-  const handleToggleMute = async () => {
-    try {
-      setIsUpdatingSettings(true);
-      toggleMute();
-      
-      if (socket && call) {
-        socket.emit('update_call_settings', {
-          callId: call._id,
-          muted: !isMuted
-        });
-      }
-      
-      toast.success(isMuted ? 'Microphone unmuted' : 'Microphone muted');
-    } catch (error) {
-      toast.error('Failed to toggle microphone');
-    } finally {
-      setIsUpdatingSettings(false);
+  const getCallStatusText = () => {
+    switch (callStatus) {
+      case 'connecting':
+        return 'Connecting...';
+      case 'connected':
+        return 'Connected';
+      case 'ended':
+        return 'Call Ended';
+      default:
+        return 'Unknown';
     }
   };
 
-  const handleToggleVideo = async () => {
-    try {
-      setIsUpdatingSettings(true);
-      toggleVideo();
-      
-      if (socket && call) {
-        socket.emit('update_call_settings', {
-          callId: call._id,
-          videoEnabled: !isVideoEnabled
-        });
-      }
-      
-      toast.success(isVideoEnabled ? 'Camera turned off' : 'Camera turned on');
-    } catch (error) {
-      toast.error('Failed to toggle camera');
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  };
+  if (isMinimized) {
+    return (
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className={`fixed bottom-4 right-4 bg-gray-900 rounded-lg shadow-2xl border border-gray-700 z-50 ${className}`}
+      >
+        <div className="flex items-center gap-3 p-3">
+          {/* Minimized video preview */}
+          <div className="relative w-16 h-12 bg-gray-800 rounded overflow-hidden">
+            {localStream ? (
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Video className="w-6 h-6 text-gray-400" />
+              </div>
+            )}
+            <div className={`absolute top-1 right-1 w-2 h-2 rounded-full ${getCallStatusColor()}`} />
+          </div>
 
-  const handleToggleScreenShare = async () => {
-    try {
-      setIsUpdatingSettings(true);
-      
-      if (isScreenSharing) {
-        await stopScreenShare();
-        toast.success('Screen sharing stopped');
-      } else {
-        await startScreenShare();
-        toast.success('Screen sharing started');
-      }
-      
-      if (socket && call) {
-        socket.emit('update_call_settings', {
-          callId: call._id,
-          screenSharing: !isScreenSharing
-        });
-      }
-    } catch (error) {
-      console.error('Screen sharing error:', error);
-      if (error.name === 'NotAllowedError') {
-        toast.error('Screen sharing permission denied');
-      } else if (error.name === 'NotFoundError') {
-        toast.error('No screen sharing source found');
-      } else {
-        toast.error('Failed to toggle screen sharing: ' + error.message);
-      }
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  };
+          {/* Call info */}
+          <div className="text-white">
+            <p className="text-sm font-medium">Video Call</p>
+            <p className="text-xs text-gray-300">{getCallStatusText()}</p>
+          </div>
 
-  // Get other participants (excluding current user)
-  const otherParticipants = participants.filter(
-    p => p.user._id !== user._id
-  );
-
-  // Check if it's a group call
-  const isGroupCall = participants.length > 2;
+          {/* Minimized controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onMaximize}
+              className="p-1 hover:bg-gray-700 rounded transition-colors"
+              title="Maximize"
+            >
+              <Maximize2 className="w-4 h-4 text-white" />
+            </button>
+            <button
+              onClick={onEndCall}
+              className="p-1 hover:bg-red-600 rounded transition-colors"
+              title="End Call"
+            >
+              <PhoneOff className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
-    <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Main Video Area */}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className={`fixed inset-0 bg-black z-50 flex flex-col ${className}`}
+      onClick={handleToggleControls}
+    >
+      {/* Main video area */}
       <div className="flex-1 relative">
-        {/* Remote Video */}
+        {/* Remote video (main) */}
         <div className="absolute inset-0">
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            muted={false}
-            className="w-full h-full object-cover"
-            style={{ backgroundColor: '#1f2937' }}
-            onLoadedMetadata={() => console.log('Remote video metadata loaded')}
-            onCanPlay={() => console.log('Remote video can play')}
-            onPlay={() => console.log('Remote video started playing')}
-            onError={(e) => console.error('Remote video error:', e)}
-          />
-          
-          {/* No video fallback */}
-          {(!remoteVideoRef.current?.srcObject || 
-            !remoteVideoRef.current.srcObject.getVideoTracks().some(track => track.enabled) ||
-            remoteVideoRef.current.readyState === 0) && (
-            <div className="flex items-center justify-center h-full">
+          {remoteStream ? (
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gray-900 flex items-center justify-center">
               <div className="text-center text-white">
-                <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <UserProfileAvatar 
-                    user={otherParticipants[0]?.user || {}} 
-                    size="lg" 
-                  />
+                <div className="w-32 h-32 mx-auto mb-4 bg-gray-800 rounded-full flex items-center justify-center">
+                  <Users className="w-16 h-16 text-gray-400" />
                 </div>
-                <p className="text-xl font-semibold">
-                  {otherParticipants[0]?.user?.name || 'Waiting...'}
-                </p>
-                <p className="text-sm text-gray-400 mt-2">
-                  {!remoteVideoRef.current?.srcObject ? 'Connecting video...' : 
-                   !remoteVideoRef.current.srcObject.getVideoTracks().some(track => track.enabled) ? 'Camera is off' :
-                   'Loading video...'}
-                </p>
-                {/* Debug info */}
-                <div className="mt-4 text-xs text-gray-500">
-                  <p>Remote stream: {remoteStream ? 'Yes' : 'No'}</p>
-                  <p>Remote video ref: {remoteVideoRef.current ? 'Yes' : 'No'}</p>
-                  <p>Remote srcObject: {remoteVideoRef.current?.srcObject ? 'Yes' : 'No'}</p>
-                  <p>Video tracks: {remoteVideoRef.current?.srcObject?.getVideoTracks().length || 0}</p>
-                  <p>WebRTC Ready: {isWebRTCReady() ? 'Yes' : 'No'}</p>
-                  <p>WebRTC Connected: {isWebRTCConnected() ? 'Yes' : 'No'}</p>
-                  <p>Has Remote Stream: {hasRemoteStream() ? 'Yes' : 'No'}</p>
-                </div>
+                <h3 className="text-xl font-semibold mb-2">Waiting for participant</h3>
+                <p className="text-gray-400">Your video call is ready</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Local Video */}
-        <div className="absolute bottom-24 right-4 w-48 h-36 rounded-lg overflow-hidden border-2 border-white shadow-lg">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-            style={{ 
-              backgroundColor: '#1f2937',
-              transform: 'scaleX(-1)' // Mirror the local video
-            }}
-            onLoadedMetadata={() => console.log('Local video metadata loaded')}
-            onCanPlay={() => console.log('Local video can play')}
-            onPlay={() => console.log('Local video started playing')}
-            onError={(e) => console.error('Local video error:', e)}
-          />
-          {/* Fallback if no video stream */}
-          {!localVideoRef.current?.srcObject && (
-            <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
-              <div className="text-center text-white">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-                <p className="text-xs">Starting camera...</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-            {/* Call Duration */}
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 px-4 py-2 rounded-lg">
-              <p className="text-white font-semibold">{formatDuration(callDuration)}</p>
-            </div>
-
-            {/* Screen Sharing Indicator */}
-            {isScreenSharing && (
-              <div className="absolute top-4 right-4 bg-black bg-opacity-75 px-3 py-1 rounded-lg">
-                <div className="flex items-center gap-2 text-white text-sm">
-                  <Monitor className="w-4 h-4" />
-                  <span>Sharing Screen</span>
-                </div>
+        {/* Local video (picture-in-picture) */}
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className={`absolute top-4 right-4 bg-gray-900 rounded-lg overflow-hidden border-2 border-gray-700 ${
+            localVideoSize === 'small' ? 'w-48 h-36' : 'w-64 h-48'
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="relative w-full h-full">
+            {localStream ? (
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+                <Video className="w-8 h-8 text-gray-400" />
               </div>
             )}
+            
+            {/* Local video controls overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent">
+              <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                <button
+                  onClick={handleToggleLocalVideoSize}
+                  className="p-1 bg-black/50 rounded hover:bg-black/70 transition-colors"
+                  title={localVideoSize === 'small' ? 'Enlarge' : 'Shrink'}
+                >
+                  {localVideoSize === 'small' ? (
+                    <Maximize2 className="w-3 h-3 text-white" />
+                  ) : (
+                    <Minimize2 className="w-3 h-3 text-white" />
+                  )}
+                </button>
+              </div>
+            </div>
 
-        {/* Settings Status Indicator */}
-        {isUpdatingSettings && (
-          <div className="absolute top-4 right-4">
-            <div className="flex items-center gap-2 bg-black/50 px-3 py-1 rounded-full text-white text-xs">
-              <Settings className="w-3 h-3 animate-spin" />
-              <span>Updating...</span>
+            {/* Local video status indicators */}
+            <div className="absolute top-2 left-2 flex items-center gap-1">
+              {isMuted && (
+                <div className="bg-red-600 rounded-full p-1">
+                  <MicOff className="w-3 h-3 text-white" />
+                </div>
+              )}
+              {!isVideoEnabled && (
+                <div className="bg-red-600 rounded-full p-1">
+                  <VideoOff className="w-3 h-3 text-white" />
+                </div>
+              )}
             </div>
           </div>
-        )}
-      </div>
+        </motion.div>
 
-      {/* Call Controls */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/75 to-transparent p-6">
-        <div className="flex justify-center items-center space-x-4">
-          {/* Microphone On/Off */}
-          <CustomButton
-            onClick={handleToggleMute}
-            variant="ghost"
-            size="lg"
-            className={`rounded-full w-14 h-14 ${
-              !isMuted
-                ? 'bg-white/10 hover:bg-white/20 text-white'
-                : 'bg-red-600 hover:bg-red-700 text-white'
-            }`}
-            title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
-            disabled={isUpdatingSettings}
-          >
-            {isMuted ? (
-              <MicOff className="w-6 h-6" />
-            ) : (
-              <Mic className="w-6 h-6" />
-            )}
-          </CustomButton>
+        {/* Call status indicator */}
+        <AnimatePresence>
+          {callStatus === 'connecting' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="absolute top-4 left-4 bg-black/70 rounded-lg px-4 py-2"
+            >
+              <div className="flex items-center gap-2 text-white">
+                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                <span className="text-sm font-medium">Connecting...</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          {/* Video On/Off */}
-          <CustomButton
-            onClick={handleToggleVideo}
-            variant="ghost"
-            size="lg"
-            className={`rounded-full w-14 h-14 ${
-              isVideoEnabled
-                ? 'bg-white/10 hover:bg-white/20 text-white'
-                : 'bg-red-600 hover:bg-red-700 text-white'
-            }`}
-            title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
-            disabled={isUpdatingSettings}
-          >
-            {isVideoEnabled ? (
-              <Video className="w-6 h-6" />
-            ) : (
-              <VideoOff className="w-6 h-6" />
-            )}
-          </CustomButton>
-
-          {/* Screen Share */}
-          <CustomButton
-            onClick={handleToggleScreenShare}
-            variant="ghost"
-            size="lg"
-            className={`rounded-full w-14 h-14 ${
-              isScreenSharing
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                : 'bg-white/10 hover:bg-white/20 text-white'
-            }`}
-            title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
-            disabled={isUpdatingSettings}
-          >
-            {isScreenSharing ? (
-              <MonitorOff className="w-6 h-6" />
-            ) : (
-              <Monitor className="w-6 h-6" />
-            )}
-          </CustomButton>
-
-    {/* Debug Button */}
-    <CustomButton
-      onClick={debugWebRTCStatus}
-      variant="ghost"
-      size="lg"
-      className="rounded-full w-14 h-14 bg-white/10 hover:bg-white/20 text-white"
-      title="Debug WebRTC"
-    >
-      <Settings className="w-6 h-6" />
-    </CustomButton>
-
-    {/* Force Refresh Remote Video Button */}
-    <CustomButton
-      onClick={() => {
-        console.log('Force refreshing remote video...');
-        if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
-          remoteVideoRef.current.srcObject = null;
-          setTimeout(() => {
-            if (remoteStream) {
-              remoteVideoRef.current.srcObject = remoteStream;
-              remoteVideoRef.current.play().catch(console.error);
-            }
-          }, 100);
-        }
-      }}
-      variant="ghost"
-      size="lg"
-      className="rounded-full w-14 h-14 bg-white/10 hover:bg-white/20 text-white"
-      title="Refresh Remote Video"
-    >
-      <RefreshCw className="w-6 h-6" />
-    </CustomButton>
-
-    {/* Force Restart WebRTC Button */}
-    <CustomButton
-      onClick={async () => {
-        console.log('Force restarting WebRTC...');
-        try {
-          await forceRestartWebRTC();
-          toast.success('WebRTC restarted');
-        } catch (error) {
-          console.error('Error restarting WebRTC:', error);
-          toast.error('Failed to restart WebRTC');
-        }
-      }}
-      variant="ghost"
-      size="lg"
-      className="rounded-full w-14 h-14 bg-red-500/20 hover:bg-red-500/30 text-white"
-      title="Restart WebRTC"
-    >
-      <Phone className="w-6 h-6" />
-    </CustomButton>
-
-    {/* Manual Negotiation Button */}
-    <CustomButton
-      onClick={async () => {
-        console.log('Manual negotiation triggered');
-        try {
-          // First check WebRTC status
-          debugWebRTCStatus();
-          
-          // Force initialize WebRTC if needed
-          if (!isWebRTCReady()) {
-            console.log('WebRTC not ready, initializing...');
-            await initializeWebRTC();
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-          
-          // Start negotiation
-          await manualStartNegotiation();
-          toast.success('Negotiation started');
-        } catch (error) {
-          console.error('Error starting negotiation:', error);
-          toast.error('Failed to start negotiation');
-        }
-      }}
-      variant="ghost"
-      size="lg"
-      className="rounded-full w-14 h-14 bg-blue-500/20 hover:bg-blue-500/30 text-white"
-      title="Start Negotiation"
-    >
-      <MessageSquare className="w-6 h-6" />
-    </CustomButton>
-
-          {/* End Call Action */}
-          <CustomButton
-            onClick={handleEndCall}
-            variant="ghost"
-            size="lg"
-            className="rounded-full w-14 h-14 bg-red-600 hover:bg-red-700 text-white"
-            title="End call"
-            disabled={isUpdatingSettings}
-          >
-            <PhoneOff className="w-6 h-6" />
-          </CustomButton>
+        {/* Participants count */}
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/70 rounded-lg px-3 py-2">
+          <div className="flex items-center gap-2 text-white">
+            <Users className="w-4 h-4" />
+            <span className="text-sm font-medium">{participants.length + 1} participant{participants.length !== 0 ? 's' : ''}</span>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Controls */}
+      <AnimatePresence>
+        {showControls && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="max-w-md mx-auto">
+              {/* Primary controls */}
+              <div className="flex items-center justify-center gap-4 mb-4">
+                {/* Mute button */}
+                <button
+                  onClick={onToggleMute}
+                  className={`p-4 rounded-full transition-all duration-200 ${
+                    isMuted 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                      : 'bg-white/20 hover:bg-white/30 text-white'
+                  }`}
+                  title={isMuted ? 'Unmute' : 'Mute'}
+                >
+                  {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                </button>
+
+                {/* Video toggle button */}
+                <button
+                  onClick={onToggleVideo}
+                  className={`p-4 rounded-full transition-all duration-200 ${
+                    !isVideoEnabled 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                      : 'bg-white/20 hover:bg-white/30 text-white'
+                  }`}
+                  title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
+                >
+                  {isVideoEnabled ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
+                </button>
+
+                {/* End call button */}
+                <button
+                  onClick={onEndCall}
+                  className="p-4 bg-red-600 hover:bg-red-700 rounded-full transition-all duration-200 text-white"
+                  title="End call"
+                >
+                  <PhoneOff className="w-6 h-6" />
+                </button>
+
+                {/* Screen share button */}
+                <button
+                  onClick={onToggleScreenShare}
+                  className={`p-4 rounded-full transition-all duration-200 ${
+                    isScreenSharing 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                      : 'bg-white/20 hover:bg-white/30 text-white'
+                  }`}
+                  title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
+                >
+                  <Maximize2 className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Secondary controls */}
+              <div className="flex items-center justify-center gap-4">
+                {/* Participants button */}
+                <button
+                  onClick={() => setShowParticipants(!showParticipants)}
+                  className="p-3 bg-white/20 hover:bg-white/30 rounded-full transition-all duration-200 text-white"
+                  title="Participants"
+                >
+                  <Users className="w-5 h-5" />
+                </button>
+
+                {/* Minimize button */}
+                <button
+                  onClick={onMinimize}
+                  className="p-3 bg-white/20 hover:bg-white/30 rounded-full transition-all duration-200 text-white"
+                  title="Minimize"
+                >
+                  <Minimize2 className="w-5 h-5" />
+                </button>
+
+                {/* Settings button */}
+                <button
+                  className="p-3 bg-white/20 hover:bg-white/30 rounded-full transition-all duration-200 text-white"
+                  title="Settings"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Participants panel */}
+      <AnimatePresence>
+        {showParticipants && (
+          <motion.div
+            initial={{ opacity: 0, x: 300 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 300 }}
+            className="absolute top-0 right-0 w-80 h-full bg-gray-900 border-l border-gray-700 p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">Participants</h3>
+              <button
+                onClick={() => setShowParticipants(false)}
+                className="p-1 hover:bg-gray-700 rounded transition-colors"
+              >
+                <Minimize2 className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {/* You */}
+              <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
+                <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center">
+                  <span className="text-white font-medium">You</span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-white font-medium">You</p>
+                  <p className="text-gray-400 text-sm">Host</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  {isMuted && <MicOff className="w-4 h-4 text-red-500" />}
+                  {!isVideoEnabled && <VideoOff className="w-4 h-4 text-red-500" />}
+                </div>
+              </div>
+
+              {/* Other participants */}
+              {participants.map((participant, index) => (
+                <div key={index} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
+                  <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-medium">{participant.name?.charAt(0) || 'U'}</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-white font-medium">{participant.name || 'Unknown User'}</p>
+                    <p className="text-gray-400 text-sm">Participant</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {participant.isMuted && <MicOff className="w-4 h-4 text-red-500" />}
+                    {!participant.isVideoEnabled && <VideoOff className="w-4 h-4 text-red-500" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 };
 
-export default ActiveCallWindow;
+export default VideoCallInterface;

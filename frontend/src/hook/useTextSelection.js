@@ -102,7 +102,6 @@ export const useTextSelection = () => {
       range.surroundContents(element);
       return true;
     } catch (error) {
-      console.warn('Failed to wrap selection:', error);
       return false;
     }
   }, [getSelection]);

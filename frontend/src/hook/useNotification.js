@@ -158,7 +158,6 @@ export const useNotification = (params = {}) => {
           return false;
         }
       } catch (error) {
-        console.error('Error requesting notification permission:', error);
         toast.error('Failed to request notification permission');
         return false;
       }
@@ -197,7 +196,6 @@ export const useNotification = (params = {}) => {
 
         return browserNotification;
       } catch (error) {
-        console.error('Error showing browser notification:', error);
       }
     }
     return null;
@@ -315,8 +313,6 @@ export const useNotification = (params = {}) => {
     if (!socket || !user) return;
 
     const handleNewNotification = (data) => {
-      console.log('New notification received:', data);
-      
       // Add to Redux state
       dispatch(addNotification(data.notification));
       
@@ -331,19 +327,16 @@ export const useNotification = (params = {}) => {
     };
 
     const handleNotificationRead = (data) => {
-      console.log('Notification marked as read:', data);
       dispatch(markOneAsRead(data.notificationId));
       queryClient.invalidateQueries(['notifications']);
     };
 
     const handleNotificationDeleted = (data) => {
-      console.log('Notification deleted:', data);
       dispatch(removeNotification(data.notificationId));
       queryClient.invalidateQueries(['notifications']);
     };
 
     const handleNotificationCleared = (data) => {
-      console.log('All notifications cleared:', data);
       dispatch(resetNotificationState());
       queryClient.invalidateQueries(['notifications']);
     };

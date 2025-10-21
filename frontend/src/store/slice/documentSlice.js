@@ -124,7 +124,6 @@ export const shareDocumentViaEmailThunk = createAsyncThunk(
   }
 );
 
-
 export const searchDocumentsThunk = createAsyncThunk(
   'documents/searchDocuments',
   async (searchParams, { rejectWithValue }) => {
@@ -147,8 +146,7 @@ const initialState = {
   currentDocument: null,
   documentLoading: false,
   documentError: null,
-  
-  
+
   // Search
   searchResults: [],
   searchLoading: false,
@@ -434,8 +432,7 @@ const documentSlice = createSlice({
         state.operations.emailSharing = false;
         state.documentError = action.payload;
       })
-      
-      
+
       // Search Documents
       .addCase(searchDocumentsThunk.pending, (state) => {
         state.searchLoading = true;

@@ -58,7 +58,6 @@ export const useOptimizedMediaUpload = () => {
 
       return processedFile;
     } catch (error) {
-      console.error('Error processing file:', error);
       // Fallback to original file
       processedFile.url = URL.createObjectURL(file);
       return processedFile;
@@ -99,7 +98,6 @@ export const useOptimizedMediaUpload = () => {
 
       return result;
     } catch (error) {
-      console.error('Upload error:', error);
       throw error;
     } finally {
       setIsUploading(false);
@@ -117,7 +115,6 @@ export const useOptimizedMediaUpload = () => {
         const result = await uploadFile(file, uploadFunction);
         results.push(result);
       } catch (error) {
-        console.error(`Error uploading file ${file.name}:`, error);
         results.push({ error: error.message, file: file.name });
       }
     }

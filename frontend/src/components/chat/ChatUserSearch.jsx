@@ -126,9 +126,9 @@ const UserSearch = ({ onSelectUser, onStartChat, placeholder = "Search users..."
             </div>
           ) : (
             <div className="py-2">
-              {users.map((user) => (
+              {users.map((user, index) => (
                 <div
-                  key={user._id}
+                  key={user._id || `user-search-${index}`}
                   onClick={() => handleUserSelect(user)}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                 >

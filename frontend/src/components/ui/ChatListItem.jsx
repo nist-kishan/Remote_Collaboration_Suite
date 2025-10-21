@@ -1,7 +1,7 @@
 import React from 'react';
 import { MessageCircle, Users, Phone, Video, MoreVertical } from 'lucide-react';
 import UserAvatar from './UserAvatar';
-import { useChat } from '../../hook/useChat';
+import { useUserStatus } from '../../hook/useUserStatus';
 import UnreadBadge from '../chat/UnreadBadge';
 
 const ChatItem = ({ 
@@ -25,10 +25,13 @@ const ChatItem = ({
     if (chat.type === 'chatted_user') {
       return chat.name || 'Unknown User';
     }
+    if (chat.type === 'user') {
+      return chat.name || chat.user?.name || 'Unknown User';
+    }
     if (!chat.participants || !Array.isArray(chat.participants)) {
       return 'Unknown User';
     }
-    const otherParticipant = chat.participants.find(p => p.user && p.user._id);
+    const otherParticipant = chat.participants.find(p => p.user && p.user._id !== currentUserId);
     return otherParticipant?.user?.name || 'Unknown User';
   };
 
@@ -37,12 +40,16 @@ const ChatItem = ({
       return null; // Group avatar logic can be added here
     }
     if (chat.type === 'chatted_user') {
-      return chat.participants?.[0]?.user || null;
+      const otherParticipant = chat.participants?.find(p => p.user && p.user._id !== currentUserId);
+      return otherParticipant?.user || null;
+    }
+    if (chat.type === 'user') {
+      return chat.user || null;
     }
     if (!chat.participants || !Array.isArray(chat.participants)) {
       return null;
     }
-    const otherParticipant = chat.participants.find(p => p.user && p.user._id);
+    const otherParticipant = chat.participants.find(p => p.user && p.user._id !== currentUserId);
     return otherParticipant?.user || null;
   };
 
@@ -89,8 +96,10 @@ const ChatItem = ({
 
   return (
     <div
-      className={`flex items-center gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors border-b border-gray-100 dark:border-gray-700 ${
-        isSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+      className={`flex items-center gap-3 p-4 cursor-pointer transition-all duration-200 border-b border-gray-100 dark:border-gray-700 ${
+        isSelected 
+          ? 'bg-indigo-100 dark:bg-indigo-900/30 border-l-4 border-l-indigo-500 shadow-sm' 
+          : 'hover:bg-gray-50 dark:hover:bg-gray-800'
       } ${className}`}
       onClick={onClick}
     >
@@ -104,7 +113,7 @@ const ChatItem = ({
           <UserAvatar 
             user={getChatAvatar()} 
             size="xl" 
-            showOnlineStatus={true}
+            showOnlineStatus={false}
             isOnline={isOnline}
           />
         )}
@@ -115,9 +124,11 @@ const ChatItem = ({
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <h3 className={`text-base truncate ${
-              hasUnreadMessages 
-                ? 'text-gray-900 dark:text-gray-100 font-bold' 
-                : 'text-gray-900 dark:text-gray-100 font-normal'
+              isSelected
+                ? 'text-indigo-900 dark:text-indigo-100 font-semibold'
+                : hasUnreadMessages 
+                  ? 'text-gray-900 dark:text-gray-100 font-bold' 
+                  : 'text-gray-900 dark:text-gray-100 font-normal'
             }`}>
               {getChatName()}
             </h3>
@@ -138,9 +149,11 @@ const ChatItem = ({
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
             <p className={`text-sm truncate ${
-              hasUnreadMessages 
-                ? 'text-gray-900 dark:text-gray-100 font-bold' 
-                : 'text-gray-500 dark:text-gray-400'
+              isSelected
+                ? 'text-indigo-700 dark:text-indigo-300'
+                : hasUnreadMessages 
+                  ? 'text-gray-900 dark:text-gray-100 font-bold' 
+                  : 'text-gray-500 dark:text-gray-400'
             }`}>
               {getLastMessage()}
             </p>
@@ -148,7 +161,7 @@ const ChatItem = ({
           
           <div className="flex items-center gap-2 ml-2">
             {/* Unread count badge */}
-            <UnreadBadge chatId={chat._id} />
+            <UnreadBadge chat={chat} currentUserId={currentUserId} />
             
             {/* Member count for groups */}
             {(chat.type === 'group' || chat.type === 'chatted_group') && (

@@ -49,16 +49,23 @@ export const uploadOnCloudinary = async (localFilePath) => {
       return null;
     }
 
-    // Upload to Cloudinary with optimized settings
+    // Upload to Cloudinary with optimized settings for speed
     const response = await cloudinary.uploader.upload(localFilePath, {
       resource_type: "auto", // Automatically detect file type
       folder: "chat-media", // Organize files in a folder
       use_filename: true, // Use original filename
       unique_filename: true, // Ensure unique filenames
       overwrite: false, // Don't overwrite existing files
+      eager_async: false, // Don't wait for eager transformations
+      eager: [
+        // Pre-generate optimized versions for faster loading
+        { quality: "auto", fetch_format: "auto", width: 1920, height: 1080 },
+        { quality: "auto", fetch_format: "auto", width: 1280, height: 720 },
+        { quality: "auto", fetch_format: "auto", width: 640, height: 480 }
+      ],
       transformation: [
-        // Optimize images
-        { quality: "auto", fetch_format: "auto" },
+        // Optimize images for faster upload and loading
+        { quality: "auto:low", fetch_format: "auto" },
         // Limit file size (10MB max)
         { flags: "attachment" }
       ]

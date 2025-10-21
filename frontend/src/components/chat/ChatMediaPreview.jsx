@@ -21,10 +21,8 @@ const MediaPreview = ({
       if (onSend && typeof onSend === 'function') {
         await onSend();
       } else {
-        console.error('onSend function is not available');
       }
     } catch (error) {
-      console.error('Upload error:', error);
     } finally {
       setIsUploading(false);
     }

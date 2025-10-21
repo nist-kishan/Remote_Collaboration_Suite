@@ -30,7 +30,7 @@ const CallHistory = ({ onStartCall, onViewCallDetails, className = '' }) => {
     getCallTitle,
     isDeleting,
     isClearing
-  } = useCallHistory();
+  } = useCall();
 
   // Show loading if user is not loaded yet
   if (isLoading || !user) {

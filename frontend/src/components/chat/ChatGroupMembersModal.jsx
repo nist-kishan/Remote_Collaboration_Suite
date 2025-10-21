@@ -6,20 +6,63 @@ import { toast } from 'react-hot-toast';
 import Button from '../ui/Button';
 import UserAvatar from '../ui/UserAvatar';
 import { useChat } from '../../hook/useChat';
-import { searchUsers } from '../../api/chatApi';
+import { searchUsers, getGroupMembers } from '../../api/chatApi';
 
 const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
   const { user } = useSelector((state) => state.auth);
+  
+  // Debug logging
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [showMemberMenu, setShowMemberMenu] = useState(null);
 
-  // Get group members using Redux-based hook
-  const { data: membersData, isLoading, error } = useGroupMembersQuery(chatId);
-  const members = membersData?.data?.members || [];
-  const isAdmin = membersData?.data?.isAdmin || false;
-  const userRole = membersData?.data?.userRole || 'member';
+  // Get group members using React Query
+  const { data: membersData, isLoading, error } = useQuery({
+    queryKey: ['groupMembers', chatId],
+    queryFn: () => {
+      // console.log('🔍 Frontend: Calling getGroupMembers API for chatId:', chatId);
+      return getGroupMembers(chatId);
+    },
+    enabled: !!chatId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevent excessive API calls
+    cacheTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: false, // Don't refetch on component mount if data exists
+    onSuccess: (data) => {
+      // console.log('✅ Frontend: Group members loaded successfully:', {
+      //   data,
+      //   members: data?.data?.data?.members,
+      //   membersCount: data?.data?.data?.members?.length,
+      //   isAdmin: data?.data?.data?.isAdmin,
+      //   userRole: data?.data?.data?.userRole
+      // });
+    },
+    onError: (error) => {
+    },
+  });
+  
+  const members = membersData?.data?.data?.members || [];
+  const isAdmin = membersData?.data?.data?.isAdmin || false;
+  const userRole = membersData?.data?.data?.userRole || 'member';
+
+  // Debug logging for members data
+  // console.log('🔍 Frontend: Members data processing:', {
+  //   membersData,
+  //   members,
+  //   membersLength: members.length,
+  //   isAdmin,
+  //   userRole,
+  //   chatId,
+  //   chatName,
+  //   rawDataStructure: {
+  //     'membersData.data': membersData?.data,
+  //     'membersData.data.data': membersData?.data?.data,
+  //     'membersData.data.data.members': membersData?.data?.data?.members,
+  //     'membersData.data.data.isAdmin': membersData?.data?.data?.isAdmin,
+  //     'membersData.data.data.userRole': membersData?.data?.data?.userRole
+  //   }
+  // });
 
   // User search for adding members
   const { data: searchResults } = useQuery({
@@ -29,11 +72,17 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
     staleTime: 60000,
   });
 
-  // Mutations using Redux-based hooks
-  const addMembersMutation = useAddGroupMembers();
-  const removeMemberMutation = useRemoveGroupMember();
-  const updateRoleMutation = useUpdateMemberRole();
-  const leaveGroupMutation = useLeaveGroup();
+  // Get chat functions from useChat hook
+  const {
+    addGroupMembers,
+    removeGroupMember,
+    updateMemberRole,
+    leaveGroup,
+    isAddingMembers,
+    isRemovingMember,
+    isUpdatingRole,
+    isLeavingGroup
+  } = useChat();
 
   const handleAddMembers = () => {
     if (selectedMembers.length === 0) {
@@ -42,20 +91,17 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
     }
 
     const memberIds = selectedMembers.map(member => member._id);
-    addMembersMutation.mutate({
+    addGroupMembers({
       chatId,
       memberIds
-    }, {
-      onSuccess: () => {
-        setSelectedMembers([]);
-        setShowAddMembers(false);
-        setSearchQuery('');
-      }
     });
+    setSelectedMembers([]);
+    setShowAddMembers(false);
+    setSearchQuery('');
   };
 
   const handleRemoveMember = (memberId) => {
-    removeMemberMutation.mutate({
+    removeGroupMember({
       chatId,
       memberId
     });
@@ -63,7 +109,7 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
   };
 
   const handleUpdateRole = (memberId, newRole) => {
-    updateRoleMutation.mutate({
+    updateMemberRole({
       chatId,
       memberId,
       role: newRole
@@ -72,11 +118,8 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
   };
 
   const handleLeaveGroup = () => {
-    leaveGroupMutation.mutate(chatId, {
-      onSuccess: () => {
-        onClose();
-      }
-    });
+    leaveGroup(chatId);
+    onClose();
   };
 
   const handleAddMember = (userToAdd) => {
@@ -120,8 +163,8 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-white/20 dark:border-gray-700/50">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
@@ -213,9 +256,9 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
                       {searchQuery.length >= 2 && (
                         <div className="max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg">
                           {filteredUsers.length > 0 ? (
-                            filteredUsers.map((user) => (
+                            filteredUsers.map((user, index) => (
                               <div
-                                key={user._id}
+                                key={user._id || `search-user-${index}`}
                                 onClick={() => handleAddMember(user)}
                                 className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-600 last:border-b-0"
                               >
@@ -243,8 +286,8 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
                       {selectedMembers.length > 0 && (
                         <Button
                           onClick={handleAddMembers}
-                          disabled={addMembersMutation.isPending}
-                          loading={addMembersMutation.isPending}
+                          disabled={isAddingMembers}
+                          loading={isAddingMembers}
                           className="w-full"
                         >
                           Add {selectedMembers.length} Member{selectedMembers.length > 1 ? 's' : ''}
@@ -260,9 +303,26 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
                 <h3 className="font-medium text-gray-900 dark:text-gray-100">
                   Members ({members.length})
                 </h3>
-                {members.map((member) => (
+                {members.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Users className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400 mb-2">No members found</p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500">
+                      This might be a loading issue. Please check the console for debugging information.
+                    </p>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    >
+                      Refresh Page
+                    </button>
+                  </div>
+                ) : (
+                  members.map((member, index) => (
                   <div
-                    key={member.user._id}
+                    key={member.user?._id || `member-${index}`}
                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
                   >
                     <div className="flex items-center gap-3">
@@ -342,7 +402,8 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
                       )}
                     </div>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -360,8 +421,8 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
               <Button
                 onClick={handleLeaveGroup}
                 variant="outline"
-                disabled={leaveGroupMutation.isPending}
-                loading={leaveGroupMutation.isPending}
+                disabled={isLeavingGroup}
+                loading={isLeavingGroup}
                 className="text-red-600 border-red-300 hover:bg-red-50 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/20"
               >
                 Leave Group

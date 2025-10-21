@@ -18,6 +18,7 @@ import {
   getArchivedChatsForUser,
   getDeletedChatsForUser,
   getChattedUsers,
+  getRecentChats,
   getGroupMembers,
   updateMemberRole
 } from '../controllers/chat.controller.js';
@@ -43,6 +44,7 @@ const router = express.Router();
 
 // Chat routes
 router.get('/', verifyToken, getUserChats);
+router.get('/recent', verifyToken, getRecentChats);
 router.get('/chatted-users', verifyToken, getChattedUsers);
 router.get('/one-to-one/:otherUserId', verifyToken, getOrCreateOneToOneChat);
 router.post('/group', verifyToken, createGroupChat);

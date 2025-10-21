@@ -272,7 +272,6 @@ export const useDocument = (documentId = null, params = {}) => {
         toast.success('Auto-save enabled');
       }
     } catch (error) {
-      console.error('Failed to toggle auto-save:', error);
       toast.error('Failed to toggle auto-save');
     }
   }, [documentId, isAutoSaveEnabled]);
@@ -294,7 +293,6 @@ export const useDocument = (documentId = null, params = {}) => {
       setAutoSaveStatus('saved');
       setLastSaved(new Date());
     } catch (error) {
-      console.error('Auto-save failed:', error);
       setAutoSaveStatus('error');
     }
   }, [documentId, isAutoSaveEnabled]);
@@ -324,7 +322,6 @@ export const useDocument = (documentId = null, params = {}) => {
       toast.success('Document saved');
       return true;
     } catch (error) {
-      console.error('Manual save failed:', error);
       setAutoSaveStatus('error');
       toast.error('Failed to save document');
       return false;

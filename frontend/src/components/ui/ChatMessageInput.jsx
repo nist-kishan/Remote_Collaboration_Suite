@@ -10,12 +10,12 @@ import {
   MoreVertical
 } from 'lucide-react';
 import Button from './Button';
-import EmojiPicker from './EmojiPicker';
+import EmojiPicker from './EmojiSelector';
 import MediaPreview from '../chat/MediaPreview';
 import WhatsAppLoader from './WhatsAppLoader';
 import { debugMediaUpload } from '../../utils/debugMediaUpload';
-import { useOptimizedMediaUpload } from '../../hook/useOptimizedMediaUpload';
 import { useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 
 const MessageInput = forwardRef(({ 
   onSendMessage, 
@@ -29,6 +29,13 @@ const MessageInput = forwardRef(({
   chatId, // Add chatId prop
   className = ''
 }, ref) => {
+  // console.log('🔍 ChatMessageInput props:', {
+  //   chatId,
+  //   disabled,
+  //   isMobile,
+  //   onSendMessage: !!onSendMessage,
+  //   onTyping: !!onTyping
+  // });
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -74,7 +81,13 @@ const MessageInput = forwardRef(({
         messageData.replyTo = replyTo._id;
       }
       
-      console.log('MessageInput sending:', messageData);
+      console.log('🔍 MessageInput sending message data:', {
+        ...messageData,
+        replyTo: messageData.replyTo,
+        replyToType: typeof messageData.replyTo,
+        replyToOriginal: replyTo,
+        replyToOriginalType: typeof replyTo
+      });
       onSendMessage?.(messageData);
       setMessage('');
       if (replyTo) {
@@ -91,8 +104,21 @@ const MessageInput = forwardRef(({
   };
 
   const handleFileSelect = (type) => {
-    fileInputRef.current.setAttribute('accept', getAcceptType(type));
+    // console.log('🔍 handleFileSelect called with type:', type);
+    // console.log('🔍 fileInputRef.current:', fileInputRef.current);
+    
+    if (!fileInputRef.current) {
+      console.error('❌ fileInputRef.current is null');
+      return;
+    }
+    
+    const acceptType = getAcceptType(type);
+    // console.log('🔍 Setting accept type:', acceptType);
+    
+    fileInputRef.current.setAttribute('accept', acceptType);
     fileInputRef.current.setAttribute('data-type', type);
+    
+    // console.log('🔍 Clicking file input...');
     fileInputRef.current.click();
   };
 
@@ -128,10 +154,23 @@ const MessageInput = forwardRef(({
   }, [previewFiles]);
 
   const handleFileChange = (e) => {
+    // console.log('🔍 handleFileChange called');
+    // console.log('🔍 e.target.files:', e.target.files);
+    
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file) {
+      // console.log('❌ No file selected');
+      return;
+    }
 
     const type = e.target.getAttribute('data-type');
+    // console.log('🔍 File selected:', {
+    //   name: file.name,
+    //   size: file.size,
+    //   type: file.type,
+    //   dataType: type
+    // });
+    
     debugMediaUpload.logFileSelection(file, type);
     
     // Create file URL for preview
@@ -146,9 +185,11 @@ const MessageInput = forwardRef(({
       file: file // Keep the actual file object for sending
     };
     
+    // console.log('🔍 Adding file to preview:', newFile);
     setPreviewFiles(prev => {
-      console.log('Adding file to preview:', newFile);
-      return [...prev, newFile];
+      const updated = [...prev, newFile];
+      // console.log('🔍 Updated preview files:', updated);
+      return updated;
     });
 
     // Reset input
@@ -298,6 +339,20 @@ const MessageInput = forwardRef(({
     }
   }, [showMediaMenu]);
 
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showEmojiPicker && !event.target.closest('.emoji-picker-container')) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showEmojiPicker]);
+
   return (
     <div className={`bg-white dark:bg-gray-900 min-h-[60px] ${className}`}>
       {/* Media Preview */}
@@ -343,7 +398,7 @@ const MessageInput = forwardRef(({
         />
 
         {/* Emoji Button (Outside Input) */}
-        <div className="flex-shrink-0">
+        <div className="relative flex-shrink-0 emoji-picker-container">
           <button
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             disabled={disabled}
@@ -354,12 +409,23 @@ const MessageInput = forwardRef(({
           >
             <Smile className="w-5 h-5" />
           </button>
+
+          {/* Emoji Picker positioned relative to emoji button */}
+          <EmojiPicker
+            isOpen={showEmojiPicker}
+            onClose={() => setShowEmojiPicker(false)}
+            onEmojiSelect={handleEmojiSelect}
+            className="absolute bottom-full left-0 mb-2 animate-in slide-in-from-bottom-2 duration-300 z-50"
+          />
         </div>
 
         {/* Media Menu Button (Outside Input) */}
         <div className="relative media-menu-container flex-shrink-0">
           <button
-            onClick={() => setShowMediaMenu(!showMediaMenu)}
+            onClick={() => {
+              // console.log('🔍 Media menu button clicked, current state:', showMediaMenu);
+              setShowMediaMenu(!showMediaMenu);
+            }}
             disabled={disabled}
             className={`h-12 px-3 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 rounded-xl transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 hover:shadow-lg backdrop-blur-sm flex items-center justify-center ${
               showMediaMenu ? 'text-indigo-600 dark:text-indigo-400 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 shadow-md scale-105' : ''
@@ -375,6 +441,7 @@ const MessageInput = forwardRef(({
               <div className="py-2">
                 <button
                   onClick={() => {
+                    // console.log('🔍 Image button clicked');
                     handleFileSelect('image');
                     setShowMediaMenu(false);
                   }}
@@ -385,7 +452,7 @@ const MessageInput = forwardRef(({
                   </div>
                   <span className="font-medium">Send Image</span>
                 </button>
-                <button
+                {/* <button
                   onClick={() => {
                     handleFileSelect('video');
                     setShowMediaMenu(false);
@@ -396,7 +463,7 @@ const MessageInput = forwardRef(({
                     <Video className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   </div>
                   <span className="font-medium">Send Video</span>
-                </button>
+                </button> */}
                 <button
                   onClick={() => {
                     handleFileSelect('audio');
@@ -463,13 +530,6 @@ const MessageInput = forwardRef(({
         </div>
       </div>
 
-      {/* Emoji Picker */}
-      <EmojiPicker
-        isOpen={showEmojiPicker}
-        onClose={() => setShowEmojiPicker(false)}
-        onEmojiSelect={handleEmojiSelect}
-        className="left-0 animate-in slide-in-from-bottom-2 duration-300"
-      />
 
       {/* WhatsApp-style Upload Loader */}
       <WhatsAppLoader

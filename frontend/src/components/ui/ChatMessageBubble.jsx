@@ -13,8 +13,8 @@ import {
   Download
 } from 'lucide-react';
 import UserAvatar from './UserAvatar';
-import LazyImage from './LazyImage';
-import OptimizedVideo from './OptimizedVideo';
+import LazyLoadedImage from './LazyLoadedImage';
+import OptimizedVideoPlayer from './OptimizedVideoPlayer';
 // Removed MediaViewer import - using inline previews instead
 
 const MessageBubble = ({ 
@@ -63,7 +63,7 @@ const MessageBubble = ({
         }
         
         return (
-          <LazyImage
+          <LazyLoadedImage
             src={message.media[0]?.url}
             alt="Shared image"
             className="w-full"
@@ -90,7 +90,7 @@ const MessageBubble = ({
         }
         
         return (
-          <OptimizedVideo
+          <OptimizedVideoPlayer
             src={message.media[0]?.url}
             poster={message.media[0]?.thumbnail}
             className="w-full"

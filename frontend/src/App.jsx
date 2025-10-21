@@ -18,7 +18,10 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import PageNotFound from "./pages/PageNotFound";
 import Dashboard from "./pages/Dashboard";
 import RequestOtp from "./pages/authenication/RequestOtp";
-// import VideoCall from "./pages/VideoCall";
+import VideoCall from "./pages/VideoCall";
+import VideoCallReceiver from "./pages/VideoCallReceiver";
+import VideoCallCaller from "./pages/VideoCallCaller";
+import VideoCallEnded from "./pages/VideoCallEnded";
 // import DocumentPreviewModal from "./components/documents/DocumentPreviewModal";
 // import DocumentsList from "./pages/documents/DocumentsList";
 // import NewDocument from "./pages/documents/NewDocument";
@@ -29,9 +32,9 @@ import RequestOtp from "./pages/authenication/RequestOtp";
 // import NewWhiteboard from "./pages/whiteboards/NewWhiteboard";
 // import WhiteboardEditor from "./pages/whiteboards/WhiteboardEditor";
 // import Whiteboard from "./pages/Whiteboard";
-// import ChatPage from "./pages/ChatPage";
-// import CallHistoryPage from "./pages/CallHistoryPage";
-// import MediaViewerPage from "./pages/MediaViewerPage";
+import ChatPage from "./pages/ChatPage";
+import CallHistoryPage from "./pages/CallHistoryPage";
+import MediaViewerPage from "./pages/MediaViewerPage";
 // import WorkspaceListGrid from "./components/workspace/WorkspaceListGrid";
 // import WorkspacePage from "./pages/workspace/WorkspacePage";
 // import ProjectPage from "./pages/project/ProjectPage";
@@ -122,18 +125,21 @@ export default function App() {
 
             {/* ==================== COMMUNICATION FEATURES ==================== */}
             {/* Chat & Messaging */}
-            {/* <Route path="/chat" element={<ChatPage />} />
+            <Route path="/chat" element={<ChatPage />} />
             <Route path="/chat/:receiverId" element={<ChatPage />} />
-            <Route path="/chats/group/:groupId" element={<ChatPage />} /> */}
+            <Route path="/chat/group/:groupId" element={<ChatPage />} />
 
             {/* Video Calling */}
-            {/* <Route path="/video-call" element={<VideoCall />} />
+            <Route path="/video-call" element={<VideoCall />} />
+            <Route path="/video-call/receiver/:receiverId" element={<VideoCallReceiver />} />
+            <Route path="/video-call/caller/:senderId" element={<VideoCallCaller />} />
+            <Route path="/video-call/ended" element={<VideoCallEnded />} />
             <Route path="/call/:callId" element={<VideoCall />} />
-            <Route path="/call-history" element={<CallHistoryPage />} /> */}
+            <Route path="/call-history" element={<CallHistoryPage />} />
 
             {/* Media Viewer */}
-            {/* <Route path="/media/:chatId" element={<MediaViewerPage />} />
-            <Route path="/media/:chatId/:messageId" element={<MediaViewerPage />} /> */}
+            <Route path="/media/:chatId" element={<MediaViewerPage />} />
+            <Route path="/media/:chatId/:messageId" element={<MediaViewerPage />} />
 
             {/* ==================== DOCUMENT MANAGEMENT ==================== */}
             {/* <Route path="/documents" element={<DocumentsList />} />
