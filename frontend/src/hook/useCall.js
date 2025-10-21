@@ -232,13 +232,47 @@ export const useCall = () => {
       setWebrtcIsVideoEnabled(true);
       setWebrtcIsScreenSharing(false);
       
+      // Clear Redux state streams
+      setLocalStream(null);
+      setRemoteStream(null);
+      
       // Force garbage collection of media streams
       if (window.gc) {
         window.gc();
       }
       
+      // Force stop all remaining media streams
+      try {
+        console.log('🔍 Checking for any remaining active streams...');
+        const allStreams = [];
+        
+        // Check if there are any global media streams that weren't caught
+        if (window.localStreams) {
+          window.localStreams.forEach(stream => {
+            if (stream && stream.getTracks) {
+              allStreams.push(stream);
+            }
+          });
+        }
+        
+        // Stop any remaining streams
+        allStreams.forEach(stream => {
+          stream.getTracks().forEach(track => {
+            console.log(`🛑 Force stopping remaining track: ${track.kind} - ${track.label}`);
+            track.stop();
+          });
+        });
+        
+        // Clear any global stream references
+        if (window.localStreams) {
+          window.localStreams = [];
+        }
+      } catch (error) {
+        console.log('⚠️ Error in force cleanup:', error.message);
+      }
+      
       // Wait a bit for devices to be released
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Increased wait time
       
       // Verify devices are released
       try {
@@ -253,6 +287,43 @@ export const useCall = () => {
       console.error('❌ Error releasing tracks:', error);
     }
   }, [localStream]);
+
+  // Force release all media devices
+  const forceReleaseAllMediaDevices = useCallback(async () => {
+    console.log('🔧 Force releasing all media devices...');
+    
+    try {
+      // Get all active media streams from the browser
+      const allTracks = [];
+      
+      // Check for any remaining active tracks
+      if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+        try {
+          // This is a fallback to ensure all tracks are stopped
+          const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          testStream.getTracks().forEach(track => {
+            console.log(`🛑 Force stopping test track: ${track.kind}`);
+            track.stop();
+          });
+        } catch (error) {
+          // This is expected if devices are already in use
+          console.log('🔍 Test stream creation failed (expected if devices are in use)');
+        }
+      }
+      
+      // Force garbage collection
+      if (window.gc) {
+        window.gc();
+      }
+      
+      // Wait for devices to be fully released
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      console.log('✅ All media devices force released');
+    } catch (error) {
+      console.error('❌ Error in force release:', error);
+    }
+  }, []);
 
   const checkDeviceAvailability = useCallback(async () => {
     try {
@@ -378,6 +449,12 @@ export const useCall = () => {
       localStreamRef.current = stream;
       originalCameraStreamRef.current = stream;
       
+      // Track stream globally for cleanup
+      if (!window.localStreams) {
+        window.localStreams = [];
+      }
+      window.localStreams.push(stream);
+      
       // Reset retry count on success
       setDeviceInUseRetryCount(0);
       setWebrtcLocalStream(stream);
@@ -428,6 +505,10 @@ export const useCall = () => {
       await releaseAllTracks();
       console.log('✅ Media tracks released');
       
+      // Force release all media devices
+      await forceReleaseAllMediaDevices();
+      console.log('✅ Media devices force released');
+      
       // Then call the socket end call function
       if (callId) {
         endCallSocketFunction(callId);
@@ -444,7 +525,7 @@ export const useCall = () => {
         endCallSocketFunction();
       }
     }
-  }, [releaseAllTracks, endCallSocketFunction]);
+  }, [releaseAllTracks, forceReleaseAllMediaDevices, endCallSocketFunction]);
 
   const createPeerConnection = useCallback(() => {
     if (peerConnectionRef.current) {
@@ -469,8 +550,10 @@ export const useCall = () => {
     }
 
     pc.ontrack = (event) => {
+      console.log('📥 Remote track received:', event.track.kind, event.track.label);
       const [remoteStream] = event.streams;
       if (remoteStream) {
+        console.log('📹 Remote stream received with tracks:', remoteStream.getTracks().map(t => t.kind));
         setWebrtcRemoteStream(remoteStream);
         
         if (remoteVideoRef.current) {
@@ -622,9 +705,16 @@ export const useCall = () => {
         return null;
       }
 
-      if (localStreamRef.current && pc.getSenders().length === 0) {
+      // Always add local stream tracks when creating offer (for outgoing calls)
+      if (localStreamRef.current) {
+        const existingSenders = pc.getSenders();
+        
         localStreamRef.current.getTracks().forEach(track => {
-          pc.addTrack(track, localStreamRef.current);
+          const hasTrack = existingSenders.some(sender => sender.track === track);
+          if (!hasTrack) {
+            console.log(`📤 Adding ${track.kind} track to peer connection for offer`);
+            pc.addTrack(track, localStreamRef.current);
+          }
         });
       }
 
@@ -657,9 +747,18 @@ export const useCall = () => {
         return null;
       }
 
-      if (localStreamRef.current && pc.getSenders().length === 0) {
+      // Always add local stream tracks when creating answer (for incoming calls)
+      if (localStreamRef.current) {
+        const existingSenders = pc.getSenders();
+        const hasVideoTrack = existingSenders.some(sender => sender.track?.kind === 'video');
+        const hasAudioTrack = existingSenders.some(sender => sender.track?.kind === 'audio');
+        
         localStreamRef.current.getTracks().forEach(track => {
-          pc.addTrack(track, localStreamRef.current);
+          const hasTrack = existingSenders.some(sender => sender.track === track);
+          if (!hasTrack) {
+            console.log(`📤 Adding ${track.kind} track to peer connection for answer`);
+            pc.addTrack(track, localStreamRef.current);
+          }
         });
       }
 
@@ -713,20 +812,32 @@ export const useCall = () => {
       const videoTrack = localStreamRef.current.getVideoTracks()[0];
       if (videoTrack) {
         const newVideoEnabled = !webrtcIsVideoEnabled;
+        console.log(`🎥 Toggling video: ${newVideoEnabled ? 'enabled' : 'disabled'}`);
         videoTrack.enabled = newVideoEnabled;
         setWebrtcIsVideoEnabled(newVideoEnabled);
         
         if (peerConnectionRef.current) {
           const senders = peerConnectionRef.current.getSenders();
+          console.log(`📤 Found ${senders.length} senders in peer connection`);
+          
           const videoSender = senders.find(sender => 
             sender.track && sender.track.kind === 'video'
           );
           
           if (videoSender) {
+            console.log(`🎥 Video sender found, setting enabled to: ${newVideoEnabled}`);
             videoSender.track.enabled = newVideoEnabled;
+          } else {
+            console.log('⚠️ No video sender found in peer connection');
           }
+        } else {
+          console.log('⚠️ No peer connection available');
         }
+      } else {
+        console.log('⚠️ No video track found in local stream');
       }
+    } else {
+      console.log('⚠️ No local stream available');
     }
   }, [webrtcIsVideoEnabled]);
 
@@ -1234,6 +1345,7 @@ export const useCall = () => {
     addIceCandidate,
     isWebRTCReady,
     releaseAllTracks,
+    forceReleaseAllMediaDevices,
     
     // Socket functions
     socket,

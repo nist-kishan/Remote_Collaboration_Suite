@@ -10,6 +10,8 @@ import {
   setShowIncomingCallModal,
   setShowOutgoingCallModal,
   setShowCallWindow,
+  setLocalStream,
+  setRemoteStream,
   addError,
   clearError,
   clearAllErrors,
@@ -200,6 +202,8 @@ export const useCallSocket = () => {
     dispatch(setShowIncomingCallModal(false));
     dispatch(setShowOutgoingCallModal(false));
     dispatch(setShowCallWindow(false));
+    dispatch(setLocalStream(null));
+    dispatch(setRemoteStream(null));
     
     // Clear processed call IDs
     setProcessedCallIds(new Set());
@@ -589,13 +593,19 @@ export const useCallSocket = () => {
       startParticipantCheck(data.call._id);
     }
     
-    // Navigate to caller page for outgoing calls
-    if (!location.pathname.includes('/video-call/')) {
+    // Navigate to caller page only for outgoing calls (not incoming calls that were just accepted)
+    // Check if this is an outgoing call by looking at the current call state
+    const isOutgoingCall = outgoingCall && (outgoingCall.callId === callId || outgoingCall._id === callId);
+    
+    if (isOutgoingCall && !location.pathname.includes('/video-call/')) {
       const receiverId = data.call.receiverId || data.call.chatId;
-      console.log('🎯 Call joined - navigating to caller page with receiver ID:', receiverId);
+      console.log('🎯 Outgoing call joined - navigating to caller page with receiver ID:', receiverId);
       navigate(`/video-call/caller/${receiverId}`, { replace: true });
+    } else if (!isOutgoingCall && location.pathname.includes('/video-call/receiver/')) {
+      // For incoming calls, stay on receiver page or navigate to connected state
+      console.log('🎯 Incoming call joined - staying on receiver page');
     }
-  }, [dispatch, navigate, location.pathname, saveCallData, startParticipantCheck]);
+  }, [dispatch, navigate, location.pathname, saveCallData, startParticipantCheck, outgoingCall]);
 
   const handleCallEnded = useCallback((data) => {
     console.log('📞 Call ended data:', data);
