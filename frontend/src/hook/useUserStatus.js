@@ -51,13 +51,23 @@ export const useUserStatus = () => {
       socket.on('user_offline', handleUserOffline);
       socket.on('bulk_online_users', handleBulkOnlineUsers);
 
-      // Emit that current user is online when connected
+      // Emit that current user is online when connected (with throttling)
       if (socket.connected) {
-        socket.emit('user_online', { userId: user?._id });
-      }
+        // Throttle user online emission to prevent spam
+        const timeoutId = setTimeout(() => {
+          socket.emit('user_online', { userId: user?._id });
+        }, 1000); // 1 second delay
 
-      // Request current online users
-      socket.emit('get_online_users');
+        // Request current online users (with throttling)
+        const requestTimeoutId = setTimeout(() => {
+          socket.emit('get_online_users');
+        }, 2000); // 2 second delay
+
+        return () => {
+          clearTimeout(timeoutId);
+          clearTimeout(requestTimeoutId);
+        };
+      }
 
       return () => {
         socket.off('user_online', handleUserOnline);

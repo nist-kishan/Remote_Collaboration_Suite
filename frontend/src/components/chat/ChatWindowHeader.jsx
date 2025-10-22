@@ -108,7 +108,7 @@ const ChatHeader = ({
           <UserAvatar 
             user={getChatAvatar()} 
             size={isMobile ? "sm" : "md"} 
-            showOnlineStatus={false}
+            showOnlineStatus={true}
             isOnline={getOnlineStatus()}
           />
         )}

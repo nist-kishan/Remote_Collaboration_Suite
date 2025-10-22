@@ -115,7 +115,7 @@ export const useChat = (chatId = null, params = {}) => {
     queryKey: ['chats', params],
     queryFn: () => getUserChats(params),
     enabled: !!user,
-    staleTime: 30000,
+    staleTime: 60000, // 1 minute - more reasonable for chat data
     refetchOnWindowFocus: false,
   });
 
@@ -123,7 +123,7 @@ export const useChat = (chatId = null, params = {}) => {
     queryKey: ['groupChats', params],
     queryFn: () => getUserGroupChats(params),
     enabled: !!user,
-    staleTime: 30000,
+    staleTime: 60000, // 1 minute - more reasonable for group chat data
     refetchOnWindowFocus: false,
   });
 
@@ -152,7 +152,7 @@ export const useChat = (chatId = null, params = {}) => {
     queryKey: ['messages', chatId, params],
     queryFn: () => getChatMessages(chatId, params),
     enabled: !!user && !!chatId,
-    staleTime: 30000,
+    staleTime: 30000, // 30 seconds - messages need more frequent updates
     refetchOnWindowFocus: false,
     keepPreviousData: true,
   });

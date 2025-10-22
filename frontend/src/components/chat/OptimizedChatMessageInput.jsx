@@ -83,10 +83,6 @@ const OptimizedChatMessageInput = ({
         onSendMessage
       );
 
-      // Record performance
-      const duration = Date.now() - startTime;
-      messageSenderRef.current.performanceMonitor.recordSendTime(duration);
-
       // Clear state
       setMessage('');
       if (replyTo) {
@@ -103,7 +99,7 @@ const OptimizedChatMessageInput = ({
       setFileCaptions({});
 
     } catch (error) {
-      messageSenderRef.current.performanceMonitor.recordFailure();
+      console.error('Error sending message:', error);
     }
   }, [message, replyTo, previewFiles, onSendMessage, onCancelReply]);
 
@@ -241,10 +237,6 @@ const OptimizedChatMessageInput = ({
 
       await Promise.all(sendPromises);
 
-      // Record performance
-      const duration = Date.now() - startTime;
-      messageSenderRef.current.performanceMonitor.recordSendTime(duration);
-
       // Clear state
       previewFiles.forEach(file => {
         if (file.url) {
@@ -256,7 +248,7 @@ const OptimizedChatMessageInput = ({
       uploadTrackerRef.current.clear();
 
     } catch (error) {
-      messageSenderRef.current.performanceMonitor.recordFailure();
+      console.error('Error sending message:', error);
     } finally {
       setIsUploading(false);
     }

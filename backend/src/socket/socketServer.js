@@ -134,6 +134,23 @@ class SocketServer {
           lastSeen: new Date()
         });
         
+        // Also emit user_online event for frontend compatibility (with throttling)
+        const lastBroadcast = this.lastUserStatusBroadcast?.get(socket.userId);
+        const now = Date.now();
+        
+        if (!lastBroadcast || (now - lastBroadcast) > 5000) { // 5 second throttle
+          this.io.emit('user_online', {
+            userId: socket.userId,
+            timestamp: new Date()
+          });
+          
+          // Track last broadcast time
+          if (!this.lastUserStatusBroadcast) {
+            this.lastUserStatusBroadcast = new Map();
+          }
+          this.lastUserStatusBroadcast.set(socket.userId, now);
+        }
+        
       } catch (error) {
         console.error('Error updating user online status:', error);
       }
@@ -143,6 +160,116 @@ class SocketServer {
         message: 'Socket connected successfully',
         userId: socket.userId,
         socketId: socket.id
+      });
+
+      // ========== USER STATUS EVENTS ==========
+      
+      // Handle user online status (with throttling)
+      socket.on('user_online', async (data) => {
+        try {
+          const { userId } = data;
+          if (userId && userId === socket.userId) {
+            // Check if we already processed this user recently (throttling)
+            const lastUpdate = this.lastUserStatusUpdate?.get(userId);
+            const now = Date.now();
+            
+            if (lastUpdate && (now - lastUpdate) < 5000) { // 5 second throttle
+              return; // Skip this update
+            }
+            
+            // Update user online status
+            await retryableUserUpdate(userId, {
+              isOnline: true,
+              lastSeen: new Date()
+            });
+            
+            // Track last update time
+            if (!this.lastUserStatusUpdate) {
+              this.lastUserStatusUpdate = new Map();
+            }
+            this.lastUserStatusUpdate.set(userId, now);
+            
+            // Notify all users about this user coming online
+            this.io.emit('user_online', {
+              userId: userId,
+              timestamp: new Date()
+            });
+          }
+        } catch (error) {
+          console.error('Error handling user online:', error);
+        }
+      });
+
+      // Handle user offline status (with throttling)
+      socket.on('user_offline', async (data) => {
+        try {
+          const { userId } = data;
+          if (userId && userId === socket.userId) {
+            // Check if we already processed this user recently (throttling)
+            const lastUpdate = this.lastUserStatusUpdate?.get(userId);
+            const now = Date.now();
+            
+            if (lastUpdate && (now - lastUpdate) < 5000) { // 5 second throttle
+              return; // Skip this update
+            }
+            
+            // Update user offline status
+            await retryableUserUpdate(userId, {
+              isOnline: false,
+              lastSeen: new Date()
+            });
+            
+            // Track last update time
+            if (!this.lastUserStatusUpdate) {
+              this.lastUserStatusUpdate = new Map();
+            }
+            this.lastUserStatusUpdate.set(userId, now);
+            
+            // Notify all users about this user going offline
+            this.io.emit('user_offline', {
+              userId: userId,
+              timestamp: new Date()
+            });
+          }
+        } catch (error) {
+          console.error('Error handling user offline:', error);
+        }
+      });
+
+      // Handle get online users request (with throttling)
+      socket.on('get_online_users', async () => {
+        try {
+          // Throttle get_online_users requests to prevent spam
+          const socketId = socket.id;
+          const lastRequest = this.lastOnlineUsersRequest?.get(socketId);
+          const now = Date.now();
+          
+          if (lastRequest && (now - lastRequest) < 10000) { // 10 second throttle
+            return; // Skip this request
+          }
+          
+          // Track last request time
+          if (!this.lastOnlineUsersRequest) {
+            this.lastOnlineUsersRequest = new Map();
+          }
+          this.lastOnlineUsersRequest.set(socketId, now);
+          
+          // Get all online users from database
+          const onlineUsers = await User.find(
+            { isOnline: true },
+            { _id: 1 }
+          );
+          
+          const onlineUserIds = onlineUsers.map(user => user._id.toString());
+          
+          // Send bulk online users to the requesting socket
+          socket.emit('bulk_online_users', {
+            userIds: onlineUserIds,
+            timestamp: new Date()
+          });
+        } catch (error) {
+          console.error('Error getting online users:', error);
+        }
       });
 
       // Join whiteboard room
@@ -1565,6 +1692,23 @@ class SocketServer {
             isOnline: false,
             lastSeen: new Date()
           });
+          
+          // Also emit user_offline event for frontend compatibility (with throttling)
+          const lastBroadcast = this.lastUserStatusBroadcast?.get(socket.userId);
+          const now = Date.now();
+          
+          if (!lastBroadcast || (now - lastBroadcast) > 5000) { // 5 second throttle
+            this.io.emit('user_offline', {
+              userId: socket.userId,
+              timestamp: new Date()
+            });
+            
+            // Track last broadcast time
+            if (!this.lastUserStatusBroadcast) {
+              this.lastUserStatusBroadcast = new Map();
+            }
+            this.lastUserStatusBroadcast.set(socket.userId, now);
+          }
           
           // console.log(`User ${socket.userId} is now offline - broadcasting status to all users`);
         } catch (error) {

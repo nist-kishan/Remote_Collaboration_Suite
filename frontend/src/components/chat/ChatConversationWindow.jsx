@@ -4,7 +4,6 @@ import ChatWindowHeader from './ChatWindowHeader';
 import ChatMessageList from './ChatMessageList';
 import ChatMessageInput from '../ui/ChatMessageInput';
 import ChatGroupMembersModal from './ChatGroupMembersModal';
-import MessagePerformanceMonitor from './MessagePerformanceMonitor';
 import { useSocket } from '../../hook/useSocket';
 import { useChat } from '../../hook/useChat';
 import { useTyping } from '../../hook/useTyping';
@@ -39,10 +38,6 @@ const ChatWindow = forwardRef(({
   const [editingMessage, setEditingMessage] = useState(null);
   const [showGroupMembers, setShowGroupMembers] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [performanceMonitor] = useState(() => {
-    const { performanceMonitor } = createOptimizedMessageSender();
-    return performanceMonitor;
-  });
   
   const { socket } = useSocket();
   const { 
@@ -331,10 +326,6 @@ const ChatWindow = forwardRef(({
         />
       )}
 
-      {/* Performance Monitor */}
-      <MessagePerformanceMonitor 
-        performanceMonitor={performanceMonitor}
-      />
     </div>
   );
 });

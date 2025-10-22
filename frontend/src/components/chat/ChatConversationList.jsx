@@ -68,7 +68,7 @@ const EnhancedChatList = ({ onSelectChat, onVideoCall, onNewChat, onCreateGroup,
       return pagination && pagination.page < pagination.pages ? pagination.page + 1 : undefined;
     },
     initialPageParam: 1,
-    staleTime: 5000, // 5 seconds - very frequent updates for live chat list
+    staleTime: 30000, // 30 seconds - more reasonable for chat list updates
     enabled: !!user, // Only run query if user is authenticated
   });
 

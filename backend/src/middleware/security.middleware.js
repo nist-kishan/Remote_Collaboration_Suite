@@ -29,9 +29,22 @@ export const securityHeaders = helmet({
 
 // Rate limiting middleware
 export const createRateLimit = (windowMs = 15 * 60 * 1000, max = 100) => {
-  // Disable rate limiting in development
+  // Use more lenient rate limiting in development
   if (process.env.NODE_ENV === 'development') {
-    return (req, res, next) => next();
+    return rateLimit({
+      windowMs: windowMs,
+      max: max * 10, // 10x more lenient in development
+      message: {
+        success: false,
+        message: 'Too many requests from this IP, please try again later.',
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => {
+        // Skip rate limiting for certain endpoints in development
+        return req.url.includes('/socket.io/') || req.url.includes('/health');
+      }
+    });
   }
   
   return rateLimit({

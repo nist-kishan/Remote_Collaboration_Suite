@@ -306,59 +306,12 @@ export const validateMessage = (message) => {
   };
 };
 
-// Performance monitoring
-export class MessagePerformanceMonitor {
-  constructor() {
-    this.metrics = {
-      sentMessages: 0,
-      failedMessages: 0,
-      averageSendTime: 0,
-      totalSendTime: 0,
-      startTime: Date.now()
-    };
-  }
-
-  // Record message send time
-  recordSendTime(duration) {
-    this.metrics.sentMessages++;
-    this.metrics.totalSendTime += duration;
-    this.metrics.averageSendTime = this.metrics.totalSendTime / this.metrics.sentMessages;
-  }
-
-  // Record failed message
-  recordFailure() {
-    this.metrics.failedMessages++;
-  }
-
-  // Get performance metrics
-  getMetrics() {
-    const uptime = Date.now() - this.metrics.startTime;
-    return {
-      ...this.metrics,
-      uptime,
-      successRate: this.metrics.sentMessages / (this.metrics.sentMessages + this.metrics.failedMessages) * 100,
-      messagesPerSecond: this.metrics.sentMessages / (uptime / 1000)
-    };
-  }
-
-  // Reset metrics
-  reset() {
-    this.metrics = {
-      sentMessages: 0,
-      failedMessages: 0,
-      averageSendTime: 0,
-      totalSendTime: 0,
-      startTime: Date.now()
-    };
-  }
-}
 
 // Create optimized message sender
 export const createOptimizedMessageSender = () => {
   return {
     textOptimizer: new TextMessageOptimizer(),
     messageOptimizer: new MessageSendingOptimizer(),
-    typingOptimizer: new TypingOptimizer(),
-    performanceMonitor: new MessagePerformanceMonitor()
+    typingOptimizer: new TypingOptimizer()
   };
 };
