@@ -44,7 +44,7 @@ export class MessageQueue {
         try {
           await callback(message);
         } catch (error) {
-          console.error('Message processing error:', error);
+          // Message processing error
         }
       }));
     } finally {
@@ -164,14 +164,14 @@ export class MessageSendingOptimizer {
           resolve(result);
         } catch (error) {
           if (retryCount < this.maxRetries) {
-            console.warn(`Message send failed, retrying... (${retryCount + 1}/${this.maxRetries})`, error);
+            // Message send failed, retrying...
             
             // Add to retry queue
             setTimeout(() => {
               sendWithRetry(msg, retryCount + 1);
             }, this.retryDelay * (retryCount + 1));
           } else {
-            console.error('Message send failed after max retries:', error);
+            // Message send failed after max retries
             reject(error);
           }
         }
@@ -258,7 +258,7 @@ export class TypingOptimizer {
       try {
         callback(typing);
       } catch (error) {
-        console.error('Typing callback error:', error);
+        // Typing callback error
       }
     });
   }

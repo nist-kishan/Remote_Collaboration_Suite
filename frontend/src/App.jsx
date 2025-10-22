@@ -14,6 +14,7 @@ import ChangePassword from "./pages/authenication/ChangePassword";
 import OtpVerification from "./pages/authenication/OtpVerification";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AuthRouteGuard from "./components/AuthRouteGuard";
 import PageNotFound from "./pages/PageNotFound";
 import Dashboard from "./pages/Dashboard";
 import RequestOtp from "./pages/authenication/RequestOtp";
@@ -83,7 +84,7 @@ export default function App() {
       dispatch(setUser({ user: data.user }));
     } else if (isSuccess && data && !data.data && !data.user) {
       dispatch(setUser({ user: data }));
-    } else if (isError && !isAuthPage) {
+    } else if (isError) {
       if (
         query.error?.response?.status === 401 ||
         query.error?.response?.status === 403
@@ -99,7 +100,7 @@ export default function App() {
   if (loading) return <ApplicationLoadingSpinner message="Initializing application..." />;
 
   return (
-    <>
+    <AuthRouteGuard>
       <Routes>
         {/* ==================== AUTHENTICATION ROUTES ==================== */}
         <Route element={<ApplicationLayout />}>
@@ -113,7 +114,7 @@ export default function App() {
         </Route>
 
         {/* ==================== PROTECTED ROUTES ==================== */}
-          <Route element={<ProtectedRoute />}>
+        <Route element={<ProtectedRoute />}>
           <Route element={<ApplicationLayout />}>
             {/* ==================== DASHBOARD & PROFILE ==================== */}
             <Route path="/" element={<Dashboard />} />
@@ -179,6 +180,6 @@ export default function App() {
         <ToastNotification />
         <BrowserExtensionNotification />
       </div>
-    </>
+    </AuthRouteGuard>
   );
 }

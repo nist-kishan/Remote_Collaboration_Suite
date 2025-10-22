@@ -23,7 +23,6 @@ import {
   updateMemberRole
 } from '../controllers/chat.controller.js';
 import {
-  testMessage,
   sendMessage,
   getChatMessages,
   editMessage,
@@ -69,7 +68,6 @@ router.get('/archived', verifyToken, getArchivedChatsForUser);
 router.get('/deleted', verifyToken, getDeletedChatsForUser);
 
 // Message routes
-router.get('/test', verifyToken, testMessage);
 router.post('/:chatId/msg', verifyToken, sendMessage);
 router.post('/:chatId/upload', verifyToken, upload.single('file'), uploadFile);
 router.get('/:chatId/msg', verifyToken, getChatMessages);

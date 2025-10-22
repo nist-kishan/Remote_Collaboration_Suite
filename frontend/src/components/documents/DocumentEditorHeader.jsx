@@ -33,19 +33,6 @@ const DocumentHeader = ({
   filename = "newDocument",
   onFilenameChange = null
 }) => {
-  // Debug logging
-  console.log('=== DOCUMENT HEADER DEBUG ===');
-  console.log('DocumentHeader rendered at:', new Date().toLocaleTimeString());
-  console.log('DocumentHeader props:', {
-    document,
-    hasDocument: !!document,
-    documentStatus: document?.status,
-    canEdit,
-    onToggleAutoSave: !!onToggleAutoSave,
-    isAutoSaveEnabled,
-    autoSaveStatus
-  });
-  console.log('=== END HEADER DEBUG ===');
 
   return (
     <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 shadow-sm transition-colors duration-200 backdrop-blur-sm">
@@ -122,17 +109,6 @@ const DocumentHeader = ({
             )}
             
             {/* Auto-save Toggle Button - Show for all saved documents (not drafts) */}
-            {(() => {
-              // Debug logging
-              console.log('Auto-save button debug:', {
-                hasDocument: !!document,
-                documentStatus: document?.status,
-                canEdit,
-                hasToggleFunction: !!onToggleAutoSave,
-                shouldShow: !!(document && document.status !== 'draft' && canEdit && onToggleAutoSave)
-              });
-              // Don't return null, let the actual button render below
-            })()}
             
             {/* Auto-save toggle button - Only show for published documents (not drafts) */}
             {document && document.status !== 'draft' && canEdit && onToggleAutoSave && (

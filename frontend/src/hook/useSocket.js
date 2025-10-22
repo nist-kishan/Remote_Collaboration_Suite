@@ -22,8 +22,8 @@ export const useSocket = () => {
       
       socketRef.current = io(SOCKET_CONFIG.URL, {
         withCredentials: true, // Use cookies for authentication
-        transports: ['websocket', 'polling'],
-        timeout: 20000, // 20 second timeout
+        transports: SOCKET_CONFIG.TRANSPORTS,
+        timeout: SOCKET_CONFIG.TIMEOUT,
         forceNew: true, // Force new connection
         reconnection: true,
         reconnectionAttempts: SOCKET_CONFIG.RECONNECTION_ATTEMPTS,

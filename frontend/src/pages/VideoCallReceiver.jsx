@@ -33,22 +33,20 @@ const VideoCallReceiver = () => {
     if (savedCallData) {
       try {
         const parsedData = JSON.parse(savedCallData);
-        console.log('📞 VideoCallReceiver - Loaded call data:', parsedData);
         if (parsedData.status === 'incoming') {
           setCallData(parsedData);
         }
       } catch (error) {
-        console.error('Error parsing saved call data:', error);
+        // Error parsing saved call data
       }
     } else {
-      console.log('📞 VideoCallReceiver - No saved call data found');
+      // No saved call data found
     }
   }, []);
 
   // If receiverId is undefined, show error
   useEffect(() => {
     if (!receiverId || receiverId === 'undefined') {
-      console.error('❌ Invalid receiver ID:', receiverId);
       toast.error('Invalid call parameters');
       navigate('/chat');
     }
@@ -71,7 +69,6 @@ const VideoCallReceiver = () => {
       // Call status is managed by useCall hook
       toast.success('Call accepted');
     } catch (error) {
-      console.error('Error accepting call:', error);
       toast.error('Failed to accept call');
     }
   };
@@ -113,8 +110,6 @@ const VideoCallReceiver = () => {
     if (!socket) return;
 
     const handleCallEnded = (data) => {
-      console.log('Call ended:', data);
-      
       navigate('/video-call/ended', { 
         state: { 
           message: 'Call ended by caller',

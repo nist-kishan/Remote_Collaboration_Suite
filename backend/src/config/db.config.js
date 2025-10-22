@@ -8,19 +8,18 @@ export const DbConnection = async () => {
     // Basic MongoDB connection options for compatibility
     await mongoose.connect(uri, {
       // Essential connection settings
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
-      connectTimeoutMS: 10000,
+      maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE) || 10,
+      serverSelectionTimeoutMS: parseInt(process.env.DB_SERVER_SELECTION_TIMEOUT) || 10000,
+      socketTimeoutMS: parseInt(process.env.DB_SOCKET_TIMEOUT) || 45000,
+      connectTimeoutMS: parseInt(process.env.DB_CONNECT_TIMEOUT) || 10000,
       
       // Enable retries for better reliability
-      retryWrites: true,
-      retryReads: true,
+      retryWrites: process.env.DB_RETRY_WRITES === 'true' || true,
+      retryReads: process.env.DB_RETRY_READS === 'true' || true,
     });
 
     // Handle connection events
     mongoose.connection.on('connected', () => {
-      console.log('✅ MongoDB connected successfully');
     });
 
     mongoose.connection.on('error', (err) => {
@@ -28,21 +27,17 @@ export const DbConnection = async () => {
     });
 
     mongoose.connection.on('disconnected', () => {
-      console.log('⚠️ MongoDB disconnected');
     });
 
     mongoose.connection.on('reconnected', () => {
-      console.log('🔄 MongoDB reconnected');
     });
 
     // Database connected successfully
-    console.log('🗄️ Database connection established');
   } catch (err) {
     console.error('❌ Database connection failed:', err.message);
     // Don't exit immediately, let the app try to reconnect
     setTimeout(() => {
-      console.log('🔄 Attempting to reconnect to database...');
       DbConnection();
-    }, 5000);
+    }, parseInt(process.env.DB_RECONNECT_INTERVAL) || 5000);
   }
 };

@@ -437,37 +437,3 @@ export const cleanupMissedCalls = asyncHandle(async (req, res) => {
     }, `Marked ${result.modifiedCount} calls as missed`)
   );
 });
-
-// Debug function to check call status
-export const debugCallStatus = asyncHandle(async (req, res) => {
-  const { callId } = req.params;
-
-  const call = await Call.findById(callId)
-    .populate('participants.user', 'name avatar')
-    .populate('startedBy', 'name avatar')
-    .populate('chat');
-
-  if (!call) {
-    throw new ApiError(404, 'Call not found');
-  }
-
-  return res.status(200).json(
-    new ApiResponse(200, { 
-      call: {
-        _id: call._id,
-        status: call.status,
-        startedAt: call.startedAt,
-        endedAt: call.endedAt,
-        duration: call.duration,
-        startedBy: call.startedBy,
-        participants: call.participants.map(p => ({
-          user: p.user,
-          status: p.status,
-          joinedAt: p.joinedAt,
-          leftAt: p.leftAt,
-          duration: p.duration
-        }))
-      }
-    }, 'Call status debug info')
-  );
-});

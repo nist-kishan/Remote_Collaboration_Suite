@@ -5,9 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallSocket } from './useCallSocket';
 import { toast } from 'react-hot-toast';
 import { isExtensionError } from '../utils/errorHandler';
-import { 
-  checkMediaDevices, 
-  requestMediaPermissions, 
+import { WEBRTC_CONFIG, REALTIME_CONFIG } from '../config/environment';
+import {  
   getOptimalMediaConstraints, 
   validateMediaStream,
   createFallbackConstraints 
@@ -16,32 +15,11 @@ import {
   getCallHistory,
   deleteCallHistory,
   clearCallHistory,
-  startCall,
-  endCall,
-  joinCall,
-  rejectCall
 } from '../api/callApi';
 import {
   // Redux actions
-  setActiveCall,
-  setOutgoingCall,
-  setIncomingCall,
   setLocalStream,
   setRemoteStream,
-  toggleMute,
-  toggleVideo,
-  toggleScreenShare,
-  setParticipants,
-  addParticipant,
-  removeParticipant,
-  updateParticipant,
-  setShowIncomingCallModal,
-  setShowOutgoingCallModal,
-  setShowCallWindow,
-  addError,
-  clearError,
-  clearAllErrors,
-  resetCallState,
   // Redux selectors
   selectActiveCall,
   selectOutgoingCall,
@@ -59,10 +37,6 @@ import {
   selectShowCallWindow
 } from '../store/slice/callSlice';
 
-/**
- * Consolidated Call Hook - All call-related functionality in one place
- * Combines: useCallManager, useCallHistory, useWebRTC, useCallBusinessLogic
- */
 export const useCall = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -115,7 +89,6 @@ export const useCall = () => {
   useEffect(() => {
     if (initializationAttempts > 0) {
       const timeout = setTimeout(() => {
-        console.log('🔄 Resetting initialization attempts counter after timeout');
         setInitializationAttempts(0);
       }, 30000); // Reset after 30 seconds
       
@@ -183,15 +156,11 @@ export const useCall = () => {
 
   // WebRTC Functions
   const releaseAllTracks = useCallback(async () => {
-    console.log('🧹 Releasing all media tracks...');
-    
     try {
       // Stop all local stream tracks
       if (localStreamRef.current) {
-        console.log('📹 Stopping local stream tracks...');
         const tracks = localStreamRef.current.getTracks();
         tracks.forEach(track => {
-          console.log(`🛑 Stopping track: ${track.kind} - ${track.label}`);
           track.stop();
         });
         localStreamRef.current = null;
@@ -200,10 +169,8 @@ export const useCall = () => {
       
       // Also stop any remaining tracks from localStream (from Redux state)
       if (localStream && localStream.getTracks) {
-        console.log('📹 Stopping Redux local stream tracks...');
         const tracks = localStream.getTracks();
         tracks.forEach(track => {
-          console.log(`🛑 Stopping Redux track: ${track.kind} - ${track.label}`);
           track.stop();
         });
       }
@@ -243,7 +210,6 @@ export const useCall = () => {
       
       // Force stop all remaining media streams
       try {
-        console.log('🔍 Checking for any remaining active streams...');
         const allStreams = [];
         
         // Check if there are any global media streams that weren't caught
@@ -258,7 +224,6 @@ export const useCall = () => {
         // Stop any remaining streams
         allStreams.forEach(stream => {
           stream.getTracks().forEach(track => {
-            console.log(`🛑 Force stopping remaining track: ${track.kind} - ${track.label}`);
             track.stop();
           });
         });
@@ -268,7 +233,7 @@ export const useCall = () => {
           window.localStreams = [];
         }
       } catch (error) {
-        console.log('⚠️ Error in force cleanup:', error.message);
+        // Error in force cleanup
       }
       
       // Wait a bit for devices to be released
@@ -277,14 +242,14 @@ export const useCall = () => {
       // Verify devices are released
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        console.log('🔍 Found devices after cleanup:', devices.length);
+        // Devices enumerated after cleanup
       } catch (error) {
-        console.log('🔍 Device enumeration failed:', error.message);
+        // Device enumeration failed
       }
       
-      console.log('✅ All tracks released');
+      // All tracks released
     } catch (error) {
-      console.error('❌ Error releasing tracks:', error);
+      // Error releasing tracks
     }
   }, [localStream]);
 
@@ -534,10 +499,7 @@ export const useCall = () => {
     }
 
     const configuration = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
+      iceServers: WEBRTC_CONFIG.ICE_SERVERS.map(server => ({ urls: server }))
     };
 
     const pc = new RTCPeerConnection(configuration);
@@ -554,10 +516,15 @@ export const useCall = () => {
       const [remoteStream] = event.streams;
       if (remoteStream) {
         console.log('📹 Remote stream received with tracks:', remoteStream.getTracks().map(t => t.kind));
+        
+        // Update both local state and Redux state
         setWebrtcRemoteStream(remoteStream);
+        dispatch(setRemoteStream(remoteStream));
         
         if (remoteVideoRef.current) {
           try {
+            // Clear previous stream first
+            remoteVideoRef.current.srcObject = null;
             remoteVideoRef.current.srcObject = remoteStream;
             remoteVideoRef.current.muted = false;
             remoteVideoRef.current.load();
@@ -565,14 +532,18 @@ export const useCall = () => {
             const playPromise = remoteVideoRef.current.play();
             if (playPromise !== undefined) {
               playPromise.then(() => {
+                console.log('✅ Remote video playing successfully');
               }).catch(error => {
+                console.warn('⚠️ Remote video play failed, retrying...', error);
                 setTimeout(() => {
                   remoteVideoRef.current?.play().catch(err => {
+                    console.error('❌ Remote video retry failed:', err);
                   });
                 }, 1000);
               });
             }
           } catch (error) {
+            console.error('❌ Error setting remote video stream:', error);
           }
         }
       }
@@ -911,9 +882,9 @@ export const useCall = () => {
   };
 
   // Call actions
-  const startCall = async (chatId) => {
+  const startCall = async (chatId, retryCount = 0) => {
     try {
-      console.log('🎥 Starting video call for chat:', chatId);
+      console.log(`🎥 Starting video call for chat: ${chatId} (attempt ${retryCount + 1})`);
       console.log('🔍 Chat ID type and value:', typeof chatId, chatId);
       
       if (!socket) {
@@ -936,22 +907,33 @@ export const useCall = () => {
       // Don't save temporary call data - wait for real call ID from server
       console.log('⏳ Waiting for real call ID from server...');
     } catch (error) {
-      console.error('❌ Error starting call:', error);
+      console.error(`❌ Error starting call (attempt ${retryCount + 1}):`, error);
       
-      // Handle socket reconnection errors
+      // Handle socket reconnection errors with retry
       if (error.message.includes('Socket reconnection timeout') || error.message.includes('Socket not available')) {
-        console.log('🔄 Socket reconnection failed, showing user-friendly message...');
-        toast.error('Connection lost. Please check your internet connection and try again.', {
-          duration: 5000,
-          action: {
-            label: 'Retry',
-            onClick: () => {
-              // Retry the call
-              startCall(chatId);
+        if (retryCount < 2) {
+          console.log(`🔄 Socket reconnection failed, retrying... (${retryCount + 1}/3)`);
+          toast.error(`Connection lost. Retrying... (${retryCount + 1}/3)`, {
+            duration: 3000,
+          });
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return startCall(chatId, retryCount + 1);
+        } else {
+          console.log('🔄 Socket reconnection failed after 3 attempts');
+          toast.error('Connection lost. Please check your internet connection and try again.', {
+            duration: 5000,
+            action: {
+              label: 'Retry',
+              onClick: () => {
+                // Retry the call
+                startCall(chatId);
+              }
             }
-          }
-        });
-        throw error;
+          });
+          throw error;
+        }
       }
       
       // Handle different types of media device errors

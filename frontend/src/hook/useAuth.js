@@ -44,7 +44,7 @@ export const useSignUp = () => {
     },
     onError: (error) => {
       dispatch(clearUser());
-      const message = error?.response?.data?.message;
+      const message = error?.data?.message;
       if (message) {
         toast.error(message);
       }
@@ -77,7 +77,7 @@ export const useSignIn = () => {
     onError: (error) => {
       dispatch(clearUser());
       
-      let message = error?.response?.data?.message || 
+      let message = error?.data?.message || 
                    error?.response?.data?.error || 
                    error?.message || 
                    'Sign in failed';
@@ -117,7 +117,7 @@ export const useLogout = () => {
       navigate("/login", { replace: true });
     },
     onError: (error) => {
-      const message = error?.response?.data?.message;
+      const message = error?.data?.message;
       if (message) {
         toast.error(message);
       }
@@ -129,7 +129,7 @@ export const useCurrentUser = () => {
   const location = useLocation();
   const dispatch = useDispatch();
   
-  // Don't run auth check on auth pages
+  // Check if current page is an auth page
   const isAuthPage = ['/login', '/signup', '/reset-password'].includes(location.pathname) || 
                      location.pathname.startsWith('/reset-password/');
   
@@ -151,22 +151,17 @@ export const useCurrentUser = () => {
       return failureCount < 1;
     },
     retryDelay: 1000,
-    enabled: !isAuthPage, // Only run on non-auth pages
+    enabled: true, // Always run to check authentication status
   });
 
   // Update Redux loading state based on query status
   useEffect(() => {
-    if (!isAuthPage) {
-      if (query.isLoading) {
-        dispatch(setLoading(true));
-      } else if (query.isSuccess || query.isError) {
-        dispatch(setLoading(false));
-      }
-    } else {
-      // On auth pages, ensure loading is false
+    if (query.isLoading) {
+      dispatch(setLoading(true));
+    } else if (query.isSuccess || query.isError) {
       dispatch(setLoading(false));
     }
-  }, [query.isLoading, query.isSuccess, query.isError, isAuthPage, dispatch]);
+  }, [query.isLoading, query.isSuccess, query.isError, dispatch]);
 
   return query;
 };
@@ -187,7 +182,7 @@ export const useUpdateProfile = () => {
       queryClient.invalidateQueries(["user"]);
     },
     onError: (error) => {
-      const message = error?.response?.data?.message;
+      const message = error?.data?.message;
       if (message) {
         toast.error(message);
       }
@@ -206,7 +201,7 @@ export const useUpdateAvatar = () => {
       queryClient.invalidateQueries(["user"]);
     },
     onError: (error) => {
-      const message = error?.response?.data?.message;
+      const message = error?.data?.message;
       if (message) toast.error(message);
     },
   });
@@ -229,7 +224,7 @@ export const useChangePassword = () => {
       setTimeout(() => navigate("/profile"), 800);
     },
     onError: (error) => {
-      const message = error?.response?.data?.message || 
+      const message = error?.data?.message || 
                      error?.response?.data?.error || 
                      error?.message || 
                      'Failed to change password';
@@ -252,7 +247,7 @@ export const useChangePasswordWithLink = (token) => {
       setTimeout(() => navigate("/"), 800);
     },
     onError: (error) => {
-      const message = error?.response?.data?.message;
+      const message = error?.data?.message;
       if (message) toast.error(message);
     },
   });
@@ -271,7 +266,7 @@ export const useResetPassword = () =>
       }
     },
     onError: (error) => {
-      const message = error?.response?.data?.message;
+      const message = error?.data?.message;
       if (message) {
         toast.error(message);
       }
@@ -296,7 +291,7 @@ export const useSendOtp = () => {
       setTimeout(() => navigate("/verification-otp"), 500);
     },
     onError: (error) => {
-      const message = error?.response?.data?.message;
+      const message = error?.data?.message;
       if (message) {
         toast.error(message);
       }
@@ -347,7 +342,7 @@ export const useToggleTheme = () => {
       }
     },
     onError: (error) => {
-      const message = error?.response?.data?.message;
+      const message = error?.data?.message;
       if (message) {
         toast.error(message);
       }

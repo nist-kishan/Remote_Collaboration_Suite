@@ -11,7 +11,6 @@ import IncomingVideoCallModal from '../components/call/IncomingVideoCallModal';
 import OutgoingVideoCallModal from '../components/call/OutgoingVideoCallModal';
 import VideoCallInterface from '../components/call/VideoCallInterface';
 import CustomButton from '../components/ui/CustomButton';
-import NetworkConnectionStatus from '../components/ui/NetworkConnectionStatus';
 
 const ChatPage = () => {
   const messageInputRef = useRef(null);
@@ -68,9 +67,6 @@ const ChatPage = () => {
 
   return (
     <div className="h-full w-full flex flex-col bg-gray-50 dark:bg-gray-900 overflow-hidden relative z-10">
-      {/* Network Connection Status */}
-      <NetworkConnectionStatus className="fixed right-2 z-40 max-w-xs" style={{ top: '80px' }} />
-
       {/* Incoming Call Modal */}
       {showIncomingCall && incomingCall && (
         <IncomingVideoCallModal
@@ -149,6 +145,7 @@ const ChatPage = () => {
                 onChatSelect={setSelectedChat}
                 onDelete={handleDelete}
                 onInfo={handleInfo}
+                onBack={handleBackToChatList}
                 isMobile={true}
                 callStatus={callStatus}
                 isVideoCallAvailable={isVideoCallAvailable}

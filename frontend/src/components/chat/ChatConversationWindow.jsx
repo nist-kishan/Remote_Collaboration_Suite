@@ -30,6 +30,7 @@ const ChatWindow = forwardRef(({
   onChatSelect,
   onDelete,
   onInfo,
+  onBack,
   isMobile = false,
   className = '' 
 }, ref) => {
@@ -289,6 +290,7 @@ const ChatWindow = forwardRef(({
               onInfo?.(chat);
             }
           }}
+          onBack={onBack}
           isMobile={isMobile}
         />
       </div>

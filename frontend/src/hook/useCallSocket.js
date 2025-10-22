@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useSocket } from './useSocket';
+import { CALL_CONFIG } from '../config/environment';
 import {
   setActiveCall,
   setOutgoingCall,
@@ -307,7 +308,7 @@ export const useCallSocket = () => {
   }, []);
 
   // Auto-cancel call after timeout
-  const startCallTimeout = useCallback((callId, timeoutMs = 60000) => {
+  const startCallTimeout = useCallback((callId, timeoutMs = CALL_CONFIG.TIMEOUT_MS) => {
     // Clear any existing timeout
     if (callTimeoutRef.current) {
       clearTimeout(callTimeoutRef.current);
@@ -328,14 +329,14 @@ export const useCallSocket = () => {
           socket.emit('end_call', { 
             callId: currentCallData.callId,
             reason: 'timeout',
-            message: 'Call not answered within 1 minute'
+            message: 'Call not answered within 45 seconds'
           });
         }
         
         // End the call locally
         endCall();
         
-        toast.error('Call cancelled - not answered within 1 minute');
+        toast.error('Call cancelled - not answered within 45 seconds');
       }
     }, timeoutMs);
   }, [socket]);

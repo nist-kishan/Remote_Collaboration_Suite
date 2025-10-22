@@ -116,7 +116,7 @@ const whiteboardSchema = new mongoose.Schema(
       },
       autoSaveInterval: {
         type: Number,
-        default: 30000, // 30 seconds
+        default: parseInt(process.env.CALL_TIMEOUT_MS) || 30000, // 30 seconds
       },
     },
   },

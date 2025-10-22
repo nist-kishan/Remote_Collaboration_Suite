@@ -34,7 +34,6 @@ const VideoCallCaller = () => {
     if (savedCallData) {
       try {
         const parsedData = JSON.parse(savedCallData);
-        console.log('📞 VideoCallCaller - Loaded call data:', parsedData);
         
         // Check if call is stuck in connecting state (older than 30 seconds)
         if (parsedData.status === 'connecting') {
@@ -43,7 +42,6 @@ const VideoCallCaller = () => {
           const timeDiff = now.getTime() - callStartTime.getTime();
           
           if (timeDiff > 30000) { // 30 seconds
-            console.warn('⚠️ Call stuck in connecting state, clearing...');
             localStorage.removeItem('activeCallData');
             return;
           }
@@ -53,18 +51,16 @@ const VideoCallCaller = () => {
           setCallData(parsedData);
         }
       } catch (error) {
-        console.error('Error parsing saved call data:', error);
         localStorage.removeItem('activeCallData');
       }
     } else {
-      console.log('📞 VideoCallCaller - No saved call data found');
+      // No saved call data found
     }
   }, []);
 
   // If senderId is undefined, show error
   useEffect(() => {
     if (!senderId || senderId === 'undefined') {
-      console.error('❌ Invalid sender ID:', senderId);
       toast.error('Invalid call parameters');
       navigate('/chat');
     }

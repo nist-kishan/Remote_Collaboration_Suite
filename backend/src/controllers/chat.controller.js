@@ -306,8 +306,6 @@ export const getGroupMembers = asyncHandle(async (req, res) => {
   const userId = req.user._id;
   const { chatId } = req.params;
 
-  // console.log('🔍 getGroupMembers API called:', { userId, chatId });
-
   const chat = await Chat.findOne({
     _id: chatId,
     type: 'group',
@@ -316,19 +314,7 @@ export const getGroupMembers = asyncHandle(async (req, res) => {
     .populate('participants.user', 'name email avatar')
     .populate('createdBy', 'name avatar');
 
-  // console.log('🔍 Chat found:', { 
-  //   chatId: chat?._id, 
-  //   chatName: chat?.name, 
-  //   participantsCount: chat?.participants?.length,
-  //   participants: chat?.participants?.map(p => ({
-  //     userId: p.user?._id,
-  //     userName: p.user?.name,
-  //     role: p.role
-  //   }))
-  // });
-
   if (!chat) {
-    console.log('❌ Group chat not found or access denied');
     throw new ApiError(404, 'Group chat not found or access denied');
   }
 
@@ -336,28 +322,12 @@ export const getGroupMembers = asyncHandle(async (req, res) => {
   const userParticipant = chat.participants.find(p => p.user._id.toString() === userId.toString());
   const isAdmin = userParticipant?.role === 'admin' || userParticipant?.role === 'owner';
 
-  // console.log('🔍 User participant info:', {
-  //   userParticipant: userParticipant ? {
-  //     userId: userParticipant.user._id,
-  //     userName: userParticipant.user.name,
-  //     role: userParticipant.role
-  //   } : null,
-  //   isAdmin,
-  //   userRole: userParticipant?.role
-  // });
-
   const response = {
     members: chat.participants,
     createdBy: chat.createdBy,
     isAdmin,
     userRole: userParticipant?.role
   };
-
-  // console.log('✅ Returning group members response:', {
-  //   membersCount: response.members.length,
-  //   isAdmin: response.isAdmin,
-  //   userRole: response.userRole
-  // });
 
   return res.status(200).json(
     new ApiResponse(200, 'Group members fetched successfully', response)
@@ -611,14 +581,7 @@ export const getRecentChats = asyncHandle(async (req, res) => {
 
       // Debug logging for chat processing
       if (chat.type === 'one-to-one' && !otherParticipant) {
-        console.log('Warning: No other participant found for one-to-one chat:', {
-          chatId: chat._id,
-          userId: userId,
-          participants: chat.participants.map(p => ({
-            userId: p.user._id,
-            userName: p.user.name
-          }))
-        });
+        // Warning: No other participant found for one-to-one chat
       }
 
       return {
@@ -713,13 +676,7 @@ export const getChattedUsers = asyncHandle(async (req, res) => {
             const userIdStr = user._id.toString();
             
             // Debug logging for user processing
-            console.log('Processing chatted user:', {
-              chatId: chat._id,
-              currentUserId: userId,
-              participantUserId: user._id,
-              participantUserName: user.name,
-              isCurrentUser: user._id.toString() === userId.toString()
-            });
+            // Processing chatted user:
             
             if (!chattedUsers.has(userIdStr)) {
               const userUnreadCount = chat.unreadCount?.get?.(userId.toString()) || 0;
@@ -744,12 +701,7 @@ export const getChattedUsers = asyncHandle(async (req, res) => {
               existing.lastChatAt = chat.lastMessageAt;
             }
           } else if (user && user._id.toString() === userId.toString()) {
-            console.log('Skipping current user from chatted users:', {
-              chatId: chat._id,
-              currentUserId: userId,
-              participantUserId: user._id,
-              participantUserName: user.name
-            });
+            // Skipping current user from chatted users:
           }
         });
       }
@@ -780,15 +732,7 @@ export const getChattedUsers = asyncHandle(async (req, res) => {
       .sort((a, b) => new Date(b.lastChatAt) - new Date(a.lastChatAt));
 
     // Debug logging for final response
-    console.log('ChattedUsers final response:', {
-      totalUsers: usersArray.length,
-      totalGroups: groupChatsFormatted.length,
-      allItems: allItems.map(item => ({
-        type: item.type,
-        name: item.type === 'one-to-one' ? item.user?.name : item.group?.name,
-        userId: item.type === 'one-to-one' ? item.user?._id : null
-      }))
-    });
+    // ChattedUsers final response:
 
     // Apply search filter if provided
     let filteredItems = allItems;

@@ -84,7 +84,6 @@ export const useChatCallIntegration = (selectedChat) => {
   // Enhanced video call initiation with chat context
   const initiateVideoCall = useCallback(async (chat) => {
     if (!chat) {
-      toast.error('No chat selected for video call');
       return { success: false, error: 'No chat selected' };
     }
 
@@ -94,8 +93,6 @@ export const useChatCallIntegration = (selectedChat) => {
         callTransitionState: 'connecting',
         pendingCallAction: 'initiate'
       }));
-
-      // Start the call using just the chatId as expected by useCall
       await startCall(chat._id);
       
       // Update integration state

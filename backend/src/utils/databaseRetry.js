@@ -10,7 +10,6 @@ export const withRetry = async (operation, maxRetries = 3, delay = 2000) => {
     try {
       // Check if MongoDB is connected before attempting operation
       if (mongoose.connection.readyState !== 1) {
-        console.log('⚠️ MongoDB not connected, waiting for connection...');
         await new Promise(resolve => {
           if (mongoose.connection.readyState === 1) {
             resolve();
@@ -37,8 +36,6 @@ export const withRetry = async (operation, maxRetries = 3, delay = 2000) => {
         throw error;
       }
       
-      console.log(`🔄 Database operation failed (attempt ${attempt + 1}/${maxRetries}), retrying in ${delay * (attempt + 1)}ms...`);
-      console.log(`Error: ${error.message}`);
       
       // Wait before retrying with exponential backoff
       await new Promise(resolve => setTimeout(resolve, delay * (attempt + 1)));
@@ -89,7 +86,7 @@ export const retryableMessageFind = async (query, options = {}) => {
 };
 
 // Connection status check utility
-export const waitForConnection = async (maxWaitTime = 30000) => {
+export const waitForConnection = async (maxWaitTime = parseInt(process.env.DB_CONNECTION_TIMEOUT) || 30000) => {
   const startTime = Date.now();
   
   while (mongoose.connection.readyState !== 1) {
@@ -97,10 +94,8 @@ export const waitForConnection = async (maxWaitTime = 30000) => {
       throw new Error('MongoDB connection timeout - database not ready');
     }
     
-    console.log('⏳ Waiting for MongoDB connection...');
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   
-  console.log('✅ MongoDB connection ready');
   return true;
 };

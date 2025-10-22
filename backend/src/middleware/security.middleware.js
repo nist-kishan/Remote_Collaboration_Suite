@@ -111,7 +111,7 @@ export const corsOptions = {
 
     // In development, be more permissive
     if (process.env.NODE_ENV === 'development') {
-      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0')) {
+      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0') || process.env.NODE_ENV === 'development') {
         return callback(null, true);
       }
     }

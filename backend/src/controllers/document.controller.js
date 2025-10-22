@@ -3,7 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import Document from "../models/document.model.js";
 import User from "../models/user.model.js";
-import { sendEmail } from "../utils/sendMail.js";
+import { sendMail } from "../utils/sendMail.js";
 import { documentShareTemplate } from "../utils/mailTemplates.js";
 import { getDocumentUrl } from "../config/url.config.js";
 
@@ -564,15 +564,14 @@ export const shareDocumentViaEmail = asyncHandle(async (req, res) => {
     );
 
     try {
-      await sendEmail({
-        email,
+      await sendMail({
+        to: email,
         subject: emailSubject,
         html: emailHtml,
       });
       return { email, status: 'sent' };
     } catch (error) {
       // Failed to send email
-      console.error(`Failed to send email to ${email}:`, error);
       return { email, status: 'failed', error: error.message };
     }
   });

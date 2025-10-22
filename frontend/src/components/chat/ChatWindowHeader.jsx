@@ -7,7 +7,8 @@ import {
   Users, 
   Settings,
   Trash2,
-  Info
+  Info,
+  ArrowLeft
 } from 'lucide-react';
 import UserAvatar from '../ui/UserAvatar';
 import { useChat } from '../../hook/useChat';
@@ -18,6 +19,7 @@ const ChatHeader = ({
   onVideoCall, 
   onDelete,
   onInfo,
+  onBack,
   isMobile = false,
   className = '' 
 }) => {
@@ -86,6 +88,17 @@ const ChatHeader = ({
 
   return (
     <div className={`flex items-center justify-between p-3 md:p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 relative z-50 ${className}`}>
+      {/* Mobile Back Button */}
+      {isMobile && onBack && (
+        <button
+          onClick={onBack}
+          className="p-1.5 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors mr-2 flex-shrink-0"
+          title="Back to chat list"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+      )}
+      
       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
         {chat.type === 'group' ? (
           <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center flex-shrink-0">

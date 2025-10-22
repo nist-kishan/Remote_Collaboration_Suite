@@ -116,11 +116,6 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
       )}
 
       <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'} max-w-[85%] sm:max-w-[80%] md:max-w-[75%] lg:max-w-[70%]`}>
-        {!isOwnMessage && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 px-2">
-            {message.sender.name}
-          </span>
-        )}
 
         <div className="relative group">
           <div

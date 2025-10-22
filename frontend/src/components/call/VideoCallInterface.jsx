@@ -79,13 +79,47 @@ const VideoCallInterface = ({
     return () => clearTimeout(controlsTimeoutRef.current);
   }, [showControls]);
 
-  // Set up video streams
+  // Set up video streams with better error handling
   useEffect(() => {
     if (localStream && localVideoRef.current) {
-      localVideoRef.current.srcObject = localStream;
+      try {
+        localVideoRef.current.srcObject = localStream;
+        console.log('✅ Local video stream set successfully');
+      } catch (error) {
+        console.error('❌ Error setting local video stream:', error);
+      }
     }
+    
     if (remoteStream && remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteStream;
+      try {
+        // Clear previous stream first
+        remoteVideoRef.current.srcObject = null;
+        remoteVideoRef.current.srcObject = remoteStream;
+        remoteVideoRef.current.load();
+        
+        console.log('✅ Remote video stream set successfully');
+        
+        // Try to play the video
+        const playPromise = remoteVideoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log('✅ Remote video playing successfully');
+          }).catch(error => {
+            console.warn('⚠️ Remote video play failed:', error);
+            // Retry after a short delay
+            setTimeout(() => {
+              remoteVideoRef.current?.play().catch(err => {
+                console.error('❌ Remote video retry failed:', err);
+              });
+            }, 1000);
+          });
+        }
+      } catch (error) {
+        console.error('❌ Error setting remote video stream:', error);
+      }
+    } else if (remoteVideoRef.current) {
+      // Clear remote video if no stream
+      remoteVideoRef.current.srcObject = null;
     }
   }, [localStream, remoteStream]);
 
@@ -432,6 +466,20 @@ const VideoCallInterface = ({
                 </div>
                 <h3 className="text-3xl font-semibold mb-4">Connected</h3>
                 <p className="text-gray-400 text-lg">Waiting for video stream...</p>
+                <div className="mt-4">
+                  <div className="animate-pulse bg-gray-600 h-2 w-32 mx-auto rounded"></div>
+                  <p className="text-sm text-gray-500 mt-2">Establishing connection...</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Connection status overlay */}
+          {remoteStream && (
+            <div className="absolute top-4 left-4 bg-black/50 rounded-lg px-3 py-2 text-white text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>Video Connected</span>
               </div>
             </div>
           )}

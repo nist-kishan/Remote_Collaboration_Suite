@@ -61,7 +61,7 @@ export const useAddReaction = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ messageId, reaction, chatId }) => addReaction(messageId, { reaction }),
+    mutationFn: ({ chatId, messageId, emoji }) => addReaction(chatId, messageId, emoji),
     onSuccess: (data, variables) => {
       // Invalidate messages query to refetch
       queryClient.invalidateQueries(['messages', variables.chatId]);

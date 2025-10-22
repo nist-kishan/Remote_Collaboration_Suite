@@ -41,7 +41,7 @@ export default function VideoCall() {
       console.log('VideoCall page loaded with callId:', callId);
       
       // Check if this is an incoming call that we need to handle
-      if (incomingCall && incomingCall.callId === callId) {
+      if (incomingCall && (incomingCall.callId === callId || incomingCall._id === callId)) {
         console.log('Handling incoming call on VideoCall page');
         setIsInitialized(true);
         
@@ -53,9 +53,10 @@ export default function VideoCall() {
             console.log('Call auto-accepted successfully');
           } catch (error) {
             console.error('Error auto-accepting call:', error);
+            toast.error('Failed to accept call: ' + error.message);
           }
-        }, 1000); // Small delay to ensure everything is loaded
-      } else if (activeCall && activeCall._id === callId) {
+        }, 2000); // Increased delay to ensure everything is loaded
+      } else if (activeCall && (activeCall._id === callId || activeCall.callId === callId)) {
         console.log('Active call found, showing call interface');
         setIsInitialized(true);
       } else {
@@ -65,14 +66,14 @@ export default function VideoCall() {
         // Listen for call events to get the call data
         const handleIncomingCall = (data) => {
           console.log('Received incoming call data:', data);
-          if (data.callId === callId) {
+          if (data.callId === callId || data.call?._id === callId) {
             setIsInitialized(true);
           }
         };
 
         const handleCallJoined = (data) => {
           console.log('Call joined data:', data);
-          if (data.call && data.call._id === callId) {
+          if (data.call && (data.call._id === callId || data.callId === callId)) {
             console.log('Call joined - transitioning to active call interface');
             setIsInitialized(true);
           }

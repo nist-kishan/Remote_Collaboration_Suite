@@ -11,7 +11,7 @@ import { retryableUserUpdate, retryableUserFind, retryableChatUpdate, retryableM
 class SocketServer {
   constructor(server) {
     // Get frontend URL from environment or use fallbacks
-    const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL;
     
     // Production-ready CORS configuration
     const corsOrigins = [
@@ -21,7 +21,6 @@ class SocketServer {
     // Remove duplicates and filter out undefined values
     const uniqueOrigins = [...new Set(corsOrigins.filter(Boolean))];
 
-    // console.log('🔌 Socket.IO CORS Origins:', uniqueOrigins);
 
     this.io = new Server(server, {
       cors: {
@@ -134,7 +133,6 @@ class SocketServer {
           lastSeen: new Date()
         });
         
-        // console.log(`User ${socket.userId} is now online - broadcasting status to all users`);
       } catch (error) {
         console.error('Error updating user online status:', error);
       }
@@ -366,7 +364,6 @@ class SocketServer {
             activeCollaborators: this.getActiveCollaboratorsInDocument(documentId),
           });
 
-          // console.log(`User ${socket.userId} joined document room: document:${documentId}`);
 
         } catch (error) {
           socket.emit("error", { message: "Failed to join document" });
@@ -575,7 +572,6 @@ class SocketServer {
           
           // Also join user-specific room for individual messaging
           socket.join(`user:${socket.userId}`);
-          // console.log(`User ${socket.userId} joined user-specific room: user:${socket.userId}`);
 
           // Add to chat room
           if (!this.chatRooms.has(chatId)) {
@@ -583,7 +579,6 @@ class SocketServer {
           }
           this.chatRooms.get(chatId).add(socket.id);
           
-          // console.log(`User ${socket.userId} joined chat room: chat:${chatId}`);
 
           // Emit confirmation to the user who joined
           socket.emit('chat_joined', { 
@@ -630,17 +625,6 @@ class SocketServer {
 
       // Send message
       socket.on("send_message", async (data) => {
-        console.log('🔍 Socket.IO send_message received:', {
-          chatId: data.chatId,
-          chatIdType: typeof data.chatId,
-          content: data.content,
-          type: data.type,
-          media: data.media ? 'present' : 'not present',
-          replyTo: data.replyTo,
-          replyToType: typeof data.replyTo,
-          sender: socket.userId,
-          senderType: typeof socket.userId
-        });
         
         try {
           const { chatId, content, type, media, replyTo } = data;
@@ -698,17 +682,6 @@ class SocketServer {
             replyTo: cleanReplyToId
           };
           
-          console.log('🔍 Creating message with data:', {
-            chat: messageData.chat,
-            chatType: typeof messageData.chat,
-            sender: messageData.sender,
-            senderType: typeof messageData.sender,
-            content: messageData.content,
-            type: messageData.type,
-            media: messageData.media,
-            replyTo: messageData.replyTo,
-            replyToType: typeof messageData.replyTo
-          });
           
           const message = await Message.create(messageData);
 
@@ -765,13 +738,6 @@ class SocketServer {
           });
 
           // Broadcast to all users in the chat
-          // console.log(`Broadcasting message to chat room: chat:${cleanChatId}`);
-          // console.log(`Message details:`, {
-          //   messageId: message._id,
-          //   content: message.content,
-          //   senderId: socket.userId,
-          //   senderName: socket.user.name
-          // });
           
           const broadcastData = {
             message,
@@ -783,19 +749,16 @@ class SocketServer {
             }
           };
           
-          // console.log(`Broadcasting to room chat:${cleanChatId} with data:`, broadcastData);
           
           // Get the number of clients in the room
           const room = this.io.sockets.adapter.rooms.get(`chat:${cleanChatId}`);
           const clientCount = room ? room.size : 0;
-          // console.log(`Number of clients in room chat:${cleanChatId}:`, clientCount);
           
           this.io.to(`chat:${cleanChatId}`).emit("new_message", broadcastData);
           
           // Also emit to individual users as backup
           chat.participants.forEach(participant => {
             if (participant.user._id.toString() !== cleanSenderId.toString()) {
-              // console.log(`Sending message to individual user: ${participant.user._id}`);
               this.io.to(`user:${participant.user._id}`).emit("new_message", broadcastData);
             }
           });
@@ -1045,12 +1008,11 @@ class SocketServer {
             }
           });
 
-          // Set auto-termination timer (1 minute = 60000ms)
-          setTimeout(async () => {
+          // Set auto-termination timer (45 seconds = 45000ms)
+          const timeoutId = setTimeout(async () => {
             try {
               const activeCall = this.activeCalls.get(call._id.toString());
               if (activeCall && activeCall.status === 'ringing') {
-                // console.log(`Auto-terminating unanswered call: ${call._id}`);
                 
                 // Update call status in database
                 await Call.findByIdAndUpdate(call._id, {
@@ -1061,11 +1023,14 @@ class SocketServer {
                 // Remove from active calls
                 this.activeCalls.delete(call._id.toString());
                 
+                // Clear the timeout reference
+                this.callTimeouts.delete(call._id.toString());
+                
                 // Notify all participants
                 this.io.to(`call:${call._id}`).emit("call_ended", {
                   callId: call._id,
                   reason: 'missed',
-                  message: 'Call not answered within 1 minute'
+                  message: 'Call not answered within 45 seconds'
                 });
                 
                 // Also notify individual participants
@@ -1073,24 +1038,26 @@ class SocketServer {
                   this.io.to(`user:${participant.user._id}`).emit("call_ended", {
                     callId: call._id,
                     reason: 'missed',
-                    message: 'Call not answered within 1 minute'
+                    message: 'Call not answered within 45 seconds'
                   });
                 });
                 
-                // console.log(`Call ${call._id} auto-terminated due to timeout`);
               }
             } catch (error) {
               console.error('Error in auto-termination:', error);
             }
-          }, 60000); // 1 minute timeout
+          }, parseInt(process.env.CALL_TIMEOUT_MS) || 45000); // Use environment variable
+          
+          // Store timeout reference for cleanup
+          this.callTimeouts.set(call._id.toString(), timeoutId);
 
           socket.emit("call_started", { 
             call
           });
 
           // Set timeout to mark call as missed if not answered
-          const timeoutDuration = 30000; // 30 seconds
-          const timeoutId = setTimeout(async () => {
+          const timeoutDuration = parseInt(process.env.CALL_TIMEOUT_MS) || 30000; // 30 seconds
+          const missedTimeoutId = setTimeout(async () => {
             try {
               const currentCall = await Call.findById(call._id);
               if (currentCall && currentCall.status === 'ringing') {
@@ -1123,6 +1090,9 @@ class SocketServer {
             }
           }, timeoutDuration);
           
+          // Store missed timeout reference
+          this.callTimeouts.set(`missed_${call._id}`, missedTimeoutId);
+          
           // Store timeout ID for potential cancellation
           this.callTimeouts.set(call._id.toString(), timeoutId);
 
@@ -1146,7 +1116,6 @@ class SocketServer {
           if (this.callTimeouts && this.callTimeouts.has(callId)) {
             clearTimeout(this.callTimeouts.get(callId));
             this.callTimeouts.delete(callId);
-            console.log(`Cleared timeout for joined call ${callId}`);
           }
 
           const participant = call.participants.find(
@@ -1201,11 +1170,9 @@ class SocketServer {
       socket.on("end_call", async (data) => {
         try {
           const { callId } = data;
-          console.log(`Call ended by ${socket.userId} for call ${callId}`);
           
           const call = await Call.findById(callId);
           if (!call) {
-            console.log('Call not found:', callId);
             return;
           }
 
@@ -1213,7 +1180,6 @@ class SocketServer {
           if (this.callTimeouts && this.callTimeouts.has(callId)) {
             clearTimeout(this.callTimeouts.get(callId));
             this.callTimeouts.delete(callId);
-            console.log(`Cleared timeout for ended call ${callId}`);
           }
 
           const participant = call.participants.find(
@@ -1280,7 +1246,6 @@ class SocketServer {
           socket.leave(`call:${callId}`);
           socket.currentCallId = null;
           
-          // console.log(`Call ${callId} ended and all participants notified`);
         } catch (error) {
           console.error('Error ending call:', error);
           socket.emit("error", "Failed to end call");
@@ -1295,7 +1260,6 @@ class SocketServer {
           
           const call = await Call.findById(callId);
           if (!call) {
-            console.log('Call not found:', callId);
             return;
           }
 
@@ -1751,7 +1715,7 @@ class SocketServer {
         clearInterval(interval);
         this.participantMonitoringIntervals.delete(callId);
       }
-    }, 5000); // Check every 5 seconds
+    }, parseInt(process.env.SOCKET_CLEANUP_INTERVAL) || 5000); // Check every 5 seconds
 
     this.participantMonitoringIntervals.set(callId, interval);
   }

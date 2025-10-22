@@ -51,31 +51,6 @@ const DocumentEditorOptimized = ({
     5000 // 5 second debounce
   );
 
-  // Debug logging
-  console.log('=== DOCUMENT EDITOR DEBUG ===');
-  console.log('Component loaded at:', new Date().toLocaleTimeString());
-  
-  // Test if console is working
-  console.log('🔍 Testing console - if you see this, console is working!');
-  console.log('Full document object:', document);
-  console.log('DocumentEditorOptimized debug:', {
-    hasDocument: !!document,
-    documentId: document?._id,
-    documentStatus: document?.status,
-    isDocumentSaved,
-    isAutoSaveEnabled,
-    hasToggleFunction: !!toggleAutoSave,
-    canEdit,
-    isPreExistingDocument: !!document && !!document._id,
-    isNewDocument: !document || !document._id,
-    documentTitle: document?.title,
-    documentOwner: document?.owner,
-    statusCheck: document?.status !== 'draft',
-    shouldShowAutoSave: !!(document && canEdit && toggleAutoSave),
-    autoSaveStatus,
-    lastSaved
-  });
-  console.log('=== END DEBUG ===');
 
   // Get user role and permissions for this document
   // For new documents (document is null), user is always the owner/editor

@@ -3,12 +3,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOrCreateOneToOneChat } from '../../api/chatApi';
 import { toast } from 'react-hot-toast';
 import ChatUserSearch from './ChatUserSearch';
-import { X, MessageCircle, Users } from 'lucide-react';
+import { X, MessageCircle } from 'lucide-react';
 import CustomButton from '../ui/CustomButton';
 
 const NewChatModal = ({ isOpen, onClose, onChatCreated, onCreateGroup }) => {
   const [selectedUser, setSelectedUser] = useState(null);
-  const [chatType, setChatType] = useState('one-to-one'); // 'one-to-one' or 'group'
   const queryClient = useQueryClient();
 
   const createChatMutation = useMutation({
@@ -39,20 +38,10 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated, onCreateGroup }) => {
   });
 
   const handleStartChat = (user) => {
-    if (chatType === 'one-to-one') {
-      // Immediately create and open chat
-      createChatMutation.mutate(user._id);
-    } else {
-      setSelectedUser(user);
-    }
+    // Immediately create and open chat
+    createChatMutation.mutate(user._id);
   };
 
-  const handleCreateGroup = () => {
-    if (onCreateGroup) {
-      onCreateGroup();
-    }
-    onClose();
-  };
 
   if (!isOpen) return null;
 
@@ -66,10 +55,7 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated, onCreateGroup }) => {
               Start New Chat
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              {chatType === 'one-to-one' 
-                ? 'Search by name, email, username, or phone number'
-                : 'Search and select users to create a group chat'
-              }
+              Search by name, email, username, or phone number
             </p>
           </div>
           <button
@@ -80,33 +66,6 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated, onCreateGroup }) => {
           </button>
         </div>
 
-        {/* Chat Type Selection - Opaque tabs */}
-        <div className="p-6 border-b border-gray-200/50 dark:border-gray-700/50">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setChatType('one-to-one')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-all duration-200 ${
-                chatType === 'one-to-one'
-                  ? 'bg-indigo-500 text-white border-indigo-500 shadow-lg transform scale-[1.02]'
-                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600'
-              }`}
-            >
-              <MessageCircle className="w-5 h-5" />
-              <span className="font-medium">One-to-One</span>
-            </button>
-            <button
-              onClick={() => setChatType('group')}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-all duration-200 ${
-                chatType === 'group'
-                  ? 'bg-indigo-500 text-white border-indigo-500 shadow-lg transform scale-[1.02]'
-                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600'
-              }`}
-            >
-              <Users className="w-5 h-5" />
-              <span className="font-medium">Group</span>
-            </button>
-          </div>
-        </div>
 
         {/* User Search */}
         <div className="p-6">
@@ -123,45 +82,9 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated, onCreateGroup }) => {
           <ChatUserSearch
             onSelectUser={setSelectedUser}
             onStartChat={handleStartChat}
-            placeholder={`Search users to ${chatType === 'one-to-one' ? 'chat with' : 'add to group'}...`}
+            placeholder="Search users to chat with..."
           />
 
-          {/* Selected User Display */}
-          {selectedUser && chatType === 'group' && (
-            <div className="mt-4 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {selectedUser.avatar ? (
-                    <img
-                      src={selectedUser.avatar}
-                      alt={selectedUser.name}
-                      className="w-8 h-8 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
-                      <MessageCircle className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                  )}
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-gray-100">
-                      {selectedUser.name}
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {selectedUser.email}
-                    </p>
-                  </div>
-                </div>
-                <CustomButton
-                  onClick={handleCreateGroup}
-                  size="sm"
-                  className="flex items-center gap-2"
-                >
-                  <Users className="w-4 h-4" />
-                  Create Group
-                </CustomButton>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}
@@ -172,15 +95,6 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated, onCreateGroup }) => {
           >
             Cancel
           </CustomButton>
-          {chatType === 'group' && selectedUser && (
-            <CustomButton
-              onClick={handleCreateGroup}
-              className="flex items-center gap-2"
-            >
-              <Users className="w-4 h-4" />
-              Create Group
-            </CustomButton>
-          )}
         </div>
       </div>
     </div>
