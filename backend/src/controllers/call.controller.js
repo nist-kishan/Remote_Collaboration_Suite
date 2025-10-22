@@ -26,6 +26,21 @@ export const startCall = asyncHandle(async (req, res) => {
       throw new ApiError(403, 'You are not a participant in this chat');
     }
 
+    // Check for existing ongoing calls between the same participants
+    const existingCall = await Call.findOne({
+      chat: chatId,
+      status: { $in: ['ringing', 'ongoing'] },
+      participants: {
+        $all: chat.participants.map(p => ({
+          $elemMatch: { user: p.user }
+        }))
+      }
+    });
+
+    if (existingCall) {
+      throw new ApiError(409, 'A call is already in progress with these participants');
+    }
+
     // Get all participants except the caller
     participants = chat.participants
       .filter(p => p.user.toString() !== userId.toString())
@@ -45,6 +60,21 @@ export const startCall = asyncHandle(async (req, res) => {
     const { participantIds } = req.body;
     if (!participantIds || participantIds.length === 0) {
       throw new ApiError(400, 'Participants are required');
+    }
+
+    // Check for existing ongoing calls between the same participants
+    const allParticipantIds = [userId, ...participantIds];
+    const existingCall = await Call.findOne({
+      status: { $in: ['ringing', 'ongoing'] },
+      participants: {
+        $all: allParticipantIds.map(id => ({
+          $elemMatch: { user: id }
+        }))
+      }
+    });
+
+    if (existingCall) {
+      throw new ApiError(409, 'A call is already in progress with these participants');
     }
 
     participants = [

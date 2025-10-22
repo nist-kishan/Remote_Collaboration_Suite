@@ -72,9 +72,19 @@ const GlobalCallNotification = () => {
     setShowNotification(false);
   };
 
-  const handleAcceptCall = () => {
-    acceptCall();
-    setShowNotification(false);
+  const handleAcceptCall = async () => {
+    try {
+      await acceptCall();
+      setShowNotification(false);
+      
+      // Navigate to receiver page after accepting the call
+      if (incomingCall) {
+        const receiverId = incomingCall.callerId || incomingCall.senderId || incomingCall.fromUserId || incomingCall.userId || incomingCall.chatId || 'unknown';
+        navigate(`/video-call/receiver/${receiverId}`, { replace: true });
+      }
+    } catch (error) {
+      console.error('Error accepting call:', error);
+    }
   };
 
   const handleRejectCall = () => {

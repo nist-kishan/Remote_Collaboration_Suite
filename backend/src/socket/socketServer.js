@@ -54,6 +54,7 @@ class SocketServer {
 
     this.setupMiddleware();
     this.setupEventHandlers();
+    this.startCallCleanup();
   }
 
   setupMiddleware() {
@@ -954,6 +955,22 @@ class SocketServer {
               return;
             }
 
+            // Check for existing ongoing calls between the same participants
+            const existingCall = await Call.findOne({
+              chat: chatId,
+              status: { $in: ['ringing', 'ongoing'] },
+              participants: {
+                $all: chat.participants.map(p => ({
+                  $elemMatch: { user: p.user }
+                }))
+              }
+            });
+
+            if (existingCall) {
+              socket.emit("error", "A call is already in progress with these participants");
+              return;
+            }
+
             participants = chat.participants
               .filter(p => p.user.toString() !== socket.userId)
               .map(p => ({
@@ -1152,6 +1169,16 @@ class SocketServer {
           // Emit call_joined to all participants (including the person who joined)
           this.io.to(`call:${callId}`).emit("call_joined", { call });
           
+          // Emit call_accepted to the caller specifically
+          const caller = call.participants.find(p => p.user._id.toString() === call.startedBy.toString());
+          if (caller) {
+            this.io.to(`user:${call.startedBy}`).emit("call_accepted", { 
+              call,
+              acceptedBy: socket.userId,
+              acceptedByName: socket.user.name
+            });
+          }
+          
           // Also notify individual participants
           call.participants.forEach(participant => {
             this.io.to(`user:${participant.user._id}`).emit("call_joined", { call });
@@ -1249,6 +1276,67 @@ class SocketServer {
         } catch (error) {
           console.error('Error ending call:', error);
           socket.emit("error", "Failed to end call");
+        }
+      });
+
+      // Leave call (explicit leave, not disconnect)
+      socket.on("leave_call", async (data) => {
+        try {
+          const { callId } = data;
+          
+          const call = await Call.findById(callId);
+          if (!call) {
+            socket.emit("error", "Call not found");
+            return;
+          }
+
+          const participant = call.participants.find(
+            p => p.user.toString() === socket.userId
+          );
+
+          if (!participant) {
+            socket.emit("error", "You are not a participant in this call");
+            return;
+          }
+
+          if (participant.status === 'joined') {
+            participant.status = 'left';
+            participant.leftAt = new Date();
+
+            if (participant.joinedAt) {
+              participant.duration = Math.floor(
+                (new Date() - participant.joinedAt) / 1000
+              );
+            }
+
+            // Check if all participants have left
+            const allLeft = call.participants.every(p => 
+              p.status === 'left' || p.status === 'rejected' || p.status === 'missed'
+            );
+
+            if (allLeft) {
+              call.status = 'ended';
+              call.endedAt = new Date();
+            }
+
+            await call.save();
+
+            // Leave socket room
+            socket.leave(`call:${callId}`);
+            socket.currentCallId = null;
+
+            // Notify others
+            socket.to(`call:${callId}`).emit("participant_left", {
+              callId,
+              userId: socket.userId,
+              userName: socket.user.name
+            });
+
+            console.log(`👥 Call ${callId} participant ${socket.userId} left call`);
+          }
+        } catch (error) {
+          console.error('Error leaving call:', error);
+          socket.emit("error", "Failed to leave call");
         }
       });
 
@@ -1508,6 +1596,43 @@ class SocketServer {
         // Handle call disconnect
         if (socket.currentCallId) {
           socket.leave(`call:${socket.currentCallId}`);
+          
+          try {
+            // Update call participant status in database
+            const call = await Call.findById(socket.currentCallId);
+            if (call) {
+              const participant = call.participants.find(
+                p => p.user.toString() === socket.userId
+              );
+
+              if (participant && participant.status === 'joined') {
+                participant.status = 'left';
+                participant.leftAt = new Date();
+
+                if (participant.joinedAt) {
+                  participant.duration = Math.floor(
+                    (new Date() - participant.joinedAt) / 1000
+                  );
+                }
+
+                // Check if all participants have left
+                const allLeft = call.participants.every(p => 
+                  p.status === 'left' || p.status === 'rejected' || p.status === 'missed'
+                );
+
+                if (allLeft) {
+                  call.status = 'ended';
+                  call.endedAt = new Date();
+                }
+
+                await call.save();
+                console.log(`👥 Call ${socket.currentCallId} participant ${socket.userId} marked as left`);
+              }
+            }
+          } catch (error) {
+            console.error('Error updating call participant status on disconnect:', error);
+          }
+
           const callData = this.activeCalls.get(socket.currentCallId);
           if (callData) {
             socket.to(`call:${socket.currentCallId}`).emit("participant_left", {
@@ -1718,6 +1843,58 @@ class SocketServer {
     }, parseInt(process.env.SOCKET_CLEANUP_INTERVAL) || 5000); // Check every 5 seconds
 
     this.participantMonitoringIntervals.set(callId, interval);
+  }
+
+  // Start periodic cleanup of stale calls
+  startCallCleanup() {
+    // Run cleanup every 30 seconds
+    setInterval(async () => {
+      try {
+        console.log('🧹 Starting call cleanup...');
+        
+        // Find calls that are still marked as 'ongoing' but have no active participants
+        const staleCalls = await Call.find({
+          status: 'ongoing',
+          'participants.status': 'joined'
+        });
+
+        for (const call of staleCalls) {
+          // Check if any participants are actually still active (not left)
+          const activeParticipants = call.participants.filter(p => 
+            p.status === 'joined' && !p.leftAt
+          );
+
+          if (activeParticipants.length < 2) {
+            console.log(`🧹 Cleaning up stale call ${call._id} - insufficient active participants`);
+            
+            // Mark all participants as left
+            call.participants.forEach(participant => {
+              if (participant.status === 'joined') {
+                participant.status = 'left';
+                participant.leftAt = new Date();
+                
+                if (participant.joinedAt) {
+                  participant.duration = Math.floor(
+                    (new Date() - participant.joinedAt) / 1000
+                  );
+                }
+              }
+            });
+
+            // End the call
+            call.status = 'ended';
+            call.endedAt = new Date();
+            await call.save();
+
+            console.log(`✅ Stale call ${call._id} cleaned up`);
+          }
+        }
+
+        console.log(`🧹 Call cleanup completed - checked ${staleCalls.length} calls`);
+      } catch (error) {
+        console.error('Error during call cleanup:', error);
+      }
+    }, 30000); // Run every 30 seconds
   }
 }
 

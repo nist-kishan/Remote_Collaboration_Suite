@@ -466,17 +466,15 @@ export const useCallSocket = () => {
       setHasShownIncomingToast(true);
     }
     
-    // Navigate to receiver page for incoming calls only if not already on a video call page
-    if (!location.pathname.includes('/video-call/')) {
-      navigate(`/video-call/receiver/${receiverId}`, { replace: true });
-    } else if (location.pathname.includes('/video-call/caller/')) {
-      // If we're on a caller page, navigate to receiver page for incoming call
-      navigate(`/video-call/receiver/${receiverId}`, { replace: true });
-    }
+    // Don't auto-navigate to receiver page - let the notification handle it
+    // The GlobalCallNotification component will show the Answer/Reject options
+    // and only navigate when the user accepts the call
     
     window.acceptCall = async () => {
       try {
         await acceptCall();
+        // Navigate to receiver page only when call is accepted
+        navigate(`/video-call/receiver/${receiverId}`, { replace: true });
       } catch (error) {
         console.error('Error accepting call:', error);
       }
@@ -717,12 +715,25 @@ export const useCallSocket = () => {
 
     window.currentSocket = socket;
 
+    // Handle socket errors
+    const handleSocketError = (error) => {
+      console.error('Socket error:', error);
+      if (error === 'A call is already in progress with these participants') {
+        toast.error('A call is already in progress with these participants');
+        dispatch(setShowOutgoingCallModal(false));
+        dispatch(clearOutgoingCall());
+      } else {
+        toast.error(error || 'An error occurred');
+      }
+    };
+
     // Register event listeners
     socket.on('incoming_call', handleIncomingCall);
     socket.on('call_started', handleCallStarted);
     socket.on('call_joined', handleCallJoined);
     socket.on('call_ended', handleCallEnded);
     socket.on('call_rejected', handleCallRejected);
+    socket.on('error', handleSocketError);
 
     return () => {
       socket.off('incoming_call', handleIncomingCall);
@@ -730,6 +741,7 @@ export const useCallSocket = () => {
       socket.off('call_joined', handleCallJoined);
       socket.off('call_ended', handleCallEnded);
       socket.off('call_rejected', handleCallRejected);
+      socket.off('error', handleSocketError);
       
       delete window.acceptCall;
     };
