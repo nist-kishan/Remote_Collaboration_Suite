@@ -36,10 +36,33 @@ export const createProject = asyncHandle(async (req, res) => {
       { "members.user": userId, "members.status": "active" }
     ],
     isActive: true
-  });
+  }).populate("members.user", "name email");
 
   if (!workspace) {
     throw new ApiError(404, "Workspace not found or access denied");
+  }
+
+  // Check user role and permissions
+  let userRole = 'member';
+  
+  // Check if user is owner
+  if (workspace.owner && workspace.owner.toString() === userId.toString()) {
+    userRole = 'owner';
+  } else {
+    // Check workspace members
+    const member = workspace.members.find(
+      m => m.user && m.user._id.toString() === userId.toString()
+    );
+    if (member) {
+      userRole = member.role;
+    }
+  }
+
+  // Check if user has permission to create projects
+  // Only owner, admin, member, hr, and mr can create projects
+  const allowedRoles = ['owner', 'admin', 'member', 'hr', 'mr'];
+  if (!allowedRoles.includes(userRole)) {
+    throw new ApiError(403, "You don't have permission to create projects in this workspace");
   }
 
   // Create project with user as owner

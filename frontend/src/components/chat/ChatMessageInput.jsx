@@ -9,6 +9,7 @@ import {
   X,
   Loader2
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import Button from '../ui/Button';
 import MediaPreview from './MediaPreview';
 import { 
@@ -182,7 +183,7 @@ const MessageInput = ({
       setPreviewFiles(prev => [...prev, ...newPreviewFiles]);
 
     } catch (error) {
-      alert(`File error: ${error.message}`);
+      toast.error(`File error: ${error.message}`);
     } finally {
       setIsOptimizing(false);
       e.target.value = '';

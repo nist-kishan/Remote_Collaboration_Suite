@@ -457,3 +457,275 @@ export const getUserMeetings = asyncHandle(async (req, res) => {
     new ApiResponse(200, "Meetings retrieved successfully", { meetings })
   );
 });
+
+// Create instant meeting
+export const createInstantMeeting = asyncHandle(async (req, res) => {
+  const userId = req.user._id;
+  
+  const {
+    title,
+    description,
+    accessType = "protected",
+    password,
+    maxParticipants = 50,
+    attendees = [],
+    settings = {}
+  } = req.body;
+
+  if (!title) {
+    throw new ApiError(400, "Meeting title is required");
+  }
+
+  // Generate password if not provided for protected meetings
+  let meetingPassword = password;
+  if (accessType === "protected" && !password) {
+    meetingPassword = Math.random().toString(36).substr(2, 6).toUpperCase();
+  }
+
+  // Create instant meeting
+  const meeting = await Meeting.create({
+    title,
+    description,
+    meetingType: "instant",
+    accessType,
+    organizer: userId,
+    password: meetingPassword,
+    maxParticipants,
+    settings: {
+      enableChat: settings.enableChat !== undefined ? settings.enableChat : true,
+      enableScreenShare: settings.enableScreenShare !== undefined ? settings.enableScreenShare : true,
+      enableRecording: settings.enableRecording !== undefined ? settings.enableRecording : false,
+      muteOnJoin: settings.muteOnJoin !== undefined ? settings.muteOnJoin : false,
+      videoOnJoin: settings.videoOnJoin !== undefined ? settings.videoOnJoin : true
+    },
+    attendees: attendees.map(attendeeId => ({
+      user: attendeeId,
+      role: "participant",
+      status: "invited"
+    }))
+  });
+
+  // Add organizer as host
+  meeting.attendees.push({
+    user: userId,
+    role: "host",
+    status: "joined"
+  });
+  meeting.currentParticipants = 1;
+  await meeting.save();
+
+  await meeting.populate([
+    { path: "organizer", select: "name email avatar" },
+    { path: "attendees.user", select: "name email avatar" },
+    { path: "project", select: "name" }
+  ]);
+
+  return res.status(201).json(
+    new ApiResponse(201, "Instant meeting created successfully", { meeting })
+  );
+});
+
+// Create scheduled meeting
+export const createScheduledMeeting = asyncHandle(async (req, res) => {
+  const userId = req.user._id;
+  
+  const {
+    title,
+    description,
+    startTime,
+    endTime,
+    accessType = "protected",
+    password,
+    maxParticipants = 50,
+    attendees = [],
+    settings = {}
+  } = req.body;
+
+  if (!title || !startTime || !endTime) {
+    throw new ApiError(400, "Title, start time, and end time are required");
+  }
+
+  // Validate times
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  const now = new Date();
+
+  if (start <= now) {
+    throw new ApiError(400, "Start time must be in the future");
+  }
+
+  if (end <= start) {
+    throw new ApiError(400, "End time must be after start time");
+  }
+
+  // Generate password if not provided for protected meetings
+  let meetingPassword = password;
+  if (accessType === "protected" && !password) {
+    meetingPassword = Math.random().toString(36).substr(2, 6).toUpperCase();
+  }
+
+  // Create scheduled meeting
+  const meeting = await Meeting.create({
+    title,
+    description,
+    meetingType: "scheduled",
+    accessType,
+    organizer: userId,
+    startTime: start,
+    endTime: end,
+    password: meetingPassword,
+    maxParticipants,
+    settings: {
+      enableChat: settings.enableChat !== undefined ? settings.enableChat : true,
+      enableScreenShare: settings.enableScreenShare !== undefined ? settings.enableScreenShare : true,
+      enableRecording: settings.enableRecording !== undefined ? settings.enableRecording : false,
+      muteOnJoin: settings.muteOnJoin !== undefined ? settings.muteOnJoin : false,
+      videoOnJoin: settings.videoOnJoin !== undefined ? settings.videoOnJoin : true
+    },
+    attendees: attendees.map(attendeeId => ({
+      user: attendeeId,
+      role: "participant",
+      status: "invited"
+    }))
+  });
+
+  await meeting.populate([
+    { path: "organizer", select: "name email avatar" },
+    { path: "attendees.user", select: "name email avatar" },
+    { path: "project", select: "name" }
+  ]);
+
+  return res.status(201).json(
+    new ApiResponse(201, "Scheduled meeting created successfully", { meeting })
+  );
+});
+
+// Join meeting
+export const joinMeeting = asyncHandle(async (req, res) => {
+  const { meetingId } = req.params;
+  const userId = req.user._id;
+  const { password } = req.body;
+
+  const meeting = await Meeting.findOne({ meetingId });
+  if (!meeting) {
+    throw new ApiError(404, "Meeting not found");
+  }
+
+  // Check if meeting is active
+  if (!meeting.isActive) {
+    throw new ApiError(400, "Meeting is not active");
+  }
+
+  // Check password for protected meetings
+  if (meeting.accessType === "protected") {
+    if (!password || password !== meeting.password) {
+      throw new ApiError(403, "Invalid meeting password");
+    }
+  }
+
+  // Check if user is already an attendee
+  const existingAttendee = meeting.attendees.find(attendee => 
+    attendee.user.toString() === userId.toString()
+  );
+
+  if (existingAttendee) {
+    existingAttendee.status = "joined";
+    existingAttendee.joinedAt = new Date();
+  } else {
+    // Add user as attendee
+    meeting.attendees.push({
+      user: userId,
+      role: "participant",
+      status: "joined",
+      joinedAt: new Date()
+    });
+  }
+
+  // Update participant count
+  meeting.currentParticipants = meeting.attendees.filter(a => a.status === "joined").length;
+  
+  // Check if meeting can start (for scheduled meetings)
+  if (meeting.meetingType === "scheduled" && meeting.status === "waiting") {
+    const now = new Date();
+    if (now >= meeting.startTime && now <= meeting.endTime) {
+      meeting.status = "in_progress";
+    }
+  } else if (meeting.meetingType === "instant" && meeting.status === "waiting") {
+    meeting.status = "in_progress";
+  }
+
+  await meeting.save();
+
+  await meeting.populate([
+    { path: "organizer", select: "name email avatar" },
+    { path: "attendees.user", select: "name email avatar" },
+    { path: "project", select: "name" }
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(200, "Successfully joined meeting", { meeting })
+  );
+});
+
+// Get meeting participants
+export const getMeetingParticipants = asyncHandle(async (req, res) => {
+  const { meetingId } = req.params;
+  const userId = req.user._id;
+
+  const meeting = await Meeting.findOne({ meetingId })
+    .populate("attendees.user", "name email avatar")
+    .populate("organizer", "name email avatar");
+
+  if (!meeting) {
+    throw new ApiError(404, "Meeting not found");
+  }
+
+  // Check if user is an attendee
+  const userAttendee = meeting.attendees.find(attendee => 
+    attendee.user._id.toString() === userId.toString()
+  );
+
+  if (!userAttendee) {
+    throw new ApiError(403, "You are not authorized to view this meeting");
+  }
+
+  const participants = meeting.attendees.filter(a => a.status === "joined");
+
+  return res.status(200).json(
+    new ApiResponse(200, "Participants retrieved successfully", { 
+      participants,
+      meetingId: meeting._id,
+      meetingTitle: meeting.title
+    })
+  );
+});
+
+// Update participant status
+export const updateParticipantStatus = asyncHandle(async (req, res) => {
+  const { meetingId } = req.params;
+  const userId = req.user._id;
+  const { isMuted, isVideoOn } = req.body;
+
+  const meeting = await Meeting.findOne({ meetingId });
+  if (!meeting) {
+    throw new ApiError(404, "Meeting not found");
+  }
+
+  const attendee = meeting.attendees.find(attendee => 
+    attendee.user.toString() === userId.toString()
+  );
+
+  if (!attendee) {
+    throw new ApiError(403, "You are not a participant in this meeting");
+  }
+
+  // Update participant metadata
+  attendee.isMuted = isMuted !== undefined ? isMuted : attendee.isMuted;
+  attendee.isVideoOn = isVideoOn !== undefined ? isVideoOn : attendee.isVideoOn;
+
+  await meeting.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, "Participant status updated successfully", { attendee })
+  );
+});

@@ -16,7 +16,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import Button from '../ui/Button';
-import WhiteboardBrushSettings from './WhiteboardBrushSettings';
+import WhiteboardBrushSettings from './WhiteboardToolSettings';
 
 const WhiteboardMobileMenu = ({
   whiteboard,

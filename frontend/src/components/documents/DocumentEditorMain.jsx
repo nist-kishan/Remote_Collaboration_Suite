@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSelector } from 'react-redux'; // Redux selector hook
 import { 
   Save, 
   Share, 
@@ -54,6 +55,7 @@ import CustomContainer from '../ui/CustomContainer';
 import DocumentShareModal from './DocumentShareModal';
 import ConfirmationDialog from '../ui/ConfirmationDialog';
 import DocumentAutoSaveIndicator from './DocumentAutoSaveIndicator';
+import RichTextEditor from '../editor/RichTextEditor';
 import { useDocument } from '../../hook/useDocument';
 import DocumentCollaborationPanel from './DocumentCollaborationPanel';
 import DocumentLiveCursors from './DocumentLiveCursors';
@@ -87,6 +89,15 @@ const DocumentEditor = ({
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [showTableModal, setShowTableModal] = useState(false);
+  
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'warning',
+    onConfirm: () => {}
+  });
   
   // Modal data
   const [modalData, setModalData] = useState({
@@ -274,9 +285,33 @@ const DocumentEditor = ({
     handleUpdateEditorField,
     handleInitializeEditorFromDocument,
     handleResetEditorState
-  } = useDocument(documentId);
+  } = useDocument(documentId, { shouldNavigateAfterCreate: isNew });
 
-  const permissions = useDocumentPermissions(currentDocument, user);
+  // Simple permissions function for now
+  const getDocumentPermissions = (document, currentUser) => {
+    if (!document || !currentUser) {
+      return {
+        canEdit: false,
+        canShare: false,
+        canDelete: false,
+        canChangeSettings: false,
+        userRole: 'viewer'
+      };
+    }
+
+    // For now, assume the document owner can do everything
+    const isOwner = document.createdBy === currentUser._id;
+    
+    return {
+      canEdit: isOwner || isNew,
+      canShare: isOwner,
+      canDelete: isOwner,
+      canChangeSettings: isOwner,
+      userRole: isOwner ? 'owner' : 'viewer'
+    };
+  };
+
+  const permissions = getDocumentPermissions(currentDocument, user);
 
   // For new documents, user should always be able to edit
   const canEditTitle = isNew || permissions.canEdit;
@@ -294,31 +329,47 @@ const DocumentEditor = ({
     timestamp: new Date().toLocaleTimeString()
   });
   
-  const { manualSave, isAutoSaveEnabled, toggleAutoSave, autoSaveStatus, lastSaved } = useAutoSave(
-    documentId,
-    editorState.content,
-    isDocumentSaved,
-    5000 // 5 second debounce
-  );
+  // Simple auto-save implementation for now
+  const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved', 'error'
+  const [lastSaved, setLastSaved] = useState(null);
+  
+  const toggleAutoSave = useCallback(() => {
+    setIsAutoSaveEnabled(prev => !prev);
+  }, []);
 
-  // Document collaboration
-  const {
-    activeCollaborators,
-    isTyping,
-    typingUsers,
-    saveStatus,
-    isJoined,
-    isConnected,
-    sendContentChange,
-    sendCursorMove,
-    sendSelectionChange,
-    sendTyping,
-    sendStopTyping,
-    sendFormatChange,
-    sendStructureChange,
-    sendTitleChange,
-    sendSaveStatus,
-  } = useDocumentCollaboration(documentId);
+  const manualSave = useCallback(async () => {
+    if (!isDocumentSaved) return;
+    
+    setAutoSaveStatus('saving');
+    try {
+      await handleUpdateDocument();
+      setAutoSaveStatus('saved');
+      setLastSaved(new Date());
+    } catch (error) {
+      setAutoSaveStatus('error');
+      console.error('Manual save failed:', error);
+    }
+  }, [isDocumentSaved, handleUpdateDocument]);
+
+  // Simple collaboration implementation for now
+  const [activeCollaborators, setActiveCollaborators] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [saveStatus, setSaveStatus] = useState({});
+  const [isJoined, setIsJoined] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  
+  // Simple stub functions for collaboration
+  const sendContentChange = useCallback(() => {}, []);
+  const sendCursorMove = useCallback(() => {}, []);
+  const sendSelectionChange = useCallback(() => {}, []);
+  const sendTyping = useCallback(() => {}, []);
+  const sendStopTyping = useCallback(() => {}, []);
+  const sendFormatChange = useCallback(() => {}, []);
+  const sendStructureChange = useCallback(() => {}, []);
+  const sendTitleChange = useCallback(() => {}, []);
+  const sendSaveStatus = useCallback(() => {}, []);
 
   // Initialize editor when document changes
   useEffect(() => {
@@ -392,13 +443,30 @@ const DocumentEditor = ({
 
   // Handle save
   const handleSave = useCallback(() => {
+    console.log('💾 Starting save process...', {
+      canEditTitle,
+      editorState: {
+        title: editorState.title,
+        hasChanges: editorState.hasChanges,
+        content: editorState.content?.substring(0, 100) + '...',
+        tags: editorState.tags,
+        visibility: editorState.visibility
+      },
+      isNew,
+      documentId,
+      isUpdating,
+      isCreating
+    });
+
     if (!canEditTitle) {
+      console.error('❌ Save failed: No edit permission');
       toast.error('You do not have permission to edit this document');
       return;
     }
     
     // Validate title
     if (!editorState.title || editorState.title.trim() === '') {
+      console.error('❌ Save failed: No title');
       toast.error('Please enter a document title');
       return;
     }
@@ -411,11 +479,14 @@ const DocumentEditor = ({
       visibility: editorState.visibility,
     };
 
+    console.log('📝 Document data to save:', documentData);
     console.log('Saving document with status:', documentData.status);
 
     if (isNew) {
+      console.log('🆕 Creating new document...');
       handleCreateDocument(documentData);
     } else {
+      console.log('📝 Updating existing document:', documentId);
       handleUpdateDocument(documentId, documentData);
     }
   }, [editorState, canEditTitle, isNew, documentId, handleCreateDocument, handleUpdateDocument]);

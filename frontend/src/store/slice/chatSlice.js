@@ -276,6 +276,28 @@ const chatSlice = createSlice({
     // Reset state
     resetChatState: (state) => {
       return { ...initialState };
+    },
+    
+    // Convenience functions for ChatPageRedux
+    selectChat: (state, action) => {
+      state.selectedChat = action.payload;
+      state.currentChat = action.payload;
+    },
+    
+    openCreateGroupModal: (state) => {
+      state.showCreateGroupModal = true;
+    },
+    
+    closeCreateGroupModal: (state) => {
+      state.showCreateGroupModal = false;
+    },
+    
+    openNewChatModal: (state) => {
+      state.showNewChatModal = true;
+    },
+    
+    closeNewChatModal: (state) => {
+      state.showNewChatModal = false;
     }
   }
 });
@@ -323,7 +345,12 @@ export const {
   addError,
   clearError,
   clearAllErrors,
-  resetChatState
+  resetChatState,
+  selectChat,
+  openCreateGroupModal,
+  closeCreateGroupModal,
+  openNewChatModal,
+  closeNewChatModal
 } = chatSlice.actions;
 
 // Export selectors

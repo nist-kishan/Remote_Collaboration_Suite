@@ -36,14 +36,14 @@ const Modal = ({ isOpen, onClose, children, className = '' }) => {
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
       
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
         <div 
-          className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl transform transition-all ${className}`}
+          className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl transform transition-all border border-gray-200 dark:border-gray-700 ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
           {children}

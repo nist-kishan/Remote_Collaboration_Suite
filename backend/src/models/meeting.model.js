@@ -13,10 +13,20 @@ const meetingSchema = new mongoose.Schema(
       trim: true,
       maxlength: [1000, "Description cannot exceed 1000 characters"]
     },
+    meetingType: {
+      type: String,
+      enum: ["instant", "scheduled"],
+      default: "instant"
+    },
+    accessType: {
+      type: String,
+      enum: ["public", "protected"],
+      default: "protected"
+    },
     project: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Project",
-      required: true
+      required: false // Optional for instant meetings
     },
     organizer: {
       type: mongoose.Schema.Types.ObjectId,
@@ -29,9 +39,14 @@ const meetingSchema = new mongoose.Schema(
         ref: "User",
         required: true
       },
+      role: {
+        type: String,
+        enum: ["host", "participant", "viewer"],
+        default: "participant"
+      },
       status: {
         type: String,
-        enum: ["invited", "accepted", "declined", "tentative"],
+        enum: ["invited", "joined", "declined", "left"],
         default: "invited"
       },
       joinedAt: Date,
@@ -39,34 +54,40 @@ const meetingSchema = new mongoose.Schema(
     }],
     startTime: {
       type: Date,
-      required: true
+      required: function() {
+        return this.meetingType === "scheduled";
+      }
     },
     endTime: {
       type: Date,
-      required: true,
-      validate: {
-        validator: function(value) {
-          return value > this.startTime;
-        },
-        message: "End time must be after start time"
+      required: function() {
+        return this.meetingType === "scheduled";
       }
     },
-    location: {
+    meetingLink: {
       type: String,
-      trim: true,
-      maxlength: [200, "Location cannot exceed 200 characters"]
-    },
-    meetingUrl: {
-      type: String,
+      unique: true,
       trim: true
     },
     meetingId: {
       type: String,
+      unique: true,
       trim: true
     },
     password: {
       type: String,
-      trim: true
+      trim: true,
+      required: function() {
+        return this.accessType === "protected";
+      }
+    },
+    maxParticipants: {
+      type: Number,
+      default: 50
+    },
+    currentParticipants: {
+      type: Number,
+      default: 0
     },
     agenda: [{
       item: {
@@ -102,13 +123,13 @@ const meetingSchema = new mongoose.Schema(
     }],
     status: {
       type: String,
-      enum: ["scheduled", "in_progress", "completed", "cancelled", "postponed"],
-      default: "scheduled"
+      enum: ["waiting", "in_progress", "completed", "cancelled"],
+      default: "waiting"
     },
     type: {
       type: String,
       enum: ["team_meeting", "client_meeting", "review", "planning", "standup", "other"],
-      default: "team_meeting"
+      default: "other"
     },
     recurring: {
       isRecurring: {
@@ -141,6 +162,28 @@ const meetingSchema = new mongoose.Schema(
         default: false
       }
     }],
+    settings: {
+      enableChat: {
+        type: Boolean,
+        default: true
+      },
+      enableScreenShare: {
+        type: Boolean,
+        default: true
+      },
+      enableRecording: {
+        type: Boolean,
+        default: false
+      },
+      muteOnJoin: {
+        type: Boolean,
+        default: false
+      },
+      videoOnJoin: {
+        type: Boolean,
+        default: true
+      }
+    },
     isActive: {
       type: Boolean,
       default: true
@@ -198,13 +241,32 @@ meetingSchema.set("toObject", { virtuals: true });
 
 // Pre-save middleware
 meetingSchema.pre("save", function(next) {
-  // Validate end time
-  if (this.endTime <= this.startTime) {
+  // Generate unique meeting ID and link if not provided
+  if (!this.meetingId) {
+    this.meetingId = `MTG-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  }
+  
+  if (!this.meetingLink) {
+    this.meetingLink = `/meeting/${this.meetingId}`;
+  }
+  
+  // For instant meetings, set start time to now
+  if (this.meetingType === "instant" && !this.startTime) {
+    this.startTime = new Date();
+  }
+  
+  // For instant meetings, set end time to 1 hour from now
+  if (this.meetingType === "instant" && !this.endTime) {
+    this.endTime = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  }
+  
+  // Validate end time for scheduled meetings
+  if (this.meetingType === "scheduled" && this.endTime <= this.startTime) {
     return next(new Error("End time must be after start time"));
   }
   
   // Set default reminders if none provided
-  if (this.reminders.length === 0) {
+  if (this.reminders.length === 0 && this.meetingType === "scheduled") {
     this.reminders = [
       { type: "email", time: 15, sent: false },
       { type: "notification", time: 5, sent: false }

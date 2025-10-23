@@ -190,7 +190,7 @@ export default function Document() {
   const handleEditDocument = (document) => {
     setSelectedDocument(document);
     setCurrentView('editor');
-    navigate(`/documents/edit/${document._id}`);
+    navigate(`/documents/${document._id}`);
   };
 
   const handleViewDocument = (document) => {

@@ -6,9 +6,9 @@ import DocumentToolbar from "./DocumentToolbar";
 import DocumentTitleBar from "./DocumentTitleBar";
 import DocumentSettingsModal from "./DocumentSettingsModal";
 import RichTextEditor from "../editor/RichTextEditor";
-import AutoSaveIndicator from "./AutoSaveIndicator";
-import Container from "../ui/Container";
-import ConfirmationModal from "../ui/ConfirmationModal";
+import AutoSaveIndicator from "./DocumentAutoSaveIndicator";
+import Container from "../ui/CustomContainer";
+import ConfirmationModal from "../ui/ConfirmationDialog";
 import { getUserRole, canPerformAction } from "../../utils/roleUtils";
 import { useDocument } from "../../hook/useDocument";
 

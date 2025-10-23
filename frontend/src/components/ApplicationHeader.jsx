@@ -7,6 +7,7 @@ import {
   FolderOpen,
   Menu,
   X,
+  Users,
 } from "lucide-react";
 import ApplicationBrandName from "./Header/ApplicationBrandName";
 import MainNavigationBar from "./Header/MainNavigationBar";
@@ -24,7 +25,7 @@ const Header = memo(() => {
   const navLinks = useMemo(
     () => [
       { name: "Chat", path: "/chat", icon: <MessageSquare size={18} /> },
-      { name: "Video Call", path: "/video-call", icon: <Video size={18} /> },
+      { name: "Meeting", path: "/meetings", icon: <Users size={18} /> },
       { name: "Documents", path: "/documents", icon: <FileText size={18} /> },
       { name: "Whiteboards", path: "/boards", icon: <PenTool size={18} /> },
       { name: "Projects", path: "/projects", icon: <FolderOpen size={18} /> },

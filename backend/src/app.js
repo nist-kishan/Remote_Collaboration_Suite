@@ -91,7 +91,7 @@ app.use("/api/v1/chat", chatRouter);
 app.use("/api/v1/call", callRouter);
 app.use("/api/v1/workspaces", workspaceRouter);
 app.use("/api/v1/projects", projectRouter);
-app.use("/api/v1", taskRouter);
+app.use("/api/v1/tasks", taskRouter);
 app.use("/api/v1", meetingRouter);
 app.use("/api/v1/notifications", notificationRouter);
 

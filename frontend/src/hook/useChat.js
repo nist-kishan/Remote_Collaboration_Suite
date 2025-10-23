@@ -54,6 +54,11 @@ import {
   addError,
   clearError,
   clearAllErrors,
+  selectChat,
+  openCreateGroupModal,
+  closeCreateGroupModal,
+  openNewChatModal,
+  closeNewChatModal,
   // Redux selectors
   selectCurrentChat,
   selectSelectedChat,
@@ -919,4 +924,86 @@ export const useChatPage = () => {
     setShowCreateGroup,
     setShowNewChat,
   };
+};
+
+// Additional hooks for ChatPageRedux
+export const useChatManager = () => {
+  const dispatch = useDispatch();
+  const currentChat = useSelector(selectCurrentChat);
+  const selectedChatId = useSelector(selectSelectedChat)?._id;
+  const showCreateGroupModal = useSelector(selectShowCreateGroupModal);
+  const showNewChatModal = useSelector(selectShowNewChatModal);
+
+  const selectChat = useCallback((chat) => {
+    dispatch(selectChat(chat));
+  }, [dispatch]);
+
+  const openCreateGroupModal = useCallback(() => {
+    dispatch(openCreateGroupModal());
+  }, [dispatch]);
+
+  const closeCreateGroupModal = useCallback(() => {
+    dispatch(closeCreateGroupModal());
+  }, [dispatch]);
+
+  const openNewChatModal = useCallback(() => {
+    dispatch(openNewChatModal());
+  }, [dispatch]);
+
+  const closeNewChatModal = useCallback(() => {
+    dispatch(closeNewChatModal());
+  }, [dispatch]);
+
+  return {
+    currentChat,
+    selectedChatId,
+    showCreateGroupModal,
+    showNewChatModal,
+    selectChat,
+    openCreateGroupModal,
+    closeCreateGroupModal,
+    openNewChatModal,
+    closeNewChatModal,
+  };
+};
+
+export const useCreateGroupChat = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: createGroupChat,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['chats']);
+      queryClient.invalidateQueries(['groupChats']);
+      toast.success('Group chat created successfully');
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || 'Failed to create group chat');
+    },
+  });
+};
+
+export const useCreateOneToOneChat = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: getOrCreateOneToOneChat,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['chats']);
+      queryClient.invalidateQueries(['oneToOneChats']);
+      toast.success('Chat started successfully');
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || 'Failed to start chat');
+    },
+  });
+};
+
+export const useChatQuery = (chatId) => {
+  return useQuery({
+    queryKey: ['chat', chatId],
+    queryFn: () => getChatById(chatId),
+    enabled: !!chatId,
+    staleTime: 30000,
+  });
 };

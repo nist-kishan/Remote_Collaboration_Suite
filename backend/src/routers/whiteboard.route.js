@@ -3,6 +3,7 @@ import { verifyToken } from "../middleware/auth.middleware.js";
 import {
   createWhiteboard,
   getUserWhiteboards,
+  getAllWhiteboards,
   getWhiteboard,
   updateWhiteboard,
   deleteWhiteboard,
@@ -12,6 +13,9 @@ import {
   shareWhiteboardViaEmail,
   getWhiteboardPreview,
   searchWhiteboards,
+  autoSaveWhiteboard,
+  enableAutoSave,
+  getWhiteboardCollaborators,
 } from "../controllers/whiteboard.controller.js";
 
 const whiteboardRouter = Router();
@@ -22,6 +26,7 @@ whiteboardRouter.use(verifyToken);
 // Whiteboard CRUD routes
 whiteboardRouter.route("/").post(createWhiteboard);
 whiteboardRouter.route("/").get(getUserWhiteboards);
+whiteboardRouter.route("/all").get(getAllWhiteboards);
 whiteboardRouter.route("/:whiteboardId").get(getWhiteboard);
 whiteboardRouter.route("/:whiteboardId").put(updateWhiteboard);
 whiteboardRouter.route("/:whiteboardId").delete(deleteWhiteboard);
@@ -36,6 +41,13 @@ whiteboardRouter.route("/:whiteboardId/share-email").post(shareWhiteboardViaEmai
 
 // Search route
 whiteboardRouter.route("/search").get(searchWhiteboards);
+
+// Auto-save routes
+whiteboardRouter.route("/:whiteboardId/auto-save").post(autoSaveWhiteboard);
+whiteboardRouter.route("/:whiteboardId/auto-save/enable").put(enableAutoSave);
+
+// Collaboration routes
+whiteboardRouter.route("/:whiteboardId/collaborators").get(getWhiteboardCollaborators);
 
 export { whiteboardRouter };
 

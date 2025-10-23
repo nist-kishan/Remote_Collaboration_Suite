@@ -21,6 +21,8 @@ const DocumentListOptimized = ({
   onShareDocument,
   onDeleteDocument,
   onViewDocument,
+  onUploadDocument,
+  onExportDocument,
   showCreateButton = true,
   className = "" 
 }) => {
@@ -149,6 +151,8 @@ const DocumentListOptimized = ({
                   onShare={onShareDocument}
                   onDelete={onDeleteDocument}
                   onView={onViewDocument}
+                  onUpload={onUploadDocument}
+                  onExport={onExportDocument}
                   className={localViewMode === "list" ? "flex-row" : ""}
                 />
               );

@@ -56,7 +56,7 @@ export default function DocumentPreview() {
 
   const handleViewFullDocument = () => {
     if (isAuthenticated) {
-      navigate(`/documents/edit/${documentId}`);
+      navigate(`/documents/${documentId}`);
     } else {
       navigate('/login');
     }

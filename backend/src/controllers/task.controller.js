@@ -250,6 +250,20 @@ export const moveTask = asyncHandle(async (req, res) => {
 
   // Update task status
   const oldStatus = task.status;
+  
+  // Don't update if status hasn't changed
+  if (oldStatus === status) {
+    await task.populate([
+      { path: "assignedTo", select: "name email avatar" },
+      { path: "createdBy", select: "name email avatar" },
+      { path: "project", select: "name" }
+    ]);
+    
+    return res.status(200).json(
+      new ApiResponse(200, "Task is already in this status", { task })
+    );
+  }
+  
   task.status = status;
   
   // Set completion date if moving to completed
@@ -472,6 +486,8 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
     priority
   } = req.query;
 
+  console.log('🔍 getAllKanbanBoards called with userId:', userId);
+
   try {
     // First, get all projects the user has access to
     const userProjects = await Project.find({
@@ -482,9 +498,12 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
       isActive: true
     }).select('_id name description');
 
+    console.log('📋 Found projects:', userProjects.length);
+
     const projectIds = userProjects.map(project => project._id);
 
     if (projectIds.length === 0) {
+      console.log('✅ No projects found, returning empty array');
       return res.status(200).json(
         new ApiResponse(200, "No projects found", { 
           kanbanBoards: [],
@@ -518,6 +537,8 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
       ];
     }
     
+    console.log('📊 Fetching tasks with filter:', JSON.stringify(filter, null, 2));
+    
     const tasks = await Task.find(filter)
       .populate("assignedTo", "name email avatar")
       .populate("createdBy", "name email avatar")
@@ -528,6 +549,8 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
       })
       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
       .lean();
+
+    console.log('✅ Found tasks:', tasks.length);
 
     // Group tasks by project to create Kanban boards
     const kanbanBoards = userProjects.map(project => {
@@ -602,6 +625,8 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
     const totalCount = kanbanBoards.length;
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
+    console.log('✅ Returning kanban boards:', paginatedBoards.length);
+
     return res.status(200).json(
       new ApiResponse(200, "Kanban boards retrieved successfully", { 
         kanbanBoards: paginatedBoards,
@@ -616,6 +641,13 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
     );
 
   } catch (error) {
-    throw error;
+    console.error('❌ Error in getAllKanbanBoards:', error);
+    console.error('Error stack:', error.stack);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve Kanban boards',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });

@@ -20,6 +20,16 @@ export const getUserDocuments = async (params = {}) => {
   }
 };
 
+// Get all documents (for admin or public access)
+export const getAllDocuments = async (params = {}) => {
+  try {
+    const response = await ApiClient.get("/documents/all", { params });
+    return response.data;
+  } catch (error) {
+    throw error.response || error;
+  }
+};
+
 // Get a single document
 export const getDocument = async (documentId) => {
   try {
@@ -48,6 +58,42 @@ export const deleteDocument = async (documentId) => {
   } catch (error) {
     throw error.response || error;
   }
+};
+
+// Upload file to document
+export const uploadFileToDocument = async (documentId, file) => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('documentId', documentId);
+    
+    const response = await ApiClient.post(`/documents/${documentId}/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response || error;
+  }
+};
+
+// Download document in different formats
+export const downloadDocument = async (documentId, format = 'pdf') => {
+  try {
+    const response = await ApiClient.get(`/documents/${documentId}/download`, {
+      params: { format },
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response || error;
+  }
+};
+
+// Export document (legacy function for backward compatibility)
+export const exportDocument = async (documentId, format = 'pdf') => {
+  return downloadDocument(documentId, format);
 };
 
 // Share document
@@ -127,6 +173,49 @@ export const autoSaveDocument = async (documentId, content) => {
 export const enableAutoSave = async (documentId) => {
   try {
     const response = await ApiClient.post(`/documents/${documentId}/enable-autosave`);
+    return response.data;
+  } catch (error) {
+    throw error.response || error;
+  }
+};
+
+// Get document by ID (alias for getDocument)
+export const getDocumentById = getDocument;
+
+// Get document comments
+export const getDocumentComments = async (documentId) => {
+  try {
+    const response = await ApiClient.get(`/documents/${documentId}/comments`);
+    return response.data;
+  } catch (error) {
+    throw error.response || error;
+  }
+};
+
+// Add comment to document
+export const addComment = async (documentId, data) => {
+  try {
+    const response = await ApiClient.post(`/documents/${documentId}/comments`, data);
+    return response.data;
+  } catch (error) {
+    throw error.response || error;
+  }
+};
+
+// Update comment
+export const updateComment = async (documentId, commentId, data) => {
+  try {
+    const response = await ApiClient.put(`/documents/${documentId}/comments/${commentId}`, data);
+    return response.data;
+  } catch (error) {
+    throw error.response || error;
+  }
+};
+
+// Delete comment
+export const deleteComment = async (documentId, commentId) => {
+  try {
+    const response = await ApiClient.delete(`/documents/${documentId}/comments/${commentId}`);
     return response.data;
   } catch (error) {
     throw error.response || error;

@@ -7,6 +7,7 @@ import { useSocket } from './useSocket';
 import {
   // API functions
   getUserDocuments,
+  getAllDocuments,
   getDocumentById,
   createDocument,
   updateDocument,
@@ -21,20 +22,13 @@ import {
   getDocumentComments,
   addComment,
   updateComment,
-  deleteComment
+  deleteComment,
+  uploadFileToDocument,
+  exportDocument,
+  downloadDocument
 } from '../api/documentApi';
 import {
   // Redux actions
-  fetchDocuments,
-  fetchDocument,
-  createNewDocument,
-  updateDocumentThunk,
-  deleteDocumentThunk,
-  shareDocumentThunk,
-  updateCollaboratorRoleThunk,
-  removeCollaboratorThunk,
-  shareDocumentViaEmailThunk,
-  searchDocumentsThunk,
   setActiveTab,
   setViewMode,
   setSearchQuery,
@@ -77,6 +71,7 @@ import {
  * Combines: useDocument, useDocumentCollaboration, useAutoSave
  */
 export const useDocument = (documentId = null, params = {}) => {
+  const { shouldNavigateAfterCreate = false } = params;
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -102,6 +97,18 @@ export const useDocument = (documentId = null, params = {}) => {
   const activeTab = useSelector(selectActiveTab);
   const viewMode = useSelector(selectViewMode);
 
+  // Build query parameters for API call
+  const queryParams = {
+    type: activeTab === 'all' ? undefined : activeTab,
+    search: searchQuery || undefined,
+    ...Object.fromEntries(
+      Object.entries(searchFilters).filter(([key, value]) => value && value !== '')
+    ),
+    ...params
+  };
+
+  console.log('🔧 Query Parameters:', queryParams);
+
   // Local state for collaboration and auto-save
   const [activeCollaborators, setActiveCollaborators] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -120,11 +127,47 @@ export const useDocument = (documentId = null, params = {}) => {
 
   // Fetch documents with React Query
   const { data: documentsData, isLoading: isLoadingDocuments, error: documentsQueryError, refetch: refetchDocuments } = useQuery({
-    queryKey: ['documents', params],
-    queryFn: () => getUserDocuments(params),
+    queryKey: ['documents', queryParams],
+    queryFn: () => {
+      console.log('🔍 API Call - getUserDocuments with params:', queryParams);
+      return getUserDocuments(queryParams);
+    },
     enabled: !!user,
     staleTime: 30000,
     refetchOnWindowFocus: false,
+    onSuccess: (data) => {
+      console.log('✅ API Success - getUserDocuments response:', data);
+    },
+    onError: (error) => {
+      console.error('❌ API Error - getUserDocuments failed:', error);
+    }
+  });
+
+  // React Query for all documents (admin function)
+  const {
+    data: allDocumentsData,
+    isLoading: allDocumentsLoading,
+    error: allDocumentsError,
+    refetch: refetchAllDocuments
+  } = useQuery({
+    queryKey: ['allDocuments', activeTab, searchQuery],
+    queryFn: () => {
+      const params = { 
+        type: activeTab === 'all' ? undefined : activeTab,
+        search: searchQuery || undefined
+      };
+      console.log('🔍 All Documents API Call - getAllDocuments with params:', params);
+      return getAllDocuments(params);
+    },
+    staleTime: 30000, // 30 seconds
+    cacheTime: 5 * 60 * 1000, // 5 minutes
+    enabled: false, // Only fetch when explicitly called
+    onSuccess: (data) => {
+      console.log('✅ All Documents API Success - getAllDocuments response:', data);
+    },
+    onError: (error) => {
+      console.error('❌ All Documents API Error - getAllDocuments failed:', error);
+    }
   });
 
   const { data: documentData, isLoading: isLoadingDocument, error: documentQueryError } = useQuery({
@@ -143,25 +186,42 @@ export const useDocument = (documentId = null, params = {}) => {
 
   // Mutations
   const createDocumentMutation = useMutation({
-    mutationFn: (documentData) => createDocument(documentData),
+    mutationFn: (documentData) => {
+      console.log('🔄 API Call - createDocument:', documentData);
+      return createDocument(documentData);
+    },
     onSuccess: (data) => {
+      console.log('✅ API Success - createDocument:', data);
       queryClient.invalidateQueries(['documents']);
+      queryClient.invalidateQueries(['allDocuments']);
+      queryClient.invalidateQueries(['getAllDocuments']);
       toast.success('Document created successfully!');
-      navigate(`/documents/edit/${data.data.document._id}`);
+      // Navigate only if shouldNavigateAfterCreate is true (for /documents/new route)
+      if (shouldNavigateAfterCreate) {
+        navigate(`/documents/${data.data.document._id}`);
+      }
     },
     onError: (error) => {
+      console.error('❌ API Error - createDocument failed:', error);
       toast.error(error?.response?.data?.message || 'Failed to create document');
     },
   });
 
   const updateDocumentMutation = useMutation({
-    mutationFn: ({ documentId, data }) => updateDocument(documentId, data),
+    mutationFn: ({ documentId, data }) => {
+      console.log('🔄 API Call - updateDocument:', { documentId, data });
+      return updateDocument(documentId, data);
+    },
     onSuccess: (data, variables) => {
+      console.log('✅ API Success - updateDocument:', data);
       queryClient.invalidateQueries(['documents']);
+      queryClient.invalidateQueries(['allDocuments']);
+      queryClient.invalidateQueries(['getAllDocuments']);
       queryClient.invalidateQueries(['document', variables.documentId]);
       toast.success('Document updated successfully!');
     },
     onError: (error) => {
+      console.error('❌ API Error - updateDocument failed:', error);
       toast.error(error?.response?.data?.message || 'Failed to update document');
     },
   });
@@ -170,6 +230,8 @@ export const useDocument = (documentId = null, params = {}) => {
     mutationFn: (documentId) => deleteDocument(documentId),
     onSuccess: () => {
       queryClient.invalidateQueries(['documents']);
+      queryClient.invalidateQueries(['allDocuments']);
+      queryClient.invalidateQueries(['getAllDocuments']);
       toast.success('Document deleted successfully!');
       navigate('/documents');
     },
@@ -448,16 +510,30 @@ export const useDocument = (documentId = null, params = {}) => {
 
   // Document management functions
   const handleFetchDocuments = useCallback((params = {}) => {
-    dispatch(fetchDocuments(params));
-  }, [dispatch]);
+    // This is now handled by React Query automatically
+    refetchDocuments();
+  }, [refetchDocuments]);
 
   const handleFetchDocument = useCallback((id) => {
-    dispatch(fetchDocument(id));
-  }, [dispatch]);
+    // This is now handled by React Query automatically
+    // The document will be fetched when documentId changes
+  }, []);
 
   const handleCreateDocument = useCallback((documentData) => {
     createDocumentMutation.mutate(documentData);
   }, [createDocumentMutation]);
+
+  const handleViewDocument = useCallback((document) => {
+    if (document?._id) {
+      navigate(`/documents/${document._id}`);
+    }
+  }, [navigate]);
+
+  const handleEditDocument = useCallback((document) => {
+    if (document?._id) {
+      navigate(`/documents/${document._id}`);
+    }
+  }, [navigate]);
 
   const handleUpdateDocument = useCallback((documentId, documentData) => {
     updateDocumentMutation.mutate({ documentId, data: documentData });
@@ -494,6 +570,39 @@ export const useDocument = (documentId = null, params = {}) => {
   const handleDeleteComment = useCallback((documentId, commentId) => {
     deleteCommentMutation.mutate({ documentId, commentId });
   }, [deleteCommentMutation]);
+
+  const handleUploadFile = useCallback(async (documentId, file) => {
+    try {
+      const result = await uploadFileToDocument(documentId, file);
+      toast.success('File uploaded successfully!');
+      queryClient.invalidateQueries(['document', documentId]);
+      return result;
+    } catch (error) {
+      toast.error('Failed to upload file');
+      throw error;
+    }
+  }, [queryClient]);
+
+  const handleExportDocument = useCallback(async (documentId, format = 'pdf') => {
+    try {
+      const blob = await exportDocument(documentId, format);
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `document-${documentId}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`Document exported as ${format.toUpperCase()} successfully!`);
+    } catch (error) {
+      toast.error('Failed to export document');
+      throw error;
+    }
+  }, []);
 
   const handleCloseShareModal = useCallback(() => {
     dispatch(closeShareModal());
@@ -538,8 +647,10 @@ export const useDocument = (documentId = null, params = {}) => {
   }, [dispatch]);
 
   const handleSearch = useCallback((params) => {
-    dispatch(searchDocumentsThunk(params));
-  }, [dispatch]);
+    // Search is now handled by React Query automatically
+    // You can implement search by updating the query key or using a separate search query
+    console.log('Search functionality moved to React Query');
+  }, []);
 
   // Document permissions
   const getDocumentPermissions = useCallback((document, currentUser) => {
@@ -670,6 +781,29 @@ export const useDocument = (documentId = null, params = {}) => {
   const documentDetails = apiDocumentData?.data?.document;
   const commentsList = apiCommentsData?.data?.comments || [];
 
+  // Debug logging
+  console.log('useDocument Debug:', {
+    documentsData,
+    apiDocumentsData,
+    documentsList,
+    documentsListLength: documentsList?.length,
+    isLoadingDocuments,
+    documentsQueryError,
+    user: user?._id,
+    queryParams
+  });
+  
+  // More detailed API response logging
+  if (apiDocumentsData) {
+    console.log('📊 API Response Details:', {
+      success: apiDocumentsData.success,
+      message: apiDocumentsData.message,
+      data: apiDocumentsData.data,
+      documentsCount: apiDocumentsData.data?.documents?.length,
+      pagination: apiDocumentsData.data?.pagination
+    });
+  }
+
   // Return consolidated interface
   return {
     // State
@@ -713,11 +847,11 @@ export const useDocument = (documentId = null, params = {}) => {
     searchError,
     
     // Operations state
-    isCreating: operations.creating || createDocumentMutation.isPending,
-    isUpdating: operations.updating || updateDocumentMutation.isPending,
-    isDeleting: operations.deleting || deleteDocumentMutation.isPending,
-    isSharing: operations.sharing || shareDocumentMutation.isPending,
-    isEmailSharing: operations.emailSharing || shareViaEmailMutation.isPending,
+    isCreating: operations?.creating || createDocumentMutation.isPending,
+    isUpdating: operations?.updating || updateDocumentMutation.isPending,
+    isDeleting: operations?.deleting || deleteDocumentMutation.isPending,
+    isSharing: operations?.sharing || shareDocumentMutation.isPending,
+    isEmailSharing: operations?.emailSharing || shareViaEmailMutation.isPending,
     
     // Search state
     searchResults,
@@ -728,6 +862,8 @@ export const useDocument = (documentId = null, params = {}) => {
     handleFetchDocuments,
     handleFetchDocument,
     handleCreateDocument,
+    handleViewDocument,
+    handleEditDocument,
     handleUpdateDocument,
     handleDeleteDocument,
     handleShareDocument,
@@ -737,6 +873,8 @@ export const useDocument = (documentId = null, params = {}) => {
     handleAddComment,
     handleUpdateComment,
     handleDeleteComment,
+    handleUploadFile,
+    handleExportDocument,
     handleCloseShareModal,
     handleClearErrors,
     
@@ -774,6 +912,13 @@ export const useDocument = (documentId = null, params = {}) => {
     // Utility functions
     getDocumentPermissions,
     refetchDocuments,
+    refetchAllDocuments,
+    
+    // All documents functions
+    allDocuments: allDocumentsData?.data?.documents || [],
+    allDocumentsLoading,
+    allDocumentsError,
+    fetchAllDocuments: refetchAllDocuments,
     
     // Mutation states
     isCreatingDocument: createDocumentMutation.isPending,

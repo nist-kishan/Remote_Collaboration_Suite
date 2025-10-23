@@ -85,6 +85,37 @@ const documentSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Collaboration settings
+    collaborationSettings: {
+      autoSave: {
+        type: Boolean,
+        default: true,
+      },
+      autoSaveInterval: {
+        type: Number,
+        default: 30000, // 30 seconds
+      },
+      allowAnonymousView: {
+        type: Boolean,
+        default: false,
+      },
+      maxCollaborators: {
+        type: Number,
+        default: 50,
+      },
+      allowComments: {
+        type: Boolean,
+        default: true,
+      },
+      allowReactions: {
+        type: Boolean,
+        default: true,
+      },
+      requireApprovalForJoin: {
+        type: Boolean,
+        default: false,
+      },
+    },
   },
   { timestamps: true }
 );

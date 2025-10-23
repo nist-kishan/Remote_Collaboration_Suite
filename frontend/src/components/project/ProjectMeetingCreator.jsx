@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { meetingApi } from '../../api/meetingApi';
 import { projectApi } from '../../api/projectApi';
 import Button from '../ui/Button';
-import Modal from '../ui/Modal';
+import CustomModal from '../ui/CustomModal';
 
 const CreateMeetingModal = ({ isOpen, onClose, projectId }) => {
   const queryClient = useQueryClient();
@@ -128,7 +128,7 @@ const CreateMeetingModal = ({ isOpen, onClose, projectId }) => {
   if (!isOpen) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose}>
+    <CustomModal isOpen={isOpen} onClose={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
@@ -392,7 +392,7 @@ const CreateMeetingModal = ({ isOpen, onClose, projectId }) => {
           </div>
         </form>
       </div>
-    </Modal>
+    </CustomModal>
   );
 };
 

@@ -22,7 +22,7 @@ import VideoCall from "./pages/VideoCall";
 import VideoCallReceiver from "./pages/VideoCallReceiver";
 import VideoCallCaller from "./pages/VideoCallCaller";
 import VideoCallEnded from "./pages/VideoCallEnded";
-import DocumentPreviewModal from "./components/documents/DocumentPreviewModal";
+import DocumentPreview from "./components/documents/DocumentPreviewModal";
 import DocumentsList from "./pages/documents/DocumentsList";
 import NewDocument from "./pages/documents/NewDocument";
 import EditDocument from "./pages/documents/EditDocument";
@@ -35,10 +35,12 @@ import Whiteboard from "./pages/Whiteboard";
 import ChatPage from "./pages/ChatPage";
 import CallHistoryPage from "./pages/CallHistoryPage";
 import MediaViewerPage from "./pages/MediaViewerPage";
-// import WorkspaceListGrid from "./components/workspace/WorkspaceListGrid";
-// import WorkspacePage from "./pages/workspace/WorkspacePage";
-// import ProjectPage from "./pages/project/ProjectPage";
-// import AllProjectsPage from "./pages/AllProjectsPage";
+import MeetingsList from "./pages/meetings/MeetingsList";
+import MeetingRoom from "./pages/meetings/MeetingRoom";
+import WorkspaceListGrid from "./components/workspace/WorkspaceListGrid";
+import WorkspacePage from "./pages/workspace/WorkspacePage";
+import ProjectPage from "./pages/project/ProjectPage";
+import AllProjectsPage from "./pages/AllProjectsPage";
 import { useCurrentUser } from "./hook/useAuth";
 import { useDispatch, useSelector } from "react-redux";
 import { clearUser, setUser } from "./store/slice/authSlice";
@@ -142,33 +144,37 @@ export default function App() {
             <Route path="/media/:chatId/:messageId" element={<MediaViewerPage />} />
 
             {/* ==================== DOCUMENT MANAGEMENT ==================== */}
-            {/* <Route path="/documents" element={<DocumentsList />} />
+            <Route path="/documents" element={<DocumentsList />} />
             <Route path="/documents/new" element={<NewDocument />} />
-            <Route path="/documents/edit/:documentId" element={<EditDocument />} />
+            <Route path="/documents/:documentId" element={<EditDocument />} />
             <Route path="/documents/shared" element={<SharedDocumentsList />} />
             <Route path="/documents/shared/:documentId" element={<SharedDocument />} />
-            <Route path="/documents/preview/:documentId" element={<DocumentPreview />} /> */}
+            <Route path="/documents/preview/:documentId" element={<DocumentPreview />} />
 
             {/* ==================== WHITEBOARD COLLABORATION ==================== */}
-            {/* <Route path="/boards" element={<WhiteboardsList />} />
+            <Route path="/boards" element={<WhiteboardsList />} />
             <Route path="/boards/new" element={<NewWhiteboard />} />
             <Route path="/boards/:whiteboardId" element={<WhiteboardEditor />} />
             <Route path="/boards/shared/:whiteboardId" element={<WhiteboardEditor />} />
-            <Route path="/whiteboard" element={<Whiteboard />} /> */}
+            <Route path="/whiteboard" element={<Whiteboard />} />
+
+            {/* ==================== MEETING MANAGEMENT ==================== */}
+            <Route path="/meetings" element={<MeetingsList />} />
+            <Route path="/meeting/:meetingId" element={<MeetingRoom />} />
 
             {/* ==================== WORKSPACE & PROJECT MANAGEMENT ==================== */}
             {/* Workspace Management */}
-            {/* <Route path="/workspaces" element={<WorkspaceListGrid />} />
-            <Route path="/workspace/:workspaceId" element={<WorkspacePage />} /> */}
+            <Route path="/workspaces" element={<WorkspaceListGrid />} />
+            <Route path="/workspace/:workspaceId" element={<WorkspacePage />} />
 
             {/* Project Management */}
-            {/* <Route path="/projects" element={<AllProjectsPage />} />
+            <Route path="/projects" element={<AllProjectsPage />} />
             <Route path="/workspace/:workspaceId/projects/:projectId" element={<ProjectPage />} />
             <Route path="/workspace/:workspaceId/projects/:projectId/board" element={<ProjectPage />} />
-            <Route path="/workspace/:workspaceId/projects/:projectId/tasks/:taskId" element={<ProjectPage />} /> */}
+            <Route path="/workspace/:workspaceId/projects/:projectId/tasks/:taskId" element={<ProjectPage />} />
             {/* Meeting Management */}
-            {/* <Route path="/workspace/:workspaceId/projects/:projectId/meetings" element={<ProjectPage />} />
-            <Route path="/workspace/:workspaceId/projects/:projectId/meetings/:meetingId" element={<ProjectPage />} /> */}
+            <Route path="/workspace/:workspaceId/projects/:projectId/meetings" element={<ProjectPage />} />
+            <Route path="/workspace/:workspaceId/projects/:projectId/meetings/:meetingId" element={<ProjectPage />} />
           </Route>
         </Route>
 

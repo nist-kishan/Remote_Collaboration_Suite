@@ -9,8 +9,8 @@ import {
   ToggleRight
 } from "lucide-react";
 import Button from "../ui/Button";
-import Container from "../ui/Container";
-import AutoSaveIndicator from "./AutoSaveIndicator";
+import Container from "../ui/CustomContainer";
+import AutoSaveIndicator from "./DocumentAutoSaveIndicator";
 
 const DocumentHeader = ({
   document,
