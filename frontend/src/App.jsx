@@ -95,7 +95,7 @@ export default function App() {
     }
   }, [isSuccess, isError, data, dispatch, query.error?.response?.status, isAuthPage]);
 
-  if (loading) return <ApplicationLoadingSpinner message="Initializing application..." />;
+  if (loading && !isAuthPage) return <ApplicationLoadingSpinner message="Initializing application..." />;
 
   return (
     <AuthRouteGuard>

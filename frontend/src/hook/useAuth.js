@@ -151,17 +151,22 @@ export const useCurrentUser = () => {
       return failureCount < 1;
     },
     retryDelay: 1000,
-    enabled: true, // Always run to check authentication status
+    enabled: !isAuthPage, // Don't run on auth pages to prevent interference
   });
 
   // Update Redux loading state based on query status
   useEffect(() => {
-    if (query.isLoading) {
-      dispatch(setLoading(true));
-    } else if (query.isSuccess || query.isError) {
+    if (!isAuthPage) {
+      if (query.isLoading) {
+        dispatch(setLoading(true));
+      } else if (query.isSuccess || query.isError) {
+        dispatch(setLoading(false));
+      }
+    } else {
+      // For auth pages, ensure loading is false
       dispatch(setLoading(false));
     }
-  }, [query.isLoading, query.isSuccess, query.isError, dispatch]);
+  }, [query.isLoading, query.isSuccess, query.isError, dispatch, isAuthPage]);
 
   return query;
 };

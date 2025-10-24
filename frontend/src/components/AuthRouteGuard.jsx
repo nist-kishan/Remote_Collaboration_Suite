@@ -18,8 +18,8 @@ const AuthRouteGuard = ({ children }) => {
     if (!loading) {
       if (isAuthenticated && user) {
         // User is logged in
-        if (isPublicRoute) {
-          // If logged in and trying to access public routes, redirect to dashboard
+        if (isPublicRoute && !location.pathname.startsWith('/reset-password/')) {
+          // If logged in and trying to access public routes (except reset password), redirect to dashboard
           navigate('/', { replace: true });
         }
       } else {
@@ -32,13 +32,13 @@ const AuthRouteGuard = ({ children }) => {
     }
   }, [isAuthenticated, user, loading, isPublicRoute, navigate, location.pathname]);
 
-  // Show loading while authentication is being checked
-  if (loading) {
+  // Show loading while authentication is being checked (but not on reset password pages)
+  if (loading && !location.pathname.startsWith('/reset-password/')) {
     return <ApplicationLoadingSpinner message="Checking authentication..." />;
   }
 
-  // If user is authenticated and on public route, show loading while redirecting
-  if (isAuthenticated && user && isPublicRoute) {
+  // If user is authenticated and on public route (except reset password), show loading while redirecting
+  if (isAuthenticated && user && isPublicRoute && !location.pathname.startsWith('/reset-password/')) {
     return <ApplicationLoadingSpinner message="Redirecting to dashboard..." />;
   }
 

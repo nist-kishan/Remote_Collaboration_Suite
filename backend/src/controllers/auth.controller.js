@@ -270,7 +270,7 @@ export const resetPasswordHandler = asyncHandle(async (req, res) => {
 
   await user.save({ validateBeforeSave: false });
 
-  const frontUrl = process.env.FRONTEND_URI
+  const frontUrl = process.env.FRONTEND_URI;
   const resetUrl = `${frontUrl}/reset-password/${resetToken}`;
 
   try {
