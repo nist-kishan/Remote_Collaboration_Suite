@@ -60,7 +60,6 @@ documentRouter.route("/:documentId/share").post(shareDocument);
 documentRouter.route("/:documentId/collaborators/:userId/role").put(updateCollaboratorRole);
 documentRouter.route("/:documentId/collaborators/:userId").delete(removeCollaborator);
 
-
 // Email sharing route
 documentRouter.route("/:documentId/share-email").post(shareDocumentViaEmail);
 

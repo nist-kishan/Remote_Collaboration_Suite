@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Task } from "../models/task.model.js";
 import { Project } from "../models/project.model.js";
+import { Notification } from "../models/notification.model.js";
 import User from "../models/user.model.js";
 import mongoose from "mongoose";
 
@@ -82,6 +83,11 @@ export const getProjectTasks = asyncHandle(async (req, res) => {
   const { projectId } = req.params;
   const userId = req.user._id;
 
+  // Pagination parameters
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 50;
+  const skip = (page - 1) * limit;
+
   // Check if project exists and user has access
   const project = await Project.findById(projectId);
   if (!project) {
@@ -101,6 +107,12 @@ export const getProjectTasks = asyncHandle(async (req, res) => {
   // Build filter
   const filter = { project: projectId };
 
+  // Filter tasks based on role
+  if (teamMember.role === 'employee') {
+    // Employees can only see their own tasks
+    filter.assignedTo = userId;
+  }
+
   if (status) filter.status = status;
   if (assignedTo) filter.assignedTo = assignedTo;
   if (priority) filter.priority = priority;
@@ -112,11 +124,18 @@ export const getProjectTasks = asyncHandle(async (req, res) => {
     ];
   }
 
+  // Get total count
+  const totalTasks = await Task.countDocuments(filter);
+
+  // Get paginated tasks
   const tasks = await Task.find(filter)
     .populate("assignedTo", "name email avatar")
     .populate("createdBy", "name email avatar")
     .populate("project", "name")
-    .sort({ createdAt: -1 });
+    .populate("comments.user", "name email avatar")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
 
   // Group tasks by status for Kanban board
   const kanbanData = {
@@ -126,11 +145,21 @@ export const getProjectTasks = asyncHandle(async (req, res) => {
     done: tasks.filter(task => task.status === "completed")
   };
 
+  const totalPages = Math.ceil(totalTasks / limit);
+
   return res.status(200).json(
     new ApiResponse(200, "Tasks retrieved successfully", { 
       tasks,
       kanbanData,
-      total: tasks.length
+      total: totalTasks,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalCount: totalTasks,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        limit
+      }
     })
   );
 });
@@ -193,8 +222,19 @@ export const updateTask = asyncHandle(async (req, res) => {
     type,
     estimatedHours,
     dueDate,
-    tags
+    tags,
+    status
   } = req.body;
+
+  // Check if user can edit this task
+  // Employees cannot edit task data (title, description, etc.)
+  // But everyone can change status under certain conditions
+  const hasOtherUpdates = title || description !== undefined || assignedTo || priority || type || 
+                          estimatedHours !== undefined || dueDate || tags;
+  
+  if (hasOtherUpdates && teamMember.role === 'employee') {
+    throw new ApiError(403, "Employees cannot edit tasks");
+  }
 
   const updateData = {};
   if (title) updateData.title = title;
@@ -205,6 +245,28 @@ export const updateTask = asyncHandle(async (req, res) => {
   if (estimatedHours !== undefined) updateData.estimatedHours = estimatedHours;
   if (dueDate) updateData.dueDate = new Date(dueDate);
   if (tags) updateData.tags = tags;
+  
+  // Handle status update with validation
+  if (status) {
+    // Prevent moving completed tasks to other states
+    if (task.status === "completed" && status !== "completed") {
+      throw new ApiError(400, "Cannot change status of completed tasks");
+    }
+    
+    // For todo and in_progress status, only allow if task is unassigned OR assigned to current user
+    if (task.status === "todo" || task.status === "in_progress") {
+      if (task.assignedTo && task.assignedTo.toString() !== userId.toString()) {
+        throw new ApiError(403, "You can only change status of tasks assigned to you or unassigned tasks");
+      }
+    }
+    
+    // Check if task is assigned for in_progress status
+    if (status === "in_progress" && !task.assignedTo && !assignedTo) {
+      throw new ApiError(400, "Task must be assigned before moving to in progress");
+    }
+    
+    updateData.status = status;
+  }
 
   const updatedTask = await Task.findByIdAndUpdate(
     taskId,
@@ -248,6 +310,34 @@ export const moveTask = asyncHandle(async (req, res) => {
     throw new ApiError(400, "Invalid status");
   }
 
+  // Prevent moving completed tasks to other states
+  if (task.status === "completed" && status !== "completed") {
+    throw new ApiError(400, "Cannot change status of completed tasks");
+  }
+
+  // Only the assigned user can move task from todo to in_progress
+  if (task.status === "todo" && status === "in_progress") {
+    if (!task.assignedTo) {
+      throw new ApiError(400, "Task must be assigned before it can be started");
+    }
+    if (task.assignedTo.toString() !== userId.toString()) {
+      throw new ApiError(403, "Only the assigned user can start the task");
+    }
+  }
+
+  // Check if task is assigned for any status change
+  if (status === "in_progress" && !task.assignedTo) {
+    throw new ApiError(400, "Task must be assigned before moving to in progress");
+  }
+
+  // Check permissions for review actions
+  if (status === "completed") {
+    // Only owner, hr, and mr can complete tasks
+    if (!["owner", "hr", "mr"].includes(teamMember.role)) {
+      throw new ApiError(403, "Only owner, HR, and MR can approve task completion");
+    }
+  }
+
   // Update task status
   const oldStatus = task.status;
   
@@ -269,14 +359,36 @@ export const moveTask = asyncHandle(async (req, res) => {
   // Set completion date if moving to completed
   if (status === "completed" && oldStatus !== "completed") {
     task.completedAt = new Date();
-  } else if (status !== "completed" && oldStatus === "completed") {
-    task.completedAt = undefined;
+    
+    // Create notification for task completion
+    if (project) {
+      // Notify project owner and team members
+      const projectOwner = project.projectManager || project.team.find(m => m.role === 'owner')?.user;
+      const teamMembers = project.team.map(m => m.user).filter(userId => userId.toString() !== userId.toString());
+      
+      // Notify project owner
+      if (projectOwner) {
+        await Notification.createProjectNotification(
+          projectOwner,
+          project,
+          "task_completed",
+          { taskId: task._id, taskTitle: task.title }
+        );
+      }
+      
+      // Notify all team members
+      const notificationPromises = teamMembers.map(memberId => 
+        Notification.createProjectNotification(
+          memberId,
+          project,
+          "task_completed",
+          { taskId: task._id, taskTitle: task.title }
+        )
+      );
+      await Promise.all(notificationPromises);
+    }
   }
 
-  await task.save();
-
-  // Add comment about status change
-  task.addComment(userId, `Status changed from ${oldStatus} to ${status}`);
   await task.save();
 
   await task.populate([
@@ -310,9 +422,9 @@ export const deleteTask = asyncHandle(async (req, res) => {
     throw new ApiError(403, "You don't have access to this task");
   }
 
-  // Check if user can delete task (only owner, hr, mr can delete)
-  if (!["owner", "hr", "mr"].includes(teamMember.role)) {
-    throw new ApiError(403, "You don't have permission to delete this task");
+  // Check if user can delete task (only owner and hr can delete)
+  if (!["owner", "hr"].includes(teamMember.role)) {
+    throw new ApiError(403, "Only owner and HR can delete tasks");
   }
 
   await Task.findByIdAndDelete(taskId);
@@ -486,8 +598,6 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
     priority
   } = req.query;
 
-  console.log('🔍 getAllKanbanBoards called with userId:', userId);
-
   try {
     // First, get all projects the user has access to
     const userProjects = await Project.find({
@@ -498,12 +608,9 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
       isActive: true
     }).select('_id name description');
 
-    console.log('📋 Found projects:', userProjects.length);
-
     const projectIds = userProjects.map(project => project._id);
 
     if (projectIds.length === 0) {
-      console.log('✅ No projects found, returning empty array');
       return res.status(200).json(
         new ApiResponse(200, "No projects found", { 
           kanbanBoards: [],
@@ -537,8 +644,6 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
       ];
     }
     
-    console.log('📊 Fetching tasks with filter:', JSON.stringify(filter, null, 2));
-    
     const tasks = await Task.find(filter)
       .populate("assignedTo", "name email avatar")
       .populate("createdBy", "name email avatar")
@@ -549,8 +654,6 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
       })
       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
       .lean();
-
-    console.log('✅ Found tasks:', tasks.length);
 
     // Group tasks by project to create Kanban boards
     const kanbanBoards = userProjects.map(project => {
@@ -625,8 +728,6 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
     const totalCount = kanbanBoards.length;
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
-    console.log('✅ Returning kanban boards:', paginatedBoards.length);
-
     return res.status(200).json(
       new ApiResponse(200, "Kanban boards retrieved successfully", { 
         kanbanBoards: paginatedBoards,
@@ -641,8 +742,6 @@ export const getAllKanbanBoards = asyncHandle(async (req, res) => {
     );
 
   } catch (error) {
-    console.error('❌ Error in getAllKanbanBoards:', error);
-    console.error('Error stack:', error.stack);
     return res.status(500).json({
       success: false,
       message: 'Failed to retrieve Kanban boards',

@@ -21,10 +21,10 @@ import ProjectDashboard from "../../components/project/ProjectDashboard";
 import ProjectMemberList from "../../components/project/ProjectMemberList";
 import ProjectMeetingList from "../../components/project/ProjectMeetingList";
 import ProjectSettings from "../../components/project/ProjectSettings";
-import ProjectProgress from "../../components/project/ProjectProgress";
 import ProjectBudget from "../../components/project/ProjectBudget";
 import ProjectDocuments from "../../components/project/ProjectDocuments";
 import ProjectEditModal from "../../components/project/ProjectEditModal";
+import BudgetRequestList from "../../components/project/BudgetRequestList";
 import { useSelector } from "react-redux";
 import { canPerformProjectAction } from "../../utils/roleUtils";
 
@@ -35,8 +35,6 @@ const ProjectPage = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const currentUser = useSelector((state) => state.auth.user);
 
-  console.log('ProjectPage params:', { workspaceId, projectId });
-
   // Fetch project
   const {
     data: projectData,
@@ -45,7 +43,6 @@ const ProjectPage = () => {
   } = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => {
-      console.log('Calling getProject with projectId:', projectId);
       return projectApi.getProject(projectId);
     },
     enabled: !!projectId && projectId !== ':projectId',
@@ -66,6 +63,7 @@ const ProjectPage = () => {
     { id: "members", label: "Members", icon: Users, show: true },
     { id: "meetings", label: "Meetings", icon: Calendar, show: true },
     { id: "documents", label: "Documents", icon: FileText, show: true },
+    { id: "budget-requests", label: "Budget Requests", icon: DollarSign, show: true },
     { id: "settings", label: "Settings", icon: Settings, show: canChangeSettings },
   ].filter(tab => tab.show);
 
@@ -110,7 +108,6 @@ const ProjectPage = () => {
           <div className="space-y-4 sm:space-y-6">
             <ProjectDashboard project={project} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <ProjectProgress project={project} />
               <ProjectBudget project={project} />
             </div>
           </div>
@@ -128,6 +125,9 @@ const ProjectPage = () => {
       case "documents":
         return <ProjectDocuments project={project} canManageCollaborators={canManageCollaborators} />;
 
+      case "budget-requests":
+        return <BudgetRequestList project={project} />;
+
       case "settings":
         return <ProjectSettings project={project} canChangeSettings={canChangeSettings} />;
 
@@ -136,7 +136,6 @@ const ProjectPage = () => {
           <div className="space-y-4 sm:space-y-6">
             <ProjectDashboard project={project} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <ProjectProgress project={project} />
               <ProjectBudget project={project} />
             </div>
           </div>

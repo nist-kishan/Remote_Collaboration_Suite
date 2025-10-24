@@ -30,6 +30,10 @@ export default function SharedDocumentsList() {
     toast('Share functionality will be available in the document editor');
   };
 
+  const handleCollaborateDocument = (document) => {
+    toast('Collaboration functionality will be available in the document editor');
+  };
+
   const handleDeleteDocument = (document) => {
     toast('You cannot delete documents shared with you');
   };
@@ -98,6 +102,7 @@ export default function SharedDocumentsList() {
               onShareDocument={handleShareDocument}
               onDeleteDocument={handleDeleteDocument}
               onViewDocument={handleViewDocument}
+              onCollaborateDocument={handleCollaborateDocument}
               showCreateButton={false}
             />
           ) : (

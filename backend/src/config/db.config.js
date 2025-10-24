@@ -23,7 +23,7 @@ export const DbConnection = async () => {
     });
 
     mongoose.connection.on('error', (err) => {
-      console.error('❌ MongoDB connection error:', err.message);
+      // Error handled by connection retry logic
     });
 
     mongoose.connection.on('disconnected', () => {
@@ -34,8 +34,7 @@ export const DbConnection = async () => {
 
     // Database connected successfully
   } catch (err) {
-    console.error('❌ Database connection failed:', err.message);
-    // Don't exit immediately, let the app try to reconnect
+    // Retry connection automatically
     setTimeout(() => {
       DbConnection();
     }, parseInt(process.env.DB_RECONNECT_INTERVAL) || 5000);

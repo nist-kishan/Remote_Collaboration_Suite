@@ -19,6 +19,7 @@ const WhiteboardList = ({
   onCreateWhiteboard,
   onEditWhiteboard,
   onShareWhiteboard,
+  onCollaborateWhiteboard,
   onDeleteWhiteboard,
   onViewWhiteboard,
   showCreateButton = true,
@@ -64,7 +65,6 @@ const WhiteboardList = ({
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <CustomInput
                 placeholder="Search whiteboards..."
                 value={searchTerm}
@@ -146,6 +146,7 @@ const WhiteboardList = ({
                   currentUser={currentUser}
                   onEdit={onEditWhiteboard}
                   onShare={onShareWhiteboard}
+                  onCollaborate={onCollaborateWhiteboard}
                   onDelete={onDeleteWhiteboard}
                   onView={onViewWhiteboard}
                   className={localViewMode === "list" ? "flex-row" : ""}

@@ -42,7 +42,6 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated, onCreateGroup }) => {
     createChatMutation.mutate(user._id);
   };
 
-
   if (!isOpen) return null;
 
   return (
@@ -65,7 +64,6 @@ const NewChatModal = ({ isOpen, onClose, onChatCreated, onCreateGroup }) => {
             <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
         </div>
-
 
         {/* User Search */}
         <div className="p-6">

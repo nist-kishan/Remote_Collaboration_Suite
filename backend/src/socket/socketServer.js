@@ -21,7 +21,6 @@ class SocketServer {
     // Remove duplicates and filter out undefined values
     const uniqueOrigins = [...new Set(corsOrigins.filter(Boolean))];
 
-
     this.io = new Server(server, {
       cors: {
         origin: function (origin, callback) {
@@ -31,7 +30,6 @@ class SocketServer {
           if (uniqueOrigins.includes(origin)) {
             callback(null, true);
           } else {
-            console.warn('🚫 Socket.IO CORS blocked origin:', origin);
             callback(new Error('Not allowed by CORS'));
           }
         },
@@ -112,7 +110,6 @@ class SocketServer {
       try {
         await waitForConnection();
       } catch (error) {
-        console.error('❌ Database not ready for socket operations:', error.message);
         socket.emit('error', { message: 'Database not ready' });
         return;
       }
@@ -152,8 +149,7 @@ class SocketServer {
         }
         
       } catch (error) {
-        console.error('Error updating user online status:', error);
-      }
+        }
       
       // Send connection confirmation
       socket.emit('connection_confirmed', {
@@ -196,8 +192,7 @@ class SocketServer {
             });
           }
         } catch (error) {
-          console.error('Error handling user online:', error);
-        }
+          }
       });
 
       // Handle user offline status (with throttling)
@@ -232,8 +227,7 @@ class SocketServer {
             });
           }
         } catch (error) {
-          console.error('Error handling user offline:', error);
-        }
+          }
       });
 
       // Handle get online users request (with throttling)
@@ -268,8 +262,7 @@ class SocketServer {
             timestamp: new Date()
           });
         } catch (error) {
-          console.error('Error getting online users:', error);
-        }
+          }
       });
 
       // Join whiteboard room
@@ -428,6 +421,84 @@ class SocketServer {
         }
       });
 
+      // Handle whiteboard real-time updates for collaborative editing
+      socket.on("whiteboard-update", async (data) => {
+        try {
+          const { whiteboardId, canvasData, shapes, elements, userId } = data;
+          
+          if (!whiteboardId || !socket.currentWhiteboardId || whiteboardId !== socket.currentWhiteboardId) {
+            return;
+          }
+
+          // Broadcast the update to all other users in the room (excluding sender)
+          socket.to(`whiteboard:${whiteboardId}`).emit("whiteboard-update", {
+            ...data,
+            userId: socket.userId,
+            userInfo: this.activeUsers.get(socket.userId)?.userInfo,
+            timestamp: new Date()
+          });
+
+          // Update the whiteboard in database with merged data
+          if (shapes || elements || canvasData) {
+            try {
+              const whiteboard = await Whiteboard.findById(whiteboardId);
+              if (whiteboard && whiteboard.hasPermission(socket.userId, "editor")) {
+                // Merge the new data with existing canvas data
+                const existingCanvasData = whiteboard.canvasData || {};
+                
+                if (shapes || elements) {
+                  const existingShapes = existingCanvasData.shapes || existingCanvasData.elements || [];
+                  const newShapes = shapes || elements || [];
+                  
+                  // Create a map of existing shapes by ID to avoid duplicates
+                  const existingShapesMap = new Map();
+                  existingShapes.forEach(shape => {
+                    if (shape.id) {
+                      existingShapesMap.set(shape.id, shape);
+                    }
+                  });
+                  
+                  // Add new shapes that don't already exist
+                  const mergedShapes = [...existingShapes];
+                  newShapes.forEach(shape => {
+                    if (shape.id && !existingShapesMap.has(shape.id)) {
+                      mergedShapes.push(shape);
+                    } else if (!shape.id) {
+                      // Add shapes without IDs (they are new)
+                      mergedShapes.push(shape);
+                    }
+                  });
+                  
+                  // Update the canvas data with merged shapes
+                  whiteboard.canvasData = {
+                    ...existingCanvasData,
+                    shapes: mergedShapes,
+                    elements: mergedShapes,
+                    lastModifiedBy: socket.userId,
+                    lastModifiedAt: new Date()
+                  };
+                } else if (canvasData) {
+                  // For other canvas data types, merge the objects
+                  whiteboard.canvasData = {
+                    ...existingCanvasData,
+                    ...canvasData,
+                    lastModifiedBy: socket.userId,
+                    lastModifiedAt: new Date()
+                  };
+                }
+                
+                whiteboard.lastModifiedBy = socket.userId;
+                whiteboard.version += 1;
+                
+                await whiteboard.save();
+                }
+            } catch (error) {
+              }
+          }
+        } catch (error) {
+          }
+      });
+
       // ========== DOCUMENT COLLABORATION EVENTS ==========
       
       // Join document room
@@ -491,7 +562,6 @@ class SocketServer {
           socket.emit("active_collaborators", {
             activeCollaborators: this.getActiveCollaboratorsInDocument(documentId),
           });
-
 
         } catch (error) {
           socket.emit("error", { message: "Failed to join document" });
@@ -706,7 +776,6 @@ class SocketServer {
             this.chatRooms.set(chatId, new Set());
           }
           this.chatRooms.get(chatId).add(socket.id);
-          
 
           // Emit confirmation to the user who joined
           socket.emit('chat_joined', { 
@@ -809,8 +878,7 @@ class SocketServer {
             media: cleanMedia,
             replyTo: cleanReplyToId
           };
-          
-          
+
           const message = await Message.create(messageData);
 
           await message.populate('sender', 'name avatar');
@@ -842,7 +910,6 @@ class SocketServer {
                 }
               });
             } catch (unreadCountError) {
-              console.error('Error updating unreadCount in socket:', unreadCountError);
               // Reset unreadCount to empty Map if there's an issue
               chat.unreadCount = new Map();
               chat.participants.forEach(participant => {
@@ -876,8 +943,7 @@ class SocketServer {
               avatar: socket.user.avatar
             }
           };
-          
-          
+
           // Get the number of clients in the room
           const room = this.io.sockets.adapter.rooms.get(`chat:${cleanChatId}`);
           const clientCount = room ? room.size : 0;
@@ -961,7 +1027,6 @@ class SocketServer {
               
               chat.unreadCount.set(socket.userId.toString(), 0);
             } catch (error) {
-              console.error('Error setting unreadCount in socket:', error);
               chat.unreadCount = new Map();
               chat.unreadCount.set(socket.userId.toString(), 0);
             }
@@ -1020,8 +1085,7 @@ class SocketServer {
             }
           });
         } catch (error) {
-          console.error('Error marking messages as read:', error);
-        }
+          }
       });
 
       // Mark message as delivered
@@ -1052,8 +1116,7 @@ class SocketServer {
             });
           }
         } catch (error) {
-          console.error('Error marking message as delivered:', error);
-        }
+          }
       });
 
       // ========== CALL EVENTS ==========
@@ -1188,8 +1251,7 @@ class SocketServer {
                 
               }
             } catch (error) {
-              console.error('Error in auto-termination:', error);
-            }
+              }
           }, parseInt(process.env.CALL_TIMEOUT_MS) || 45000); // Use environment variable
           
           // Store timeout reference for cleanup
@@ -1401,7 +1463,6 @@ class SocketServer {
           socket.currentCallId = null;
           
         } catch (error) {
-          console.error('Error ending call:', error);
           socket.emit("error", "Failed to end call");
         }
       });
@@ -1459,10 +1520,8 @@ class SocketServer {
               userName: socket.user.name
             });
 
-            console.log(`👥 Call ${callId} participant ${socket.userId} left call`);
-          }
+            }
         } catch (error) {
-          console.error('Error leaving call:', error);
           socket.emit("error", "Failed to leave call");
         }
       });
@@ -1471,8 +1530,6 @@ class SocketServer {
       socket.on("reject_call", async (data) => {
         try {
           const { callId } = data;
-          console.log(`Call rejected by ${socket.userId} for call ${callId}`);
-          
           const call = await Call.findById(callId);
           if (!call) {
             return;
@@ -1482,8 +1539,7 @@ class SocketServer {
           if (this.callTimeouts && this.callTimeouts.has(callId)) {
             clearTimeout(this.callTimeouts.get(callId));
             this.callTimeouts.delete(callId);
-            console.log(`Cleared timeout for rejected call ${callId}`);
-          }
+            }
 
           const participant = call.participants.find(
             p => p.user.toString() === socket.userId
@@ -1502,12 +1558,11 @@ class SocketServer {
           await call.save();
 
           // Notify caller
-          // console.log(`Notifying caller ${call.startedBy} about rejection`);
-          this.io.to(`user:${call.startedBy}`).emit("call_rejected", {
-            callId,
-            rejectedBy: socket.userId,
-            rejectedByName: socket.user.name
-          });
+          // this.io.to(`user:${call.startedBy}`).emit("call_rejected", {
+          //   callId,
+          //   rejectedBy: socket.userId,
+          //   rejectedByName: socket.user.name
+          // });
 
           // Also notify all participants that the call has ended
           call.participants.forEach(participant => {
@@ -1519,9 +1574,7 @@ class SocketServer {
             });
           });
 
-          // console.log(`Call ${callId} rejected and all participants notified`);
         } catch (error) {
-          console.error('Error rejecting call:', error);
           socket.emit("error", "Failed to reject call");
         }
       });
@@ -1710,9 +1763,8 @@ class SocketServer {
             this.lastUserStatusBroadcast.set(socket.userId, now);
           }
           
-          // console.log(`User ${socket.userId} is now offline - broadcasting status to all users`);
         } catch (error) {
-          console.error('Error updating user offline status:', error);
+          // Error handling for disconnect
         }
         
         if (socket.currentWhiteboardId) {
@@ -1770,12 +1822,10 @@ class SocketServer {
                 }
 
                 await call.save();
-                console.log(`👥 Call ${socket.currentCallId} participant ${socket.userId} marked as left`);
-              }
+                }
             }
           } catch (error) {
-            console.error('Error updating call participant status on disconnect:', error);
-          }
+            }
 
           const callData = this.activeCalls.get(socket.currentCallId);
           if (callData) {
@@ -1927,8 +1977,6 @@ class SocketServer {
       this.participantMonitoringIntervals = new Map();
     }
 
-    console.log(`👥 Starting participant monitoring for call: ${callId}`);
-    
     const interval = setInterval(async () => {
       try {
         const call = await Call.findById(callId);
@@ -1944,12 +1992,8 @@ class SocketServer {
           p.status === 'joined' && !p.leftAt
         );
 
-        console.log(`👥 Call ${callId} has ${activeParticipants.length} active participants`);
-
         // If less than 2 participants, end the call
         if (activeParticipants.length < 2) {
-          console.log(`📞 Auto-ending call ${callId} - insufficient participants`);
-          
           // Update call status
           call.status = 'ended';
           call.endedAt = new Date();
@@ -1980,7 +2024,6 @@ class SocketServer {
           this.participantMonitoringIntervals.delete(callId);
         }
       } catch (error) {
-        console.error('Error in participant monitoring:', error);
         clearInterval(interval);
         this.participantMonitoringIntervals.delete(callId);
       }
@@ -1994,8 +2037,6 @@ class SocketServer {
     // Run cleanup every 30 seconds
     setInterval(async () => {
       try {
-        console.log('🧹 Starting call cleanup...');
-        
         // Find calls that are still marked as 'ongoing' but have no active participants
         const staleCalls = await Call.find({
           status: 'ongoing',
@@ -2009,8 +2050,6 @@ class SocketServer {
           );
 
           if (activeParticipants.length < 2) {
-            console.log(`🧹 Cleaning up stale call ${call._id} - insufficient active participants`);
-            
             // Mark all participants as left
             call.participants.forEach(participant => {
               if (participant.status === 'joined') {
@@ -2030,14 +2069,11 @@ class SocketServer {
             call.endedAt = new Date();
             await call.save();
 
-            console.log(`✅ Stale call ${call._id} cleaned up`);
-          }
+            }
         }
 
-        console.log(`🧹 Call cleanup completed - checked ${staleCalls.length} calls`);
-      } catch (error) {
-        console.error('Error during call cleanup:', error);
-      }
+        } catch (error) {
+        }
     }, 30000); // Run every 30 seconds
   }
 }

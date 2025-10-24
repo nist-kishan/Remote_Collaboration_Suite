@@ -7,14 +7,11 @@ import {
   Settings, 
   Calendar, 
   MessageSquare, 
-  BarChart3,
   FolderOpen,
   MoreVertical,
   Search,
   ArrowLeft,
-  TrendingUp,
-  Target,
-  Clock
+  TrendingUp
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceApi';
@@ -65,11 +62,28 @@ const WorkspacePage = () => {
     project.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Check if current user is the owner
+  const isOwner = workspace?.owner?._id === currentUser?._id;
+  
+  // Get user role in workspace
+  const getUserRole = () => {
+    if (!workspace || !currentUser) return 'member';
+    if (isOwner) return 'owner';
+    
+    // Check if user is admin or member
+    const member = workspace.members?.find(m => m.user?._id === currentUser._id);
+    return member?.role || 'member';
+  };
+  
+  const userRole = getUserRole();
+  
+  // Settings visible only to owner and admin
+  const canViewSettings = userRole === 'owner' || userRole === 'admin';
+
   const tabs = [
     { id: 'projects', label: 'Projects', icon: FolderOpen, count: projects.length, show: true },
     { id: 'members', label: 'Members', icon: Users, count: workspace?.memberCount || 0, show: true },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3, show: true },
-    { id: 'settings', label: 'Settings', icon: Settings, show: canChangeSettings }
+    { id: 'settings', label: 'Settings', icon: Settings, show: canViewSettings }
   ].filter(tab => tab.show);
 
   if (workspaceLoading) {
@@ -105,7 +119,7 @@ const WorkspacePage = () => {
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                
                 <input
                   type="text"
                   placeholder="Search projects..."
@@ -114,14 +128,15 @@ const WorkspacePage = () => {
                   className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
               </div>
-              <CustomButton 
-                onClick={() => setShowCreateProject(true)} 
-                className="flex items-center gap-2"
-                disabled={!canCreateProject}
-              >
-                <Plus className="w-4 h-4" />
-                Create Project
-              </CustomButton>
+              {(userRole === 'owner' || userRole === 'admin') && (
+                <CustomButton 
+                  onClick={() => setShowCreateProject(true)} 
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create Project
+                </CustomButton>
+              )}
             </div>
 
             <ProjectList 
@@ -134,76 +149,6 @@ const WorkspacePage = () => {
 
       case 'members':
         return <WorkspaceMemberList workspace={workspace} canManageMembers={canManageMembers} />;
-
-      case 'analytics':
-        return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Workspace Analytics
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <CustomCard className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                    <FolderOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Projects</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {projects.length}
-                    </p>
-                  </div>
-                </div>
-              </CustomCard>
-
-              <CustomCard className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
-                    <Users className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Members</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {workspace.memberCount}
-                    </p>
-                  </div>
-                </div>
-              </CustomCard>
-
-              <CustomCard className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900 rounded-lg flex items-center justify-center">
-                    <BarChart3 className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Active Projects</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {projects.filter(p => p.status === 'active').length}
-                    </p>
-                  </div>
-                </div>
-              </CustomCard>
-
-              <CustomCard className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
-                    <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">This Month</p>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {projects.filter(p => {
-                        const created = new Date(p.createdAt);
-                        const now = new Date();
-                        return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
-                      }).length}
-                    </p>
-                  </div>
-                </div>
-              </CustomCard>
-            </div>
-          </div>
-        );
 
       case 'settings':
         return <WorkspaceSettings workspace={workspace} canManageSettings={canChangeSettings} />;
@@ -234,15 +179,17 @@ const WorkspacePage = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <button
-              onClick={() => setActiveTab('settings')}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              title="Settings"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
+          {canViewSettings && (
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+              <button
+                onClick={() => setActiveTab('settings')}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                title="Settings"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Stats */}

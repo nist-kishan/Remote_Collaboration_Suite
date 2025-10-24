@@ -21,8 +21,7 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
   const { data: membersData, isLoading, error } = useQuery({
     queryKey: ['groupMembers', chatId],
     queryFn: () => {
-      // console.log('🔍 Frontend: Calling getGroupMembers API for chatId:', chatId);
-      return getGroupMembers(chatId);
+      // return getGroupMembers(chatId);
     },
     enabled: !!chatId,
     staleTime: 5 * 60 * 1000, // 5 minutes - prevent excessive API calls
@@ -30,15 +29,10 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
     refetchOnWindowFocus: false, // Don't refetch on window focus
     refetchOnMount: false, // Don't refetch on component mount if data exists
     onSuccess: (data) => {
-      // console.log('✅ Frontend: Group members loaded successfully:', {
-      //   data,
-      //   members: data?.data?.data?.members,
-      //   membersCount: data?.data?.data?.members?.length,
-      //   isAdmin: data?.data?.data?.isAdmin,
-      //   userRole: data?.data?.data?.userRole
-      // });
+      console.log('Members data loaded:', data);
     },
     onError: (error) => {
+      console.error('Error loading members:', error);
     },
   });
   
@@ -47,24 +41,7 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
   const userRole = membersData?.data?.data?.userRole || 'member';
 
   // Debug logging for members data
-  // console.log('🔍 Frontend: Members data processing:', {
-  //   membersData,
-  //   members,
-  //   membersLength: members.length,
-  //   isAdmin,
-  //   userRole,
-  //   chatId,
-  //   chatName,
-  //   rawDataStructure: {
-  //     'membersData.data': membersData?.data,
-  //     'membersData.data.data': membersData?.data?.data,
-  //     'membersData.data.data.members': membersData?.data?.data?.members,
-  //     'membersData.data.data.isAdmin': membersData?.data?.data?.isAdmin,
-  //     'membersData.data.data.userRole': membersData?.data?.data?.userRole
-  //   }
-  // });
-
-  // User search for adding members
+  // // User search for adding members
   const { data: searchResults } = useQuery({
     queryKey: ['userSearch', searchQuery],
     queryFn: () => searchUsers({ query: searchQuery }),
@@ -218,16 +195,6 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
                   {showAddMembers && (
                     <div className="space-y-3">
                       {/* Search */}
-                      <div className="relative">
-                        <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <input
-                          type="text"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Search users to add..."
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
 
                       {/* Selected Members */}
                       {selectedMembers.length > 0 && (

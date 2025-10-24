@@ -90,8 +90,7 @@ export const useCallSocket = () => {
         socket.on('connect_error', onError);
       });
       
-      console.log('✅ Socket reconnected successfully');
-    }
+      }
   };
 
   // Helper function to start connecting timeout
@@ -123,8 +122,7 @@ export const useCallSocket = () => {
       setProcessedCallIds(new Set());
       setLastEventTime({});
       
-      console.log('✅ Call state cleaned up due to timeout');
-    }, 30000); // 30 seconds timeout
+      }, 30000); // 30 seconds timeout
   }, [dispatch]);
 
   // Helper function to clear connecting timeout
@@ -167,26 +165,20 @@ export const useCallSocket = () => {
     try {
       if (incomingCallAudioRef.current) {
         // Web Audio API doesn't have pause method, just stop the current sound
-        console.log('🔇 Stopping incoming call audio');
-      }
+        }
     } catch (error) {
-      console.log('🔇 Error stopping incoming call audio:', error.message);
-    }
+      }
     
     try {
       if (outgoingCallAudioRef.current) {
         // Web Audio API doesn't have pause method, just stop the current sound
-        console.log('🔇 Stopping outgoing call audio');
-      }
+        }
     } catch (error) {
-      console.log('🔇 Error stopping outgoing call audio:', error.message);
-    }
+      }
   };
 
   // Function to end call and clear all state
   const endCall = useCallback(() => {
-    console.log('🧹 Ending call and clearing all state...');
-    
     // Clear all timers
     clearAllTimers();
     
@@ -225,8 +217,7 @@ export const useCallSocket = () => {
       navigate(-1);
     }
     
-    console.log('✅ Call state completely cleared');
-  }, [dispatch, clearAllTimers, saveCallData, stopCallSounds, location.pathname, navigate]);
+    }, [dispatch, clearAllTimers, saveCallData, stopCallSounds, location.pathname, navigate]);
 
   // Auto-cancel timeout refs
   const callTimeoutRef = useRef(null);
@@ -272,12 +263,10 @@ export const useCallSocket = () => {
       outgoingCallAudioRef.current = { play: createBeepSound };
       audioInitializedRef.current = true;
 
-      console.log('🔊 Audio elements initialized with Web Audio API');
-    } catch (error) {
-      console.log('🔇 Audio initialization failed:', error.message);
-      // Fallback to silent audio objects
-      incomingCallAudioRef.current = { play: () => console.log('🔇 Audio not available') };
-      outgoingCallAudioRef.current = { play: () => console.log('🔇 Audio not available') };
+      } catch (error) {
+        // Fallback to silent audio objects
+        incomingCallAudioRef.current = { play: () => {} };
+        outgoingCallAudioRef.current = { play: () => {} };
       audioInitializedRef.current = true;
     }
 
@@ -287,8 +276,7 @@ export const useCallSocket = () => {
         outgoingCallAudioRef.current = null;
         audioInitializedRef.current = false;
       } catch (error) {
-        console.log('🔇 Error cleaning up audio:', error.message);
-      }
+        }
     };
   }, []);
 
@@ -299,8 +287,7 @@ export const useCallSocket = () => {
       try {
         const parsedData = JSON.parse(savedCallData);
         setCallPersistData(parsedData);
-        console.log('Restored call data from localStorage:', parsedData);
-      } catch (error) {
+        } catch (error) {
         console.error('Error parsing saved call data:', error);
         localStorage.removeItem('activeCallData');
       }
@@ -314,16 +301,10 @@ export const useCallSocket = () => {
       clearTimeout(callTimeoutRef.current);
     }
 
-    console.log(`⏰ Starting call timeout: ${timeoutMs}ms for call ${callId}`);
-    
     callTimeoutRef.current = setTimeout(() => {
-      console.log('⏰ Call timeout reached - auto-cancelling call');
-      
       // Check if call is still active and not answered
       const currentCallData = JSON.parse(localStorage.getItem('activeCallData') || 'null');
       if (currentCallData && (currentCallData.status === 'connecting' || currentCallData.status === 'incoming')) {
-        console.log('📞 Auto-cancelling unanswered call');
-        
         // Emit call ended event
         if (socket) {
           socket.emit('end_call', { 
@@ -348,8 +329,6 @@ export const useCallSocket = () => {
       clearInterval(participantCheckIntervalRef.current);
     }
 
-    console.log('👥 Starting participant count check for call:', callId);
-    
     participantCheckIntervalRef.current = setInterval(() => {
       const currentCallData = JSON.parse(localStorage.getItem('activeCallData') || 'null');
       
@@ -359,11 +338,9 @@ export const useCallSocket = () => {
           p.status !== 'ended' && p.status !== 'left'
         ) || [];
         
-        console.log(`👥 Active participants: ${activeParticipants.length + 1}`); // +1 for caller
+        // +1 for caller
         
         if (activeParticipants.length + 1 < 2) {
-          console.log('📞 Auto-cancelling call - less than 2 participants');
-          
           // Emit call ended event
           if (socket) {
             socket.emit('end_call', { 
@@ -396,13 +373,11 @@ export const useCallSocket = () => {
     
     // If same event happened within 2 seconds, consider it duplicate
     if (now - lastTime < 2000) {
-      console.log(`🚫 Duplicate ${eventType} event ignored for call ${callId}`);
       return true;
     }
     
     // Check if this call ID is already being processed
     if (processedCallIds.has(callId)) {
-      console.log(`🚫 Call ${callId} already being processed, ignoring duplicate ${eventType}`);
       return true;
     }
     
@@ -420,8 +395,7 @@ export const useCallSocket = () => {
 
   // Socket event handlers
   const handleIncomingCall = useCallback((data) => {
-    console.log('📞 Incoming call data:', data);
-    console.log('🔍 Available fields:', Object.keys(data));
+    console.log('Incoming call received:', data);
     
     // Extract call ID for duplicate checking
     const callId = data.callId || data._id || `incoming_${Date.now()}`;
@@ -437,8 +411,6 @@ export const useCallSocket = () => {
     
     // Extract receiver ID from various possible fields
     const receiverId = data.callerId || data.senderId || data.fromUserId || data.userId || data.chatId || 'unknown';
-    console.log('🎯 Extracted receiver ID:', receiverId);
-    
     // Save incoming call data for persistence
     const callData = {
       callId: data.callId || `incoming_${Date.now()}`,
@@ -454,10 +426,8 @@ export const useCallSocket = () => {
       // Try to play audio using Web Audio API
       try {
         incomingCallAudioRef.current.play();
-        console.log('🔊 Incoming call beep played');
-      } catch (error) {
-        console.log('🔇 Incoming call audio play failed:', error.message);
-      }
+        } catch (error) {
+        }
     }
     
     // Only show toast if we haven't shown it yet for this call
@@ -482,8 +452,7 @@ export const useCallSocket = () => {
   }, [dispatch, navigate, location.pathname]);
 
   const handleCallStarted = useCallback((data) => {
-    console.log('📞 Call started data:', data);
-    console.log('🔍 Available fields:', Object.keys(data));
+    console.log('Call started:', data);
     
     // Extract call ID for duplicate checking
     const callId = data.call?._id || data.callId || `started_${Date.now()}`;
@@ -510,9 +479,6 @@ export const useCallSocket = () => {
         receiverId = otherParticipant?.user._id;
       }
       
-      console.log('🎯 Call started - receiver ID:', receiverId);
-      console.log('🔍 Call participants:', data.call.participants);
-      
       const callData = {
         callId: data.call._id,
         receiverId: receiverId,
@@ -523,8 +489,6 @@ export const useCallSocket = () => {
         participants: data.call.participants
       };
       saveCallData(callData);
-      console.log('✅ Updated call data with real call ID:', data.call._id);
-      
       // Start auto-cancel timeout (1 minute)
       startCallTimeout(data.call._id, 60000);
     }
@@ -533,36 +497,25 @@ export const useCallSocket = () => {
       // Try to play audio using Web Audio API
       try {
         outgoingCallAudioRef.current.play();
-        console.log('🔊 Outgoing call beep played');
-      } catch (error) {
-        console.log('🔇 Outgoing call audio play failed:', error.message);
-      }
+        } catch (error) {
+        }
     }
   }, [dispatch]);
 
   const handleCallJoined = useCallback((data) => {
-    console.log('📞 handleCallJoined called with data:', data);
-    
     // Extract call ID for duplicate checking
     const callId = data.call?._id || data.callId || `joined_${Date.now()}`;
-    console.log('🆔 Extracted callId for duplicate check:', callId);
-    
     // Check for duplicate event
     if (isDuplicateEvent('call_joined', callId, data)) {
-      console.log('🚫 Duplicate call_joined event ignored');
       return;
     }
     
-    console.log('✅ Processing call_joined event...');
     dispatch(setActiveCall(data.call));
-    console.log('🔄 Setting call status to connected...');
     setCallStatus('connected');
     
     // Clear connecting timeout since call is now connected
-    console.log('⏰ Clearing connecting timeout...');
     clearConnectingTimeout();
     
-    console.log('🎭 Updating UI state...');
     dispatch(setShowIncomingCallModal(false));
     dispatch(setShowOutgoingCallModal(false));
     dispatch(setShowCallWindow(true));
@@ -570,7 +523,6 @@ export const useCallSocket = () => {
     // Explicitly clear incoming call state to prevent re-triggering
     dispatch(setIncomingCall(null));
     
-    console.log('🔇 Stopping call sounds...');
     stopCallSounds();
     
     // Update call data with connected status
@@ -585,14 +537,11 @@ export const useCallSocket = () => {
         participants: data.call.participants
       };
       saveCallData(callData);
-      console.log('✅ Updated call status to connected');
-      
       // Clear the timeout since call was answered
       if (callTimeoutRef.current) {
         clearTimeout(callTimeoutRef.current);
         callTimeoutRef.current = null;
-        console.log('⏰ Call timeout cleared - call was answered');
-      }
+        }
       
       // Start participant count checking
       startParticipantCheck(data.call._id);
@@ -604,27 +553,21 @@ export const useCallSocket = () => {
     
     if (isOutgoingCall && !location.pathname.includes('/video-call/')) {
       const receiverId = data.call.receiverId || data.call.chatId;
-      console.log('🎯 Outgoing call joined - navigating to caller page with receiver ID:', receiverId);
       navigate(`/video-call/caller/${receiverId}`, { replace: true });
     } else if (!isOutgoingCall) {
       // For incoming calls, navigate to the generic video call route for connected state
       if (location.pathname.includes('/video-call/receiver/')) {
         // Navigate to generic video call route for connected state
-        console.log('🎯 Incoming call joined - navigating to connected video call page');
         navigate(`/video-call`, { replace: true });
       } else if (!location.pathname.includes('/video-call')) {
         // If not on any video call page, navigate to generic video call route
-        console.log('🎯 Call joined - navigating to video call page');
         navigate(`/video-call`, { replace: true });
       } else {
-        console.log('🎯 Call joined - staying on current page');
-      }
+        }
     }
   }, [dispatch, navigate, location.pathname, saveCallData, startParticipantCheck, outgoingCall]);
 
   const handleCallEnded = useCallback((data) => {
-    console.log('📞 Call ended data:', data);
-    
     // Clear duplicate tracking for this call
     const callId = data.callId;
     if (callId) {
@@ -659,8 +602,6 @@ export const useCallSocket = () => {
   }, [navigate, location.pathname, endCall]);
 
   const handleCallRejected = useCallback((data) => {
-    console.log('📞 Call rejected data:', data);
-    
     // Clear duplicate tracking for this call
     const callId = data.callId;
     if (callId) {
@@ -771,43 +712,30 @@ export const useCallSocket = () => {
     // Ensure socket connection
     await ensureSocketConnection();
 
-    console.log('📡 Emitting start_call event...');
-    console.log('🔍 Socket connected:', socket.connected);
-    console.log('🔍 Socket ID:', socket.id);
-    
     socket.emit('start_call', {
       chatId,
       type
     });
 
     setCallStatus('connecting');
-    console.log('✅ Call status set to connecting');
-    
     // Start connecting timeout
     startConnectingTimeout();
   }, [socket]);
 
   const joinCallSocket = useCallback(async (callId) => {
-    console.log('📡 joinCallSocket called with callId:', callId);
-    
     // Ensure socket connection
-    console.log('🔌 Ensuring socket connection...');
     await ensureSocketConnection();
 
-    console.log('📤 Emitting join_call event with callId:', callId);
     socket.emit('join_call', { 
       callId 
     });
 
-    console.log('🔄 Setting call status to connecting...');
     setCallStatus('connecting');
     
     // Start connecting timeout
-    console.log('⏰ Starting connecting timeout...');
     startConnectingTimeout();
     
-    console.log('✅ joinCallSocket completed');
-  }, [socket]);
+    }, [socket]);
 
   const rejectCallSocket = useCallback(async (callId) => {
     // Ensure socket connection

@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import WhiteboardList from '../../components/whiteboard/WhiteboardList';
 import WhiteboardErrorBoundary from '../../components/whiteboard/WhiteboardErrorBoundary';
+import WhiteboardShareModal from '../../components/whiteboard/WhiteboardShareModal';
 import CustomButton from '../../components/ui/CustomButton';
 import CustomCard from '../../components/ui/CustomCard';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
@@ -11,17 +12,11 @@ import { useWhiteboard } from '../../hook/useWhiteboard';
 
 export default function WhiteboardsList() {
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, whiteboard: null });
+  const [shareModal, setShareModal] = useState({ isOpen: false, whiteboard: null });
   const { user, isAuthenticated, loading: authLoading } = useSelector((state) => state.auth);
   const navigate = useNavigate();
   
   // Debug authentication state
-  console.log('🔐 Auth Debug:', {
-    user: user ? { id: user._id, email: user.email, name: user.name } : null,
-    isAuthenticated,
-    authLoading,
-    hasUserId: !!user?._id
-  });
-  
   // Show loading state while checking authentication
   if (authLoading) {
     return (
@@ -86,30 +81,22 @@ export default function WhiteboardsList() {
   // Fetch all whiteboards when component mounts or activeTab changes
   useEffect(() => {
     if (isAuthenticated && user?._id) {
-      console.log('🔄 Fetching all whiteboards for tab:', activeTab);
       fetchAllWhiteboards();
     }
   }, [isAuthenticated, user?._id, activeTab, fetchAllWhiteboards]);
 
   // Debug whiteboard data
-  if (allWhiteboards && allWhiteboards.length > 0) {
-    console.log('📄 All Whiteboards to render:', allWhiteboards.map(wb => ({
-      id: wb._id,
-      title: wb.title,
-      status: wb.status,
-      owner: wb.owner?._id,
-      visibility: wb.visibility
-    })));
-  } else {
-    console.log('❌ No all whiteboards to render - allWhiteboards array:', allWhiteboards);
-  }
 
   const handleCreateWhiteboardClick = () => {
     navigate('/boards/new');
   };
 
   const handleShareWhiteboardClick = (whiteboard) => {
-    handleOpenShareModal(whiteboard);
+    setShareModal({ isOpen: true, whiteboard });
+  };
+
+  const handleCollaborateWhiteboardClick = (whiteboard) => {
+    setShareModal({ isOpen: true, whiteboard });
   };
 
   const handleDeleteWhiteboardClick = (whiteboard) => {
@@ -138,7 +125,12 @@ export default function WhiteboardsList() {
     { 
       id: 'shared', 
       label: 'Shared with Me', 
-      count: allWhiteboards?.filter(wb => wb.visibility === 'shared' && wb.owner?._id !== user?._id).length || 0
+      count: allWhiteboards?.filter(wb => {
+        // Show whiteboards where user is a collaborator but not the owner
+        const isCollaborator = wb.collaborators?.some(collab => collab.user?._id === user?._id);
+        const isNotOwner = wb.owner?._id !== user?._id;
+        return isCollaborator && isNotOwner;
+      }).length || 0
     },
     { 
       id: 'draft', 
@@ -262,6 +254,7 @@ export default function WhiteboardsList() {
             onEditWhiteboard={handleEditWhiteboard}
             onViewWhiteboard={handleViewWhiteboard}
             onShareWhiteboard={handleShareWhiteboardClick}
+            onCollaborateWhiteboard={handleCollaborateWhiteboardClick}
             onDeleteWhiteboard={handleDeleteWhiteboardClick}
             loading={allWhiteboardsLoading}
           />
@@ -278,6 +271,49 @@ export default function WhiteboardsList() {
         confirmText={isDeleting ? "Deleting..." : "Delete"}
         cancelText="Cancel"
         type="danger"
+      />
+
+      {/* Whiteboard Share/Collaboration Modal */}
+      <WhiteboardShareModal
+        whiteboard={shareModal.whiteboard}
+        isOpen={shareModal.isOpen}
+        onClose={() => setShareModal({ isOpen: false, whiteboard: null })}
+        onShare={(data) => {
+          setShareModal({ isOpen: false, whiteboard: null });
+        }}
+        onUpdateRole={(userId, role) => {
+          // Refresh the whiteboard data to reflect the role change
+          if (shareModal.whiteboard?._id) {
+            // Update the local whiteboard data
+            setShareModal(prev => ({
+              ...prev,
+              whiteboard: {
+                ...prev.whiteboard,
+                collaborators: prev.whiteboard.collaborators.map(collab => 
+                  collab.user._id === userId ? { ...collab, role } : collab
+                )
+              }
+            }));
+          }
+        }}
+        onRemoveCollaborator={(userId) => {
+          // Refresh the whiteboard data to reflect the removal
+          if (shareModal.whiteboard?._id) {
+            // Update the local whiteboard data
+            setShareModal(prev => ({
+              ...prev,
+              whiteboard: {
+                ...prev.whiteboard,
+                collaborators: prev.whiteboard.collaborators.filter(collab => 
+                  collab.user._id !== userId
+                )
+              }
+            }));
+          }
+        }}
+        onShareViaEmail={(data) => {
+          }}
+        loading={false}
       />
     </div>
   );

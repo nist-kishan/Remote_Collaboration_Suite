@@ -13,11 +13,9 @@ export const sendMessage = asyncHandle(async (req, res) => {
     const { chatId } = req.params;
     const { content, type, media, replyTo } = req.body;
 
-
     // Clean up undefined values exactly like Socket.IO handler
     const cleanReplyTo = (replyTo && replyTo !== 'undefined' && replyTo !== 'null') ? replyTo : null;
     const cleanMedia = (media && media !== 'undefined' && media !== 'null') ? media : null;
-
 
     // Validate exactly like Socket.IO handler
     if (!content && !cleanMedia && !cleanReplyTo) {
@@ -148,7 +146,6 @@ export const getChatMessages = asyncHandle(async (req, res) => {
     .skip((page - 1) * limit);
 
   const total = await Message.countDocuments({ chat: chatId });
-
 
   return res.status(200).json(
     new ApiResponse(200, 'Messages fetched successfully', {

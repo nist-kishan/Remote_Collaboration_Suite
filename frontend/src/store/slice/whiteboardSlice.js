@@ -308,12 +308,10 @@ const whiteboardSlice = createSlice({
     },
     
     undo: (state) => {
-      console.log('Undo action triggered');
-    },
+      },
     
     redo: (state) => {
-      console.log('Redo action triggered');
-    },
+      },
     
     clearWhiteboardErrors: (state) => {
       state.whiteboardsError = null;

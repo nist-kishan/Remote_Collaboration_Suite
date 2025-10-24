@@ -70,8 +70,6 @@ const VideoCallCaller = () => {
   useEffect(() => {
     const initializeCall = async () => {
       try {
-        console.log('🎥 VideoCallCaller - Starting call for sender:', senderId);
-        
         // Check if call is already in progress
         const savedCallData = localStorage.getItem('activeCallData');
         if (savedCallData) {
@@ -87,11 +85,9 @@ const VideoCallCaller = () => {
               console.warn('⚠️ Call stuck in connecting state, clearing and retrying...');
               localStorage.removeItem('activeCallData');
             } else {
-              console.log('📞 Call already in progress, skipping initialization');
               return;
             }
           } else if (parsedData.status === 'calling') {
-            console.log('📞 Call already in progress, skipping initialization');
             return;
           }
         }
@@ -99,8 +95,7 @@ const VideoCallCaller = () => {
         // Use the useCall hook's startCall function
         await startCall(senderId);
         
-        console.log('✅ VideoCallCaller - Call initiated successfully');
-      } catch (error) {
+        } catch (error) {
         console.error('❌ VideoCallCaller - Error starting call:', error);
         toast.error('Failed to start call');
         navigate('/chat');
@@ -143,14 +138,11 @@ const VideoCallCaller = () => {
     if (!socket) return;
 
     const handleCallAccepted = (data) => {
-      console.log('Call accepted:', data);
       setCallData(data.call);
       toast.success(`Call accepted by ${data.acceptedByName}`);
     };
 
     const handleCallRejected = (data) => {
-      console.log('Call rejected:', data);
-      
       navigate('/video-call/ended', { 
         state: { 
           message: 'Call rejected',
@@ -160,8 +152,6 @@ const VideoCallCaller = () => {
     };
 
     const handleCallEnded = (data) => {
-      console.log('Call ended:', data);
-      
       navigate('/video-call/ended', { 
         state: { 
           message: 'Call ended by receiver',

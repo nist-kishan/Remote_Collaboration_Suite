@@ -50,7 +50,6 @@ const MeetingRoom = () => {
           localVideoRef.current.srcObject = stream;
         }
       } catch (error) {
-        console.error('Error accessing media devices:', error);
         toast.error('Failed to access camera/microphone');
       }
     };

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { verifyToken } from "../middleware/auth.middleware.js";
+import { upload } from "../middleware/multer.middleware.js";
 import {
   getAllProjects,
   getProject,
@@ -8,7 +9,8 @@ import {
   addProjectMember,
   removeProjectMember,
   updateMemberRole,
-  searchWorkspaceMembers
+  searchWorkspaceMembers,
+  uploadDocument
 } from "../controllers/project.controller.js";
 
 const router = Router();
@@ -25,6 +27,10 @@ router.route("/:projectId")
   .get(getProject)
   .put(updateProject)
   .delete(deleteProject);
+
+// Upload document route
+router.route("/:projectId/documents/upload")
+  .post(upload.single('file'), uploadDocument);
 
 // Project member management routes
 router.route("/:projectId/members")

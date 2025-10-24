@@ -153,7 +153,7 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
               <div className="relative">
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    
                     <input
                       type="text"
                       placeholder="Search users to add..."

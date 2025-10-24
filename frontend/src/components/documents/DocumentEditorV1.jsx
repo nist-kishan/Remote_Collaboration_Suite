@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-hot-toast";
 import DocumentEditorHeader from "./DocumentEditorHeader";
 import DocumentToolbar from "./DocumentToolbar";
-import DocumentTitleBar from "./DocumentTitleBar";
+import DocumentTitleBar from "./DocumentTitleHeader";
 import DocumentSettingsModal from "./DocumentSettingsModal";
 import RichTextEditor from "../editor/RichTextEditor";
 import AutoSaveIndicator from "./DocumentAutoSaveIndicator";
@@ -11,6 +13,7 @@ import Container from "../ui/CustomContainer";
 import ConfirmationModal from "../ui/ConfirmationDialog";
 import { getUserRole, canPerformAction } from "../../utils/roleUtils";
 import { useDocument } from "../../hook/useDocument";
+import { autoSaveDocument } from "../../api/documentApi";
 
 const DocumentEditorOptimized = ({ 
   document = null, 
@@ -24,6 +27,7 @@ const DocumentEditorOptimized = ({
   className = "" 
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user: currentUser } = useSelector((state) => state.auth);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -32,6 +36,10 @@ const DocumentEditorOptimized = ({
   const [visibility, setVisibility] = useState("private");
   const [hasChanges, setHasChanges] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved', 'error'
+  const [lastSaved, setLastSaved] = useState(null);
+  const autoSaveTimeoutRef = useRef(null);
+  const previousDocumentIdRef = useRef(null);
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -43,14 +51,41 @@ const DocumentEditorOptimized = ({
   // Determine if document is saved (not draft)
   const isDocumentSaved = document && document.status !== 'draft';
 
-  // Auto-save hook
-  const { manualSave, isAutoSaveEnabled, toggleAutoSave, autoSaveStatus, lastSaved } = useAutoSave(
-    document?._id,
-    content,
-    isDocumentSaved,
-    5000 // 5 second debounce
-  );
-
+  // Auto-save mutation
+  const autoSaveMutation = useMutation({
+    mutationFn: ({ documentId, content: contentToSave }) => {
+      || 'empty',
+        timestamp: new Date().toISOString()
+      });
+      return autoSaveDocument(documentId, contentToSave);
+    },
+    onSuccess: (data, variables) => {
+      .toISOString()
+      });
+      
+      setLastSaved(new Date());
+      setAutoSaveStatus('saved');
+      setHasChanges(false);
+      
+      // Invalidate queries to refresh document data - use variables.documentId
+      if (variables.documentId) {
+        queryClient.invalidateQueries(['document', variables.documentId]);
+        
+        // Also refetch to ensure data is up to date
+        queryClient.refetchQueries(['document', variables.documentId]).then(() => {
+          });
+      }
+    },
+    onError: (error) => {
+      console.error('❌ [AUTO-SAVE MUTATION] Auto-save error:', {
+        error: error.response?.data || error.message,
+        status: error.response?.status,
+        timestamp: new Date().toISOString()
+      });
+      setAutoSaveStatus('error');
+      setHasChanges(true); // Keep hasChanges true on error so user knows to save manually
+    }
+  });
 
   // Get user role and permissions for this document
   // For new documents (document is null), user is always the owner/editor
@@ -62,26 +97,40 @@ const DocumentEditorOptimized = ({
   // Initialize form data when document changes
   useEffect(() => {
     if (document) {
-      setTitle(document.title || "");
-      setContent(document.content || "");
-      setTags(document.tags?.join(", ") || "");
-      setStatus(document.status || "draft");
-      setVisibility(document.visibility || "private");
-      setHasChanges(false);
+      // Only update if the document ID changed
+      const documentChanged = document._id !== previousDocumentIdRef.current;
       
-      // Log status for debugging
-      console.log('Document loaded with status:', document.status);
+      if (documentChanged) {
+        setTitle(document.title || "");
+        setContent(document.content || "");
+        setTags(document.tags?.join(", ") || "");
+        setStatus(document.status || "draft");
+        setVisibility(document.visibility || "private");
+        setHasChanges(false);
+        
+        // Set last saved time from document's updatedAt
+        if (document.updatedAt) {
+          setLastSaved(new Date(document.updatedAt));
+          setAutoSaveStatus('saved');
+        }
+        
+        // Update the ref to track this document
+        previousDocumentIdRef.current = document._id;
+        
+        }
     } else {
       // Reset form for new document
-      setTitle("");
-      setContent("");
-      setTags("");
-      setStatus("draft");
-      setVisibility("private");
-      setHasChanges(false);
-      
-      // Log status for debugging
-      console.log('New document created with draft status');
+      if (previousDocumentIdRef.current !== null) {
+        setTitle("");
+        setContent("");
+        setTags("");
+        setStatus("draft");
+        setVisibility("private");
+        setHasChanges(false);
+        setLastSaved(null);
+        setAutoSaveStatus('idle');
+        previousDocumentIdRef.current = null;
+      }
     }
   }, [document]);
 
@@ -89,9 +138,12 @@ const DocumentEditorOptimized = ({
   useEffect(() => {
     if (document && document.status) {
       setStatus(document.status);
-      console.log('Document status updated to:', document.status);
-    }
+      }
   }, [document?.status]);
+
+  // Log when document prop changes to debug auto-save issues
+  useEffect(() => {
+    }, [document]);
 
   // Handle title change
   const handleTitleChange = useCallback((e) => {
@@ -99,11 +151,89 @@ const DocumentEditorOptimized = ({
     setHasChanges(true);
   }, []);
 
+  // Auto-save handler
+  const handleAutoSave = useCallback(() => {
+    .toISOString()
+    });
+    
+    // Prevent multiple simultaneous auto-saves
+    if (autoSaveMutation.isPending) {
+      return;
+    }
+    
+    if (document?._id && content) {
+      setAutoSaveStatus('saving');
+      
+      autoSaveMutation.mutate({
+        documentId: document._id,
+        content
+      });
+    } else {
+      }
+  }, [document?._id, content, autoSaveMutation]);
+
+  // Store handleAutoSave in a ref to avoid dependency issues
+  const handleAutoSaveRef = useRef(handleAutoSave);
+  
+  // Update the ref when handleAutoSave changes
+  useEffect(() => {
+    handleAutoSaveRef.current = handleAutoSave;
+  }, [handleAutoSave]);
+
+  // Auto-save effect
+  useEffect(() => {
+    .toISOString()
+    });
+    
+    if (hasChanges && document?._id && content) {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        }
+      
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        handleAutoSaveRef.current();
+      }, 5000); // Auto-save every 5 seconds
+    } else {
+      // Clear timeout if hasChanges becomes false
+      if (autoSaveTimeoutRef.current) {
+        ');
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+    }
+    
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [hasChanges, document?._id, content]);
+
+  // Save before page unload - warn user about unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasChanges && document?._id && content) {
+        // Show warning about unsaved changes
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasChanges, document?._id, content]);
+
   // Handle content change
   const handleContentChange = useCallback((value) => {
+    .toISOString()
+    });
     setContent(value);
     setHasChanges(true);
-  }, []);
+  }, [content]);
 
   // Handle tags change
   const handleTagsChange = useCallback((e) => {
@@ -123,37 +253,32 @@ const DocumentEditorOptimized = ({
     setHasChanges(true);
   }, []);
 
-  // Handle manual save
+  // Handle manual save (for new documents or drafts)
   const handleManualSave = useCallback(async () => {
     if (!canEdit) {
       return;
     }
 
-    // If document is saved and auto-save is enabled, use manual save from auto-save hook
-    if (isDocumentSaved && isAutoSaveEnabled) {
-      const success = await manualSave(content);
-      if (success) {
-        setHasChanges(false);
-      }
+    // For existing documents, trigger immediate auto-save
+    if (document?._id && content) {
+      handleAutoSave();
       return;
     }
 
-    // Otherwise, use regular save for new documents or draft documents
-    // If document is draft, change status to published when saving
+    // For new documents, use the onSave callback
     const documentData = {
       title: title.trim(),
       content,
       tags: tags.split(",").map(tag => tag.trim()).filter(tag => tag.length > 0),
-      status: status === 'draft' ? 'published' : status, // Change draft to published when saving
+      status: status === 'draft' ? 'published' : status,
       visibility,
     };
 
-    console.log('Saving document with data:', documentData);
-    console.log('Current status:', status, 'New status:', documentData.status);
-    
-    onSave(documentData);
-    setHasChanges(false);
-  }, [title, content, tags, status, visibility, onSave, canEdit, isDocumentSaved, isAutoSaveEnabled, manualSave]);
+    if (onSave) {
+      await onSave(documentData);
+      // Keep hasChanges as true for now - it will be set to false once the document prop updates
+    }
+  }, [title, content, tags, status, visibility, onSave, canEdit, document?._id, handleAutoSave]);
 
   // Handle save (legacy function for backward compatibility)
   const handleSave = useCallback(() => {
@@ -225,14 +350,21 @@ const DocumentEditorOptimized = ({
         onPreview={handlePreview}
         onSettings={handleSettings}
         title={pageTitle || (document ? "Edit Document" : "New Document")}
+        filename={title || (document?.title || "Untitled Document")}
+        onFilenameChange={handleTitleChange}
         userRole={userRole}
         canEdit={canEdit}
         canShare={canShare}
         canChangeSettings={canChangeSettings}
         autoSaveStatus={autoSaveStatus}
         lastSaved={lastSaved}
-        isAutoSaveEnabled={isAutoSaveEnabled}
-        onToggleAutoSave={toggleAutoSave}
+        isAutoSaveEnabled={true}
+        onToggleAutoSave={null}
+        activeUsers={document?.collaborators?.filter(c => c.user)?.map(c => ({
+          name: c.user.name || c.user.email,
+          role: c.role
+        })) || []}
+        isConnected={true}
       />
 
       {/* Main Content - Google Docs Layout */}

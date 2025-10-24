@@ -98,7 +98,7 @@ const EmojiPicker = ({ isOpen, onClose, onEmojiSelect, className = '' }) => {
       {/* Search Bar */}
       <div className="p-3 border-b border-gray-200 dark:border-gray-700">
         <div className="relative">
-          {/* <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" /> */}
+          
           <input
             type="text"
             placeholder="Search emojis"
@@ -110,7 +110,6 @@ const EmojiPicker = ({ isOpen, onClose, onEmojiSelect, className = '' }) => {
           <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-500 rounded-full"></div>
         </div>
       </div>
-
 
       {/* Emojis Grid */}
       <div className="p-3 h-56 overflow-y-auto">

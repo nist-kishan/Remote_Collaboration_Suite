@@ -95,7 +95,7 @@ const MessageInput = ({
       setFileCaptions({});
 
     } catch (error) {
-      console.error('Error sending message:', error);
+      // Error handled by toast notification
     }
   }, [message, replyTo, previewFiles, onSendMessage, onCancelReply]);
 
@@ -278,7 +278,7 @@ const MessageInput = ({
       uploadTrackerRef.current.clear();
 
     } catch (error) {
-      console.error('Error sending message:', error);
+      // Error handled by toast notification
     } finally {
       setIsUploading(false);
     }

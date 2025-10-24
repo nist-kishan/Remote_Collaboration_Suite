@@ -306,7 +306,6 @@ export const validateMessage = (message) => {
   };
 };
 
-
 // Create optimized message sender
 export const createOptimizedMessageSender = () => {
   return {

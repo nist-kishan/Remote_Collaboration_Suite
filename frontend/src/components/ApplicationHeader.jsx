@@ -1,10 +1,9 @@
 import { useState, useCallback, useMemo, memo } from "react";
 import {
   MessageSquare,
-  Video,
   FileText,
   PenTool,
-  FolderOpen,
+  Building2,
   Menu,
   X,
   Users,
@@ -28,7 +27,7 @@ const Header = memo(() => {
       { name: "Meeting", path: "/meetings", icon: <Users size={18} /> },
       { name: "Documents", path: "/documents", icon: <FileText size={18} /> },
       { name: "Whiteboards", path: "/boards", icon: <PenTool size={18} /> },
-      { name: "Projects", path: "/projects", icon: <FolderOpen size={18} /> },
+      { name: "Workspace", path: "/workspaces", icon: <Building2 size={18} /> },
     ],
     []
   );

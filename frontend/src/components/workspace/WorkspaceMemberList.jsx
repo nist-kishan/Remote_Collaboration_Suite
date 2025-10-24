@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, MoreVertical, User, Crown, Shield, UserCheck, UserX } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useSelector } from 'react-redux';
 import { workspaceApi } from '../../api/workspaceApi';
 import CustomButton from '../ui/CustomButton';
 import CustomCard from '../ui/CustomCard';
@@ -9,26 +10,24 @@ import CustomModal from '../ui/CustomModal';
 
 const WorkspaceMemberList = ({ workspace, canManageMembers = true }) => {
   const queryClient = useQueryClient();
+  const currentUser = useSelector((state) => state.auth.user);
   const [showAddMember, setShowAddMember] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMember, setSelectedMember] = useState(null);
+
+  // Check if current user is the owner
+  const isOwner = workspace?.owner?._id === currentUser?._id;
 
   // Search users for workspace
   const { data: searchResults, isLoading: searching, error: searchError } = useQuery({
     queryKey: ['search-workspace-users', workspace._id, searchQuery],
     queryFn: async () => {
-      console.log('🔍 Searching workspace users:', searchQuery);
       const response = await workspaceApi.searchUsers(workspace._id, searchQuery);
-      console.log('📦 API Response:', response);
-      console.log('📦 Response data:', response?.data);
-      console.log('📦 Response data.data:', response?.data?.data);
-      console.log('📦 Users array:', response?.data?.data?.users);
       return response;
     },
     enabled: showAddMember && searchQuery.length >= 2,
     onError: (error) => {
-      console.error('❌ Search error:', error);
-      console.error('❌ Error response:', error.response);
+      // Error handled by toast notification
     }
   });
 
@@ -113,15 +112,6 @@ const WorkspaceMemberList = ({ workspace, canManageMembers = true }) => {
     { value: 'admin', label: 'Admin' }
   ];
 
-  // Debug: Log searchResults changes
-  React.useEffect(() => {
-    console.log('📊 searchResults changed:', searchResults);
-    console.log('📊 searchResults.data:', searchResults?.data);
-    console.log('📊 searchResults.data.data:', searchResults?.data?.data);
-    console.log('📊 Users array:', searchResults?.data?.data?.users);
-    console.log('📊 Users length:', searchResults?.data?.data?.users?.length);
-  }, [searchResults]);
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -141,8 +131,19 @@ const WorkspaceMemberList = ({ workspace, canManageMembers = true }) => {
         {workspace.members?.map((member) => (
           <CustomCard key={member.user._id} className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center">
-                <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+              <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                {member.user.avatar ? (
+                  <img
+                    src={member.user.avatar}
+                    alt={member.user.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <span className={`text-indigo-600 dark:text-indigo-400 font-medium ${member.user.avatar ? 'hidden' : ''}`}>
                   {member.user.name.charAt(0).toUpperCase()}
                 </span>
               </div>
@@ -161,12 +162,14 @@ const WorkspaceMemberList = ({ workspace, canManageMembers = true }) => {
                 </div>
               </div>
               <div className="relative">
-                <button
-                  onClick={() => setSelectedMember(selectedMember === member ? null : member)}
-                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </button>
+                {isOwner && (
+                  <button
+                    onClick={() => setSelectedMember(selectedMember === member ? null : member)}
+                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+                )}
                 
                 {selectedMember === member && (
                   <div className="absolute right-0 top-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-10 min-w-32">
@@ -219,7 +222,6 @@ const WorkspaceMemberList = ({ workspace, canManageMembers = true }) => {
                 Search Members
               </label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
                   placeholder="Search by name or email..."
@@ -247,8 +249,19 @@ const WorkspaceMemberList = ({ workspace, canManageMembers = true }) => {
                 {searchResults.data.data.users.map((member) => (
                   <div key={member._id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                      <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                        {member.avatar ? (
+                          <img
+                            src={member.avatar}
+                            alt={member.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <span className={`text-xs font-medium text-indigo-600 dark:text-indigo-400 ${member.avatar ? 'hidden' : ''}`}>
                           {member.name?.charAt(0).toUpperCase() || '?'}
                         </span>
                       </div>

@@ -107,8 +107,6 @@ export const useDocument = (documentId = null, params = {}) => {
     ...params
   };
 
-  console.log('🔧 Query Parameters:', queryParams);
-
   // Local state for collaboration and auto-save
   const [activeCollaborators, setActiveCollaborators] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -129,15 +127,13 @@ export const useDocument = (documentId = null, params = {}) => {
   const { data: documentsData, isLoading: isLoadingDocuments, error: documentsQueryError, refetch: refetchDocuments } = useQuery({
     queryKey: ['documents', queryParams],
     queryFn: () => {
-      console.log('🔍 API Call - getUserDocuments with params:', queryParams);
       return getUserDocuments(queryParams);
     },
     enabled: !!user,
     staleTime: 30000,
     refetchOnWindowFocus: false,
     onSuccess: (data) => {
-      console.log('✅ API Success - getUserDocuments response:', data);
-    },
+      },
     onError: (error) => {
       console.error('❌ API Error - getUserDocuments failed:', error);
     }
@@ -156,15 +152,13 @@ export const useDocument = (documentId = null, params = {}) => {
         type: activeTab === 'all' ? undefined : activeTab,
         search: searchQuery || undefined
       };
-      console.log('🔍 All Documents API Call - getAllDocuments with params:', params);
       return getAllDocuments(params);
     },
     staleTime: 30000, // 30 seconds
     cacheTime: 5 * 60 * 1000, // 5 minutes
     enabled: false, // Only fetch when explicitly called
     onSuccess: (data) => {
-      console.log('✅ All Documents API Success - getAllDocuments response:', data);
-    },
+      },
     onError: (error) => {
       console.error('❌ All Documents API Error - getAllDocuments failed:', error);
     }
@@ -187,11 +181,9 @@ export const useDocument = (documentId = null, params = {}) => {
   // Mutations
   const createDocumentMutation = useMutation({
     mutationFn: (documentData) => {
-      console.log('🔄 API Call - createDocument:', documentData);
       return createDocument(documentData);
     },
     onSuccess: (data) => {
-      console.log('✅ API Success - createDocument:', data);
       queryClient.invalidateQueries(['documents']);
       queryClient.invalidateQueries(['allDocuments']);
       queryClient.invalidateQueries(['getAllDocuments']);
@@ -209,11 +201,9 @@ export const useDocument = (documentId = null, params = {}) => {
 
   const updateDocumentMutation = useMutation({
     mutationFn: ({ documentId, data }) => {
-      console.log('🔄 API Call - updateDocument:', { documentId, data });
       return updateDocument(documentId, data);
     },
     onSuccess: (data, variables) => {
-      console.log('✅ API Success - updateDocument:', data);
       queryClient.invalidateQueries(['documents']);
       queryClient.invalidateQueries(['allDocuments']);
       queryClient.invalidateQueries(['getAllDocuments']);
@@ -649,8 +639,7 @@ export const useDocument = (documentId = null, params = {}) => {
   const handleSearch = useCallback((params) => {
     // Search is now handled by React Query automatically
     // You can implement search by updating the query key or using a separate search query
-    console.log('Search functionality moved to React Query');
-  }, []);
+    }, []);
 
   // Document permissions
   const getDocumentPermissions = useCallback((document, currentUser) => {
@@ -773,36 +762,18 @@ export const useDocument = (documentId = null, params = {}) => {
   }, [leaveDocument]);
 
   // Extract data from API responses
-  const apiDocumentsData = documentsData?.data;
-  const apiDocumentData = documentData?.data;
-  const apiCommentsData = commentsData?.data;
+  const apiDocumentsData = documentsData;
+  const apiDocumentData = documentData;
+  const apiCommentsData = commentsData;
 
   const documentsList = apiDocumentsData?.data?.documents || [];
   const documentDetails = apiDocumentData?.data?.document;
   const commentsList = apiCommentsData?.data?.comments || [];
 
   // Debug logging
-  console.log('useDocument Debug:', {
-    documentsData,
-    apiDocumentsData,
-    documentsList,
-    documentsListLength: documentsList?.length,
-    isLoadingDocuments,
-    documentsQueryError,
-    user: user?._id,
-    queryParams
-  });
-  
   // More detailed API response logging
   if (apiDocumentsData) {
-    console.log('📊 API Response Details:', {
-      success: apiDocumentsData.success,
-      message: apiDocumentsData.message,
-      data: apiDocumentsData.data,
-      documentsCount: apiDocumentsData.data?.documents?.length,
-      pagination: apiDocumentsData.data?.pagination
-    });
-  }
+    }
 
   // Return consolidated interface
   return {

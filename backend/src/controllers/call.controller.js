@@ -212,7 +212,6 @@ export const getCallHistory = asyncHandle(async (req, res) => {
     query.status = { $in: ['ended', 'missed', 'rejected', 'ringing', 'ongoing'] };
   }
 
-
   const calls = await Call.find(query)
     .populate('participants.user', 'name avatar')
     .populate('startedBy', 'name avatar')
@@ -220,7 +219,6 @@ export const getCallHistory = asyncHandle(async (req, res) => {
     .sort({ startedAt: -1 })
     .limit(limit * 1)
     .skip((page - 1) * limit);
-
 
   const total = await Call.countDocuments(query);
 

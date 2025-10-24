@@ -13,9 +13,12 @@ const HTML5WhiteboardCanvas = forwardRef(({
   stageX,
   stageY,
   isGridVisible,
+  backgroundColor,
   savedCanvasData,
   onChange,
-  whiteboardId
+  onPathCreated,
+  whiteboardId,
+  canEdit = true,
 }, ref) => {
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
@@ -34,6 +37,28 @@ const HTML5WhiteboardCanvas = forwardRef(({
   const selectionRectRef = useRef(null); // Store selection rectangle for area eraser
   const isSelectingAreaRef = useRef(false); // Track if selecting area for eraser
   const [isLoading, setIsLoading] = useState(true); // Track loading state
+  const lastChangeTimeRef = useRef(0); // Track last change time for throttling
+  
+  // Convert color based on theme
+  const convertColorForTheme = (color) => {
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    const normalizedColor = color.toLowerCase();
+    
+    // In dark mode: convert black to white
+    if (isDarkMode && (normalizedColor === '#000000' || normalizedColor === '#000' || normalizedColor === 'black')) {
+      return '#ffffff';
+    }
+    
+    // In light mode: convert white to black
+    if (!isDarkMode && (normalizedColor === '#ffffff' || normalizedColor === '#fff' || normalizedColor === 'white')) {
+      return '#000000';
+    }
+    
+    return color;
+  };
+  
+  // Get converted color
+  const convertedColor = convertColorForTheme(strokeColor);
 
   useImperativeHandle(ref, () => ({
     getCanvas: () => canvasRef.current,
@@ -61,7 +86,21 @@ const HTML5WhiteboardCanvas = forwardRef(({
     },
     clearCanvas: () => {
       if (ctxRef.current && canvasRef.current) {
-        ctxRef.current.clearRect(0, 0, canvasWidth, canvasHeight);
+        const ctx = ctxRef.current;
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        
+        // Set background color - use provided backgroundColor or theme-aware default
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        let bgColor = backgroundColor || (isDarkMode ? '#111827' : '#ffffff');
+        
+        // Normalize color format
+        if (bgColor && !bgColor.startsWith('#')) {
+          bgColor = `#${bgColor}`;
+        }
+        
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        
         shapesRef.current = [];
         backgroundImageRef.current = null; // Clear background image too
         drawGrid();
@@ -73,19 +112,73 @@ const HTML5WhiteboardCanvas = forwardRef(({
         redrawCanvas();
       }
     },
+    addShapes: (newShapes) => {
+      if (Array.isArray(newShapes) && newShapes.length > 0) {
+        // Track which shapes were actually added
+        let addedCount = 0;
+        
+        // Add new shapes to the existing shapes array
+        newShapes.forEach(shape => {
+          // Create a unique identifier for the shape to check for duplicates
+          const shapeId = shape.id || `${shape.type}-${JSON.stringify(shape.points || [shape.x, shape.y, shape.width, shape.height])}`;
+          
+          // Check if shape already exists by comparing multiple properties
+          const existingShape = shapesRef.current.find(existingShape => {
+            // If both have IDs, compare them
+            if (existingShape.id && shape.id && existingShape.id === shape.id) {
+              return true;
+            }
+            
+            // Compare by type and key properties
+            if (existingShape.type === shape.type) {
+              if (shape.type === 'path' && shape.points && existingShape.points) {
+                return JSON.stringify(existingShape.points) === JSON.stringify(shape.points);
+              } else if (['rectangle', 'circle', 'line'].includes(shape.type)) {
+                return existingShape.x === shape.x && 
+                       existingShape.y === shape.y && 
+                       existingShape.width === shape.width && 
+                       existingShape.height === shape.height;
+              }
+            }
+            return false;
+          });
+          
+          if (!existingShape) {
+            shapesRef.current.push(shape);
+            addedCount++;
+          }
+        });
+        
+        // Redraw the canvas with the new shapes
+        redrawCanvas();
+        }
+    },
     undo: () => {
       if (historyIndexRef.current > 0) {
         historyIndexRef.current--;
-        shapesRef.current = [...historyRef.current[historyIndexRef.current]];
+        const previousState = historyRef.current[historyIndexRef.current];
+        shapesRef.current = [...previousState];
         redrawCanvas();
-      }
+      } else {
+        }
     },
     redo: () => {
       if (historyIndexRef.current < historyRef.current.length - 1) {
         historyIndexRef.current++;
-        shapesRef.current = [...historyRef.current[historyIndexRef.current]];
+        const nextState = historyRef.current[historyIndexRef.current];
+        shapesRef.current = [...nextState];
         redrawCanvas();
-      }
+      } else {
+        }
+    },
+    getShapes: () => {
+      return shapesRef.current;
+    },
+    getHistoryIndex: () => {
+      return historyIndexRef.current;
+    },
+    getHistoryLength: () => {
+      return historyRef.current.length;
     }
   }));
 
@@ -121,26 +214,38 @@ const HTML5WhiteboardCanvas = forwardRef(({
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
+        // Set background color - use provided backgroundColor or theme-aware default
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        let bgColor = backgroundColor || (isDarkMode ? '#111827' : '#ffffff');
+        
+        // Normalize color format
+        if (bgColor && !bgColor.startsWith('#')) {
+          bgColor = `#${bgColor}`;
+        }
+        
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
         // Draw initial grid
         if (isGridVisible) {
           drawGrid();
         }
       }, 100);
     }
-  }, [canvasWidth, canvasHeight, isGridVisible]);
+  }, [canvasWidth, canvasHeight, isGridVisible, backgroundColor]);
 
   // Load saved canvas data - only load once
   const hasLoadedInitialCanvasData = useRef(false);
   
   useEffect(() => {
-    console.log('🔄 Checking saved canvas data:', savedCanvasData);
-    
-    // Check if there's actually any canvas data to load
-    const hasCanvasData = savedCanvasData && savedCanvasData.canvasImage && savedCanvasData.canvasImage.length > 0;
+    // Check if there's actually any canvas data to load (either image or shapes)
+    const hasCanvasImage = savedCanvasData && savedCanvasData.canvasImage && savedCanvasData.canvasImage.length > 0;
+    const hasShapes = savedCanvasData && ((savedCanvasData.shapes && savedCanvasData.shapes.length > 0) || (savedCanvasData.elements && savedCanvasData.elements.length > 0));
+    const hasCanvasData = hasCanvasImage || hasShapes;
     
     // If no canvas data exists, immediately hide loading and return
     if (!hasCanvasData) {
-      console.log('⚠️ No saved canvas data to load (empty or new whiteboard)');
+      console.log('No canvas data found, skipping load');
       hasLoadedInitialCanvasData.current = true;
       setIsLoading(false); // No saved data, not loading
       return;
@@ -153,42 +258,73 @@ const HTML5WhiteboardCanvas = forwardRef(({
       // Add a delay to ensure canvas is fully initialized
       const loadCanvasData = () => {
         if (canvasRef.current && ctxRef.current) {
-          console.log('📸 Loading canvas image from saved data');
+          // Load shapes data first
+          if (hasShapes) {
+            if (savedCanvasData.shapes && savedCanvasData.shapes.length > 0) {
+              shapesRef.current = [...savedCanvasData.shapes];
+            } else if (savedCanvasData.elements && savedCanvasData.elements.length > 0) {
+              shapesRef.current = [...savedCanvasData.elements];
+            }
+            }
           
-          const img = new Image();
-          img.onload = () => {
-            const canvas = canvasRef.current;
-            const ctx = ctxRef.current;
+          // Load canvas image if available
+          if (hasCanvasImage) {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = canvasRef.current;
+              const ctx = ctxRef.current;
+              
+              // Store the background image for redrawing
+              backgroundImageRef.current = img;
+              
+              // Clear canvas and draw saved image
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(img, 0, 0);
+              
+              hasLoadedInitialCanvasData.current = true;
+              setIsLoading(false); // Clear loading state
+              
+              // Redraw canvas with shapes
+              setTimeout(() => {
+                redrawCanvas();
+              }, 100);
+              
+              // Immediately save to history so we can track changes
+              if (historyRef.current.length === 0) {
+                historyRef.current.push([...shapesRef.current]);
+                historyIndexRef.current = 0;
+              }
+            };
             
-            console.log('🖼️ Image loaded, drawing to canvas and storing for redraw');
+            img.onerror = (error) => {
+              console.error('❌ Failed to load canvas image:', error);
+              hasLoadedInitialCanvasData.current = true;
+              setIsLoading(false); // Clear loading state even on error
+              
+              // Still redraw with shapes even if image failed
+              setTimeout(() => {
+                redrawCanvas();
+              }, 100);
+            };
             
-            // Store the background image for redrawing
-            backgroundImageRef.current = img;
-            
-            // Clear canvas and draw saved image
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-            
-            console.log('✅ Canvas data loaded from saved state');
+            img.src = savedCanvasData.canvasImage;
+          } else {
+            // No image, just load shapes
             hasLoadedInitialCanvasData.current = true;
-            setIsLoading(false); // Clear loading state
+            setIsLoading(false);
             
-            // Immediately save to history so we can track changes
+            // Redraw canvas with shapes
+            setTimeout(() => {
+              redrawCanvas();
+            }, 100);
+            
+            // Save to history
             if (historyRef.current.length === 0) {
-              historyRef.current.push([]);
+              historyRef.current.push([...shapesRef.current]);
               historyIndexRef.current = 0;
             }
-          };
-          
-          img.onerror = (error) => {
-            console.error('❌ Failed to load canvas image:', error);
-            hasLoadedInitialCanvasData.current = true;
-            setIsLoading(false); // Clear loading state even on error
-          };
-          
-          img.src = savedCanvasData.canvasImage;
+          }
         } else {
-          console.log('⚠️ Canvas not ready, retrying in 500ms');
           setTimeout(loadCanvasData, 500);
         }
       };
@@ -206,36 +342,34 @@ const HTML5WhiteboardCanvas = forwardRef(({
     setIsLoading(false);
   }, [whiteboardId]);
 
-  // Handle window resize
+  // Set canvas dimensions to exact props values (non-responsive)
   useEffect(() => {
     const handleResize = () => {
       if (canvasRef.current && ctxRef.current) {
         const canvas = canvasRef.current;
         
-        // Get container dimensions
-        const container = canvas.parentElement;
-        const containerWidth = container?.clientWidth || window.innerWidth;
-        const containerHeight = container?.clientHeight || window.innerHeight;
+        // Use exact canvas dimensions from props
+        const width = Math.max(Number(canvasWidth) || 1920, 300);
+        const height = Math.max(Number(canvasHeight) || 1080, 200);
         
-        // Use full container dimensions instead of square
-        const width = Math.max(Number(containerWidth) || 1920, 300);
-        const height = Math.max(Number(containerHeight) || 1080, 200);
-        
-        // Final NaN check
-        if (isNaN(width) || isNaN(height)) {
-          console.warn('Invalid resize dimensions detected, using defaults');
-          canvas.width = 1920;
-          canvas.height = 1080;
-        } else {
-          canvas.width = width;
-          canvas.height = height;
-        }
+        // Set canvas dimensions to exact values
+        canvas.width = width;
+        canvas.height = height;
         
         // Redraw everything to preserve drawings
         const ctx = ctxRef.current;
         
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Fill background color
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        let bgColor = backgroundColor || (isDarkMode ? '#111827' : '#ffffff');
+        if (bgColor && !bgColor.startsWith('#')) {
+          bgColor = `#${bgColor}`;
+        }
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // Redraw background image if it exists
         if (backgroundImageRef.current) {
@@ -290,12 +424,14 @@ const HTML5WhiteboardCanvas = forwardRef(({
             ctx.restore();
           });
         }
-      }
+        
+        }
     };
 
+    handleResize(); // Set initial size
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isGridVisible]);
+  }, [canvasWidth, canvasHeight, isGridVisible, backgroundColor]);
 
   // Update canvas size and scale
   useEffect(() => {
@@ -356,7 +492,10 @@ const HTML5WhiteboardCanvas = forwardRef(({
     const height = canvas.height || window.innerHeight;
     
     ctx.save();
-    ctx.strokeStyle = '#e0e0e0';
+    
+    // Theme-aware grid color
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    ctx.strokeStyle = isDarkMode ? '#374151' : '#e0e0e0'; // Dark mode: gray-700, Light mode: gray-300
     ctx.lineWidth = 1;
     
     // Vertical lines
@@ -483,15 +622,8 @@ const HTML5WhiteboardCanvas = forwardRef(({
     
     // Ensure rectangle has valid dimensions
     if (rect.width <= 0 || rect.height <= 0) {
-      console.log('⚠️ Invalid selection rect dimensions:', rect);
       return false;
     }
-    
-    console.log('🔍 Checking intersection:', {
-      shapeType: shape.type,
-      shapeBounds,
-      rect
-    });
     
     // Check if shape bounds intersect with selection rectangle
     const intersects = !(shapeBounds.x + shapeBounds.width < rect.x ||
@@ -499,7 +631,6 @@ const HTML5WhiteboardCanvas = forwardRef(({
                          shapeBounds.y + shapeBounds.height < rect.y ||
                          shapeBounds.y > rect.y + rect.height);
     
-    console.log('📊 Intersection result:', intersects);
     return intersects;
   }, [getShapeBounds]);
 
@@ -514,8 +645,19 @@ const HTML5WhiteboardCanvas = forwardRef(({
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
     
-    ctx.strokeStyle = shape.color || strokeColor;
-    ctx.lineWidth = shape.strokeWidth || strokeWidth;
+    // DON'T use destination-out composite operation for eraser anymore
+    // We'll handle erasing by removing shapes instead
+    ctx.globalCompositeOperation = 'source-over';
+    
+    // For eraser preview, show semi-transparent red line
+    if (shape.isEraser || shape.type === 'eraser') {
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+      ctx.lineWidth = shape.strokeWidth || strokeWidth;
+    } else {
+      ctx.strokeStyle = shape.color || convertedColor;
+      ctx.lineWidth = shape.strokeWidth || strokeWidth;
+    }
+    
     ctx.fillStyle = shape.fill || 'transparent';
     
     switch (shape.type) {
@@ -530,7 +672,8 @@ const HTML5WhiteboardCanvas = forwardRef(({
         
       case 'circle':
         ctx.beginPath();
-        ctx.arc(shape.x + shape.width / 2, shape.y + shape.height / 2, shape.radius, 0, 2 * Math.PI);
+        const circleRadius = shape.radius || Math.max(Math.abs(shape.width), Math.abs(shape.height)) / 2;
+        ctx.arc(shape.x + shape.width / 2, shape.y + shape.height / 2, circleRadius, 0, 2 * Math.PI);
         if (shape.fill && shape.fill !== 'transparent') {
           ctx.fill();
         }
@@ -545,12 +688,26 @@ const HTML5WhiteboardCanvas = forwardRef(({
         break;
         
       case 'path':
-        ctx.beginPath();
-        ctx.moveTo(shape.points[0], shape.points[1]);
-        for (let i = 2; i < shape.points.length; i += 2) {
-          ctx.lineTo(shape.points[i], shape.points[i + 1]);
+        if (shape.points && shape.points.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(shape.points[0], shape.points[1]);
+          for (let i = 2; i < shape.points.length; i += 2) {
+            ctx.lineTo(shape.points[i], shape.points[i + 1]);
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
+        break;
+        
+      case 'eraser':
+        // Draw eraser preview as semi-transparent red path
+        if (shape.points && shape.points.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(shape.points[0], shape.points[1]);
+          for (let i = 2; i < shape.points.length; i += 2) {
+            ctx.lineTo(shape.points[i], shape.points[i + 1]);
+          }
+          ctx.stroke();
+        }
         break;
     }
     
@@ -575,7 +732,7 @@ const HTML5WhiteboardCanvas = forwardRef(({
         drawResizeHandles(bounds);
       }
     }
-  }, [strokeColor, strokeWidth, getShapeBounds, drawResizeHandles]);
+  }, [convertedColor, strokeWidth, getShapeBounds, drawResizeHandles]);
 
   const redrawCanvas = useCallback(() => {
     if (!ctxRef.current || !canvasRef.current) return;
@@ -587,8 +744,20 @@ const HTML5WhiteboardCanvas = forwardRef(({
     const width = canvas.width || window.innerWidth;
     const height = canvas.height || window.innerHeight;
     
-    // Clear canvas
+    // Clear canvas and set theme-aware background
     ctx.clearRect(0, 0, width, height);
+    
+    // Set background color - use provided backgroundColor or theme-aware default
+    const isDarkMode = document.documentElement.classList.contains('dark');
+    let bgColor = backgroundColor || (isDarkMode ? '#111827' : '#ffffff');
+    
+    // Normalize color format
+    if (bgColor && !bgColor.startsWith('#')) {
+      bgColor = `#${bgColor}`;
+    }
+    
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, width, height);
     
     // Draw background image first (preserves previous drawings)
     if (backgroundImageRef.current) {
@@ -629,7 +798,9 @@ const HTML5WhiteboardCanvas = forwardRef(({
       ctx.stroke();
       ctx.restore();
     }
-  }, [isGridVisible, drawGrid, drawShape]);
+  }, [isGridVisible, drawGrid, drawShape, backgroundColor]);
+
+  // Note: Redraw is now handled in the main loading effect above to prevent premature rendering
 
   const getMousePos = useCallback((e) => {
     if (!canvasRef.current) return { x: 0, y: 0 };
@@ -646,16 +817,28 @@ const HTML5WhiteboardCanvas = forwardRef(({
     const scaleX = canvasWidth / rectWidth;
     const scaleY = canvasHeight / rectHeight;
     
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    // Get mouse position relative to canvas
+    let x = (e.clientX - rect.left) * scaleX;
+    let y = (e.clientY - rect.top) * scaleY;
+    
+    // Apply inverse transform for zoom and pan
+    const currentScale = stageScale || 1;
+    const currentX = stageX || 0;
+    const currentY = stageY || 0;
+    
+    // Transform coordinates based on zoom and pan
+    x = (x - currentX) / currentScale;
+    y = (y - currentY) / currentScale;
     
     return {
       x: Math.max(0, Math.min(x, canvasWidth)),
       y: Math.max(0, Math.min(y, canvasHeight))
     };
-  }, []);
+  }, [stageScale, stageX, stageY]);
 
   const handleMouseDown = useCallback((e) => {
+    if (!canEdit) return; // Disable drawing for viewers
+    
     const pos = getMousePos(e);
     startPosRef.current = pos;
     
@@ -732,13 +915,20 @@ const HTML5WhiteboardCanvas = forwardRef(({
     // Drawing mode
     isDrawingRef.current = true;
     
-    if (selectedTool === 'pen' || selectedTool === 'highlighter' || selectedTool === 'eraser') {
+    if (selectedTool === 'pen' || selectedTool === 'highlighter') {
       currentShapeRef.current = {
         type: 'path',
         points: [pos.x, pos.y],
-        color: selectedTool === 'eraser' ? '#ffffff' : strokeColor,
-        strokeWidth: selectedTool === 'highlighter' ? strokeWidth * 3 : 
-                    selectedTool === 'eraser' ? strokeWidth * 2 : strokeWidth
+        color: convertedColor,
+        strokeWidth: selectedTool === 'highlighter' ? strokeWidth * 3 : strokeWidth
+      };
+    } else if (selectedTool === 'eraser') {
+      // Eraser mode - don't create a shape, erase existing shapes instead
+      currentShapeRef.current = {
+        type: 'eraser',
+        points: [pos.x, pos.y],
+        strokeWidth: strokeWidth * 2,
+        isEraser: true
       };
     } else if (['rectangle', 'circle', 'line'].includes(selectedTool)) {
       currentShapeRef.current = {
@@ -748,12 +938,12 @@ const HTML5WhiteboardCanvas = forwardRef(({
         width: 0,
         height: 0,
         radius: 0,
-        color: strokeColor,
+        color: convertedColor,
         strokeWidth: strokeWidth,
         fill: 'transparent'
       };
-    }
-  }, [selectedTool, strokeColor, strokeWidth, getMousePos, getShapeBounds, isPointInShape, redrawCanvas, shapeIntersectsRect]);
+      }
+  }, [selectedTool, convertedColor, strokeWidth, canEdit, getMousePos, getShapeBounds, isPointInShape, redrawCanvas, shapeIntersectsRect]);
 
   const handleMouseMove = useCallback((e) => {
     const pos = getMousePos(e);
@@ -843,11 +1033,21 @@ const HTML5WhiteboardCanvas = forwardRef(({
         if (selectedTool === 'circle') {
           currentShapeRef.current.radius = Math.max(Math.abs(width), Math.abs(height)) / 2;
         }
-      }
+        
+        }
     }
     
     redrawCanvas();
-  }, [selectedTool, getMousePos, redrawCanvas]);
+    
+    // Trigger onChange during drawing to enable autosave (throttled to once per second)
+    if (isDrawingRef.current && onChange) {
+      const now = Date.now();
+      if (now - lastChangeTimeRef.current > 1000) {
+        lastChangeTimeRef.current = now;
+        onChange();
+      }
+    }
+  }, [selectedTool, getMousePos, redrawCanvas, onChange]);
 
   const saveToHistory = useCallback(() => {
     const newHistory = [...shapesRef.current];
@@ -856,7 +1056,6 @@ const HTML5WhiteboardCanvas = forwardRef(({
     historyIndexRef.current = historyRef.current.length - 1;
     
     // Notify parent component that changes have been made
-    console.log('📝 Change detected, calling onChange callback');
     if (onChange) {
       onChange();
     } else {
@@ -867,16 +1066,12 @@ const HTML5WhiteboardCanvas = forwardRef(({
   const handleMouseUp = useCallback(() => {
     // Handle area selection end for eraser
     if (isSelectingAreaRef.current && selectionRectRef.current) {
-      console.log('🗑️ Area eraser triggered, selection rect:', selectionRectRef.current);
-      console.log('📊 Shapes before deletion:', shapesRef.current.length);
-      
       // Erase all shapes that intersect with the selection rectangle
       const rect = selectionRectRef.current;
       const beforeCount = shapesRef.current.length;
       
       // Check if rect has valid dimensions
       if (rect.width <= 0 || rect.height <= 0) {
-        console.log('⚠️ Invalid selection rect, skipping deletion');
         isSelectingAreaRef.current = false;
         selectionRectRef.current = null;
         redrawCanvas();
@@ -886,18 +1081,18 @@ const HTML5WhiteboardCanvas = forwardRef(({
       shapesRef.current = shapesRef.current.filter(shape => {
         const intersects = shapeIntersectsRect(shape, rect);
         if (intersects) {
-          console.log('🗑️ Deleting shape:', shape.type, shape);
-        }
+          }
         return !intersects;
       });
       
       const afterCount = shapesRef.current.length;
-      console.log('✅ Deleted shapes:', beforeCount - afterCount);
-      
       isSelectingAreaRef.current = false;
       selectionRectRef.current = null;
       redrawCanvas(); // Redraw canvas after deletion
       saveToHistory();
+      if (onChange) {
+        onChange(); // Trigger autosave
+      }
       return;
     }
     
@@ -907,6 +1102,9 @@ const HTML5WhiteboardCanvas = forwardRef(({
       resizeHandleRef.current = null;
       initialShapeDataRef.current = null;
       saveToHistory();
+      if (onChange) {
+        onChange(); // Trigger autosave
+      }
       return;
     }
     
@@ -915,6 +1113,9 @@ const HTML5WhiteboardCanvas = forwardRef(({
       isDraggingRef.current = false;
       initialShapeDataRef.current = null;
       saveToHistory();
+      if (onChange) {
+        onChange(); // Trigger autosave
+      }
       return;
     }
     
@@ -924,17 +1125,127 @@ const HTML5WhiteboardCanvas = forwardRef(({
     isDrawingRef.current = false;
     
     if (currentShapeRef.current) {
-      shapesRef.current.push({ ...currentShapeRef.current });
-      saveToHistory();
-      currentShapeRef.current = null;
-      
-      if (onShapeSelect) {
-        onShapeSelect(shapesRef.current.length - 1);
+      // Special handling for eraser tool
+      if (selectedTool === 'eraser' && currentShapeRef.current.type === 'eraser') {
+        // Create a helper function to check if a point is near a line segment
+        const isPointNearLine = (px, py, x1, y1, x2, y2, threshold) => {
+          const A = px - x1;
+          const B = py - y1;
+          const C = x2 - x1;
+          const D = y2 - y1;
+          
+          const dot = A * C + B * D;
+          const lenSq = C * C + D * D;
+          let param = -1;
+          
+          if (lenSq !== 0) param = dot / lenSq;
+          
+          let xx, yy;
+          
+          if (param < 0) {
+            xx = x1;
+            yy = y1;
+          } else if (param > 1) {
+            xx = x2;
+            yy = y2;
+          } else {
+            xx = x1 + param * C;
+            yy = y1 + param * D;
+          }
+          
+          const dx = px - xx;
+          const dy = py - yy;
+          return Math.sqrt(dx * dx + dy * dy) < threshold;
+        };
+        
+        // Get eraser path points
+        const eraserPoints = currentShapeRef.current.points || [];
+        const eraserWidth = currentShapeRef.current.strokeWidth || strokeWidth;
+        const threshold = eraserWidth / 2 + 5; // Add some tolerance
+        
+        // Filter out shapes that intersect with the eraser path
+        const beforeCount = shapesRef.current.length;
+        shapesRef.current = shapesRef.current.filter(shape => {
+          // Skip the eraser shape itself
+          if (shape.type === 'eraser' || shape.isEraser) {
+            return false;
+          }
+          
+          // Check if any eraser path point is near this shape
+          const shapeBounds = getShapeBounds(shape);
+          if (!shapeBounds) return true;
+          
+          // For path shapes, check each point
+          if (shape.type === 'path' && shape.points) {
+            for (let i = 0; i < shape.points.length - 2; i += 2) {
+              const px = shape.points[i];
+              const py = shape.points[i + 1];
+              
+              // Check if this point is near any eraser path segment
+              for (let j = 0; j < eraserPoints.length - 2; j += 2) {
+                if (isPointNearLine(px, py, eraserPoints[j], eraserPoints[j + 1], 
+                    eraserPoints[j + 2], eraserPoints[j + 3], threshold)) {
+                  return false;
+                }
+              }
+            }
+          } else {
+            // For other shapes, check if eraser path intersects with shape bounds
+            for (let j = 0; j < eraserPoints.length - 2; j += 2) {
+              const ex = eraserPoints[j];
+              const ey = eraserPoints[j + 1];
+              
+              if (ex >= shapeBounds.x && ex <= shapeBounds.x + shapeBounds.width &&
+                  ey >= shapeBounds.y && ey <= shapeBounds.y + shapeBounds.height) {
+                return false;
+              }
+            }
+          }
+          
+          return true;
+        });
+        
+        const afterCount = shapesRef.current.length;
+        currentShapeRef.current = null;
+        saveToHistory();
+        
+        if (onChange) {
+          onChange();
+        }
+        
+        // Trigger onPathCreated for live collaboration
+        if (onPathCreated) {
+          onPathCreated();
+        }
+      } else {
+        // Normal drawing - add shape to canvas
+        const shapeWithId = {
+          ...currentShapeRef.current,
+          id: `shape-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        };
+        
+        shapesRef.current.push(shapeWithId);
+        saveToHistory();
+        currentShapeRef.current = null;
+        
+        if (onShapeSelect) {
+          onShapeSelect(shapesRef.current.length - 1);
+        }
+        
+        // Trigger onChange after drawing completes
+        if (onChange) {
+          onChange();
+        }
+        
+        // Trigger onPathCreated for live collaboration
+        if (onPathCreated) {
+          onPathCreated();
+        }
       }
     }
     
     startPosRef.current = null;
-  }, [onShapeSelect, saveToHistory, redrawCanvas, shapeIntersectsRect]);
+  }, [onShapeSelect, saveToHistory, redrawCanvas, shapeIntersectsRect, onChange, onPathCreated, selectedTool, strokeWidth, getShapeBounds]);
 
   return (
     <div className="w-full h-full relative overflow-hidden" style={{ touchAction: 'none' }}>
@@ -978,7 +1289,7 @@ const HTML5WhiteboardCanvas = forwardRef(({
           width: '100%',
           height: '100%',
           cursor: selectedTool === 'pen' || selectedTool === 'highlighter' ? 'crosshair' :
-                  selectedTool === 'eraser' ? 'grab' :
+                  selectedTool === 'eraser' ? 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'%3E%3Cpath fill=\'%23000\' d=\'M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l11.17-11.22c.79-.78 2.05-.78 2.83 0zM7.24 18l3.76-3.76 3.76 3.76-3.76 3.76-3.76-3.76z\'/%3E%3C/svg%3E") 12 12, auto' :
                   ['rectangle', 'circle', 'line'].includes(selectedTool) ? 'crosshair' :
                   selectedTool === 'text' ? 'text' : 'default'
         }}

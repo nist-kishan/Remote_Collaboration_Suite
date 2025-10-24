@@ -6,6 +6,7 @@ import DocumentList from '../../components/documents/DocumentList';
 import DocumentErrorBoundary from '../../components/documents/DocumentErrorBoundary';
 import DocumentUploadModal from '../../components/documents/DocumentUploadModal';
 import DocumentExportModal from '../../components/documents/DocumentExportModal';
+import DocumentShareModal from '../../components/documents/DocumentShareModal';
 import CustomButton from '../../components/ui/CustomButton';
 import CustomCard from '../../components/ui/CustomCard';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
@@ -15,17 +16,11 @@ export default function DocumentsList() {
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, document: null });
   const [uploadModal, setUploadModal] = useState({ isOpen: false, document: null });
   const [exportModal, setExportModal] = useState({ isOpen: false, document: null });
+  const [shareModal, setShareModal] = useState({ isOpen: false, document: null });
   const { user, isAuthenticated, loading: authLoading } = useSelector((state) => state.auth);
   const navigate = useNavigate();
   
   // Debug authentication state
-  console.log('🔐 Auth Debug:', {
-    user: user ? { id: user._id, email: user.email, name: user.name } : null,
-    isAuthenticated,
-    authLoading,
-    hasUserId: !!user?._id
-  });
-  
   // Show loading state while checking authentication
   if (authLoading) {
     return (
@@ -92,40 +87,22 @@ export default function DocumentsList() {
   // Fetch all documents when component mounts or activeTab changes
   useEffect(() => {
     if (isAuthenticated && user?._id) {
-      console.log('🔄 Fetching all documents for tab:', activeTab);
       fetchAllDocuments();
     }
   }, [isAuthenticated, user?._id, activeTab, fetchAllDocuments]);
 
   // Debug logging
-  console.log('DocumentsList Debug:', {
-    allDocuments,
-    allDocumentsLength: allDocuments?.length,
-    allDocumentsLoading,
-    allDocumentsError,
-    user: user?._id,
-    activeTab
-  });
-
-  // Additional debugging for document rendering
-  if (allDocuments && allDocuments.length > 0) {
-    console.log('📄 All Documents to render:', allDocuments.map(doc => ({
-      id: doc._id,
-      title: doc.title,
-      status: doc.status,
-      owner: doc.owner?._id,
-      visibility: doc.visibility
-    })));
-  } else {
-    console.log('❌ No all documents to render - allDocuments array:', allDocuments);
-  }
 
   const handleCreateDocumentClick = () => {
     navigate('/documents/new');
   };
 
   const handleShareDocumentClick = (document) => {
-    handleOpenShareModal(document);
+    setShareModal({ isOpen: true, document });
+  };
+
+  const handleCollaborateDocumentClick = (document) => {
+    setShareModal({ isOpen: true, document });
   };
 
   const handleDeleteDocumentClick = (document) => {
@@ -180,7 +157,12 @@ export default function DocumentsList() {
     { 
       id: 'shared', 
       label: 'Shared with Me', 
-      count: allDocuments?.filter(doc => doc.visibility === 'shared' && doc.owner?._id !== user?._id).length || 0
+      count: allDocuments?.filter(doc => {
+        // Show documents where user is a collaborator but not the owner
+        const isCollaborator = doc.collaborators?.some(collab => collab.user?._id === user?._id);
+        const isNotOwner = doc.owner?._id !== user?._id;
+        return isCollaborator && isNotOwner;
+      }).length || 0
     },
     { 
       id: 'draft', 
@@ -296,7 +278,6 @@ export default function DocumentsList() {
           </div>
         </div>
 
-
         {/* Documents List */}
         <DocumentErrorBoundary>
           <DocumentList
@@ -308,6 +289,7 @@ export default function DocumentsList() {
             onDeleteDocument={handleDeleteDocumentClick}
             onUploadDocument={handleUploadDocumentClick}
             onExportDocument={handleExportDocumentClick}
+            onCollaborateDocument={handleCollaborateDocumentClick}
             loading={allDocumentsLoading}
           />
         </DocumentErrorBoundary>
@@ -340,6 +322,49 @@ export default function DocumentsList() {
         isOpen={exportModal.isOpen}
         onClose={() => setExportModal({ isOpen: false, document: null })}
         onExport={handleExportDocumentWithOptions}
+        loading={false}
+      />
+
+      {/* Share/Collaboration Modal */}
+      <DocumentShareModal
+        document={shareModal.document}
+        isOpen={shareModal.isOpen}
+        onClose={() => setShareModal({ isOpen: false, document: null })}
+        onShare={(data) => {
+          setShareModal({ isOpen: false, document: null });
+        }}
+        onUpdateRole={(userId, role) => {
+          // Refresh the document data to reflect the role change
+          if (shareModal.document?._id) {
+            // Update the local document data
+            setShareModal(prev => ({
+              ...prev,
+              document: {
+                ...prev.document,
+                collaborators: prev.document.collaborators.map(collab => 
+                  collab.user._id === userId ? { ...collab, role } : collab
+                )
+              }
+            }));
+          }
+        }}
+        onRemoveCollaborator={(userId) => {
+          // Refresh the document data to reflect the removal
+          if (shareModal.document?._id) {
+            // Update the local document data
+            setShareModal(prev => ({
+              ...prev,
+              document: {
+                ...prev.document,
+                collaborators: prev.document.collaborators.filter(collab => 
+                  collab.user._id !== userId
+                )
+              }
+            }));
+          }
+        }}
+        onShareViaEmail={(data) => {
+          }}
         loading={false}
       />
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Bell, UserCheck, CheckCircle, AlertCircle } from 'lucide-react';
+import { Settings, Bell, UserCheck, CheckCircle, AlertCircle, Shield } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { projectApi } from '../../api/projectApi';
 import CustomButton from '../ui/CustomButton';
@@ -44,6 +44,25 @@ const ProjectSettings = ({ project, canChangeSettings = true }) => {
     setSettings(newSettings);
     updateSettingsMutation.mutate(newSettings);
   };
+
+  // Show restricted message if user doesn't have permission
+  if (!canChangeSettings) {
+    return (
+      <div className="space-y-6">
+        <CustomCard className="p-6">
+          <div className="text-center py-8">
+            <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              Settings Restricted
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400">
+              Only project owners and administrators can access project settings
+            </p>
+          </div>
+        </CustomCard>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

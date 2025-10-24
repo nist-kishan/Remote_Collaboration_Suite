@@ -3,90 +3,140 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { Meeting } from "../models/meeting.model.js";
 import { Project } from "../models/project.model.js";
+import { Notification } from "../models/notification.model.js";
 import User from "../models/user.model.js";
 import mongoose from "mongoose";
 
+// Helper function to generate meeting link
+const generateMeetingLink = (meetingId) => {
+  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  return `${baseUrl}/meeting/${meetingId}`;
+};
+
 // Create meeting
 export const createMeeting = asyncHandle(async (req, res) => {
-  const { projectId } = req.params;
-  const userId = req.user._id;
-  
-  const {
-    title,
-    description,
-    startTime,
-    endTime,
-    location,
-    meetingUrl,
-    meetingId,
-    password,
-    agenda = [],
-    type = "team_meeting",
-    attendees = []
-  } = req.body;
+  try {
+    const { projectId } = req.params;
+    const userId = req.user._id;
+    
+    const {
+      title,
+      description,
+      startTime,
+      endTime,
+      location,
+      agenda = [],
+      type = "team_meeting",
+      attendees = [],
+      meetingType = "scheduled"
+    } = req.body;
 
-  if (!title || !startTime || !endTime) {
-    throw new ApiError(400, "Title, start time, and end time are required");
+    if (!title) {
+      throw new ApiError(400, "Title is required");
+    }
+
+    // For scheduled meetings, require start and end time
+    if (meetingType === "scheduled") {
+      if (!startTime || !endTime) {
+        throw new ApiError(400, "Start time and end time are required for scheduled meetings");
+      }
+    }
+
+    // Check if project exists and user has access
+    const project = await Project.findById(projectId);
+    if (!project) {
+      throw new ApiError(404, "Project not found");
+    }
+
+    const teamMember = project.team.find(member => 
+      member.user.toString() === userId.toString() && member.status === "active"
+    );
+
+    if (!teamMember) {
+      throw new ApiError(403, "You don't have access to this project");
+    }
+
+    // Check if user can create meetings (owner, hr, mr, tr can create, but not employee)
+    if (teamMember.role === "employee") {
+      throw new ApiError(403, "You don't have permission to create meetings");
+    }
+
+    // Validate attendees are project members
+    const projectMemberIds = project.team.map(member => member.user.toString());
+    const invalidAttendees = attendees.filter(attendeeId => 
+      !projectMemberIds.includes(attendeeId)
+    );
+
+    if (invalidAttendees.length > 0) {
+      throw new ApiError(400, "All attendees must be project members");
+    }
+
+    // Create meeting
+    const meetingData = {
+      title,
+      description,
+      project: projectId,
+      organizer: userId,
+      location,
+      agenda,
+      type,
+      meetingType: meetingType || "scheduled",
+      accessType: "public", // Default to public for project meetings
+      attendees: attendees.map(attendeeId => ({
+        user: attendeeId,
+        status: "invited"
+      }))
+    };
+
+    // Add start/end time only for scheduled meetings
+    if (meetingType === "scheduled") {
+      meetingData.startTime = new Date(startTime);
+      meetingData.endTime = new Date(endTime);
+    }
+
+    // Generate meeting link
+    const meetingLink = generateMeetingLink('temp');
+    
+    // Add meetingUrl to meetingData
+    meetingData.meetingUrl = meetingLink;
+    
+    const meeting = await Meeting.create(meetingData);
+
+    // Update meetingUrl with actual meeting ID
+    meeting.meetingUrl = generateMeetingLink(meeting._id);
+    await meeting.save();
+
+    await meeting.populate([
+      { path: "organizer", select: "name email avatar" },
+      { path: "attendees.user", select: "name email avatar" },
+      { path: "project", select: "name" }
+    ]);
+
+    // Create notifications for all attendees
+    if (attendees.length > 0 && meetingType === "scheduled") {
+      const notificationPromises = attendees.map(attendeeId => 
+        Notification.createNotification(
+          attendeeId,
+          "meeting_invite",
+          "Meeting Invitation",
+          `You have been invited to meeting "${title}" in project ${project.name}`,
+          { meetingId: meeting._id, projectId: projectId },
+          { 
+            priority: "high",
+            actionUrl: `/meeting/${meeting._id}`,
+            expiresAt: new Date(endTime)
+          }
+        )
+      );
+      await Promise.all(notificationPromises);
+    }
+
+    return res.status(201).json(
+      new ApiResponse(201, "Meeting created successfully", { meeting })
+    );
+  } catch (error) {
+    throw error;
   }
-
-  // Check if project exists and user has access
-  const project = await Project.findById(projectId);
-  if (!project) {
-    throw new ApiError(404, "Project not found");
-  }
-
-  const teamMember = project.team.find(member => 
-    member.user.toString() === userId.toString() && member.status === "active"
-  );
-
-  if (!teamMember) {
-    throw new ApiError(403, "You don't have access to this project");
-  }
-
-  // Check if user can create meetings (owner, hr, mr can create)
-  if (!["owner", "hr", "mr"].includes(teamMember.role)) {
-    throw new ApiError(403, "You don't have permission to create meetings");
-  }
-
-  // Validate attendees are project members
-  const projectMemberIds = project.team.map(member => member.user.toString());
-  const invalidAttendees = attendees.filter(attendeeId => 
-    !projectMemberIds.includes(attendeeId)
-  );
-
-  if (invalidAttendees.length > 0) {
-    throw new ApiError(400, "All attendees must be project members");
-  }
-
-  // Create meeting
-  const meeting = await Meeting.create({
-    title,
-    description,
-    project: projectId,
-    organizer: userId,
-    startTime: new Date(startTime),
-    endTime: new Date(endTime),
-    location,
-    meetingUrl,
-    meetingId,
-    password,
-    agenda,
-    type,
-    attendees: attendees.map(attendeeId => ({
-      user: attendeeId,
-      status: "invited"
-    }))
-  });
-
-  await meeting.populate([
-    { path: "organizer", select: "name email avatar" },
-    { path: "attendees.user", select: "name email avatar" },
-    { path: "project", select: "name" }
-  ]);
-
-  return res.status(201).json(
-    new ApiResponse(201, "Meeting created successfully", { meeting })
-  );
 });
 
 // Get project meetings
@@ -223,14 +273,21 @@ export const deleteMeeting = asyncHandle(async (req, res) => {
   const { meetingId } = req.params;
   const userId = req.user._id;
 
-  const meeting = await Meeting.findById(meetingId);
+  const meeting = await Meeting.findById(meetingId).populate('project');
   if (!meeting) {
     throw new ApiError(404, "Meeting not found");
   }
 
-  // Check if user can manage this meeting
-  if (!meeting.canBeManagedBy(req.user)) {
-    throw new ApiError(403, "You don't have permission to delete this meeting");
+  // Check if project exists and user is the owner
+  const project = await Project.findById(meeting.project);
+  if (!project) {
+    throw new ApiError(404, "Project not found");
+  }
+
+  // Only project owner can delete meetings
+  const isOwner = project.owner.toString() === userId.toString();
+  if (!isOwner) {
+    throw new ApiError(403, "Only project owner can delete meetings");
   }
 
   await Meeting.findByIdAndDelete(meetingId);
@@ -505,13 +562,9 @@ export const createInstantMeeting = asyncHandle(async (req, res) => {
     }))
   });
 
-  // Add organizer as host
-  meeting.attendees.push({
-    user: userId,
-    role: "host",
-    status: "joined"
-  });
-  meeting.currentParticipants = 1;
+  // Generate meeting link
+  const meetingLink = generateMeetingLink(meeting._id);
+  meeting.meetingUrl = meetingLink;
   await meeting.save();
 
   await meeting.populate([
@@ -589,11 +642,10 @@ export const createScheduledMeeting = asyncHandle(async (req, res) => {
     }))
   });
 
-  await meeting.populate([
-    { path: "organizer", select: "name email avatar" },
-    { path: "attendees.user", select: "name email avatar" },
-    { path: "project", select: "name" }
-  ]);
+  // Generate meeting link
+  const meetingLink = generateMeetingLink(meeting._id);
+  meeting.meetingUrl = meetingLink;
+  await meeting.save();
 
   return res.status(201).json(
     new ApiResponse(201, "Scheduled meeting created successfully", { meeting })

@@ -86,7 +86,6 @@ export default function Signup() {
     signup(signupData);
   };
 
-
   return (
     <AuthContainer
       title="Create Account"

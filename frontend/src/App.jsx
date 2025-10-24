@@ -69,7 +69,6 @@ export default function App() {
   useEffect(() => {
     if (loading && !isAuthPage) {
       const timeout = setTimeout(() => {
-        console.warn("Loading timeout reached, clearing user and stopping loading");
         dispatch(clearUser());
       }, 10000); // 10 second timeout
 
@@ -92,9 +91,6 @@ export default function App() {
         query.error?.response?.status === 403
       ) {
         dispatch(clearUser());
-      }
-      if (query.error?.response?.status === 429) {
-        console.warn("Rate limit exceeded, retrying later...");
       }
     }
   }, [isSuccess, isError, data, dispatch, query.error?.response?.status, isAuthPage]);

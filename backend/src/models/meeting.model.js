@@ -69,6 +69,10 @@ const meetingSchema = new mongoose.Schema(
       unique: true,
       trim: true
     },
+    meetingUrl: {
+      type: String,
+      trim: true
+    },
     meetingId: {
       type: String,
       unique: true,

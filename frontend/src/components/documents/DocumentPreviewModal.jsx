@@ -20,13 +20,11 @@ export default function DocumentPreview() {
   const { data: previewData, isLoading, error } = useQuery({
     queryKey: ['documentPreview', documentId],
     queryFn: async () => {
-      console.log('Fetching document preview for ID:', documentId);
       try {
         // Try to get document with authentication first
         const result = await getDocument(documentId);
         return result;
       } catch (err) {
-        console.log('Authenticated access failed, trying public preview:', err);
         // If authenticated access fails, try public preview
         try {
           const result = await getDocumentPreview(documentId);
@@ -42,8 +40,7 @@ export default function DocumentPreview() {
       console.error('Document preview error:', err);
     },
     onSuccess: (data) => {
-      console.log('Document preview success:', data);
-    }
+      }
   });
 
   const handleSignIn = () => {

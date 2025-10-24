@@ -106,7 +106,6 @@ export const useCall = () => {
   const localStreamRef = useRef(null);
   const originalCameraStreamRef = useRef(null);
   const initializationLockRef = useRef(false);
-  
 
   // WebRTC state
   const [webrtcLocalStream, setWebrtcLocalStream] = useState(null);
@@ -255,8 +254,6 @@ export const useCall = () => {
 
   // Force release all media devices
   const forceReleaseAllMediaDevices = useCallback(async () => {
-    console.log('🔧 Force releasing all media devices...');
-    
     try {
       // Get all active media streams from the browser
       const allTracks = [];
@@ -267,12 +264,11 @@ export const useCall = () => {
           // This is a fallback to ensure all tracks are stopped
           const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
           testStream.getTracks().forEach(track => {
-            console.log(`🛑 Force stopping test track: ${track.kind}`);
             track.stop();
           });
         } catch (error) {
           // This is expected if devices are already in use
-          console.log('🔍 Test stream creation failed (expected if devices are in use)');
+          console.log('Media devices test failed:', error);
         }
       }
       
@@ -284,8 +280,7 @@ export const useCall = () => {
       // Wait for devices to be fully released
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      console.log('✅ All media devices force released');
-    } catch (error) {
+      } catch (error) {
       console.error('❌ Error in force release:', error);
     }
   }, []);
@@ -315,22 +310,17 @@ export const useCall = () => {
       
       // If we can get a stream, devices are available
       testStream.getTracks().forEach(track => track.stop());
-      console.log('✅ Devices are available');
       return false;
     } catch (error) {
       if (error.name === 'NotReadableError') {
-        console.log('⚠️ Devices are in use by another application');
         return true;
       }
-      console.log('⚠️ Device check failed:', error.message);
       return false;
     }
   }, []);
 
   const startLocalStream = useCallback(async () => {
     try {
-      console.log('🎬 Starting local stream...');
-      
       // Check if devices are in use first
       const devicesInUse = await checkDeviceInUse();
       if (devicesInUse) {
@@ -345,31 +335,24 @@ export const useCall = () => {
       
       // Check if we already have a valid stream
       if (localStreamRef.current && localStreamRef.current.active) {
-        console.log('✅ Reusing existing active stream');
         return localStreamRef.current;
       }
       
-      console.log('🔍 Checking device availability...');
       const deviceInfo = await checkDeviceAvailability();
       
       if (!deviceInfo.hasVideo) {
         throw new Error('No video devices found');
       }
       
-      console.log('📱 Device info:', deviceInfo);
-      
       // If device is in use, try to force release it
       if (deviceInUseRetryCount > 0) {
-        console.log('🔄 Device in use detected, attempting force release...');
         try {
           // Try to get a test stream and immediately release it
           const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
           testStream.getTracks().forEach(track => track.stop());
-          console.log('✅ Test stream released successfully');
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (testError) {
-          console.log('⚠️ Test stream failed:', testError.message);
-        }
+          }
       }
       
       const strategies = [
@@ -386,16 +369,12 @@ export const useCall = () => {
       
       for (let i = 0; i < strategies.length; i++) {
         try {
-          console.log(`🎯 Trying strategy ${i + 1}/${strategies.length}:`, strategies[i]);
           stream = await navigator.mediaDevices.getUserMedia(strategies[i]);
-          console.log(`✅ Strategy ${i + 1} successful`);
           break;
         } catch (error) {
-          console.log(`❌ Strategy ${i + 1} failed:`, error.name, error.message);
           lastError = error;
           
           if (error.name === 'NotReadableError' && i < strategies.length - 1) {
-            console.log('⏳ Waiting before trying next strategy...');
             await new Promise(resolve => setTimeout(resolve, 2000)); // Increased delay
           }
         }
@@ -464,24 +443,18 @@ export const useCall = () => {
 
   // Enhanced end call function that includes media cleanup
   const endCallWithCleanup = useCallback(async (callId) => {
-    console.log('🧹 Ending call with media cleanup...');
     try {
       // First release all media tracks
       await releaseAllTracks();
-      console.log('✅ Media tracks released');
-      
       // Force release all media devices
       await forceReleaseAllMediaDevices();
-      console.log('✅ Media devices force released');
-      
       // Then call the socket end call function
       if (callId) {
         endCallSocketFunction(callId);
       } else {
         endCallSocketFunction();
       }
-      console.log('✅ Call ended via socket');
-    } catch (error) {
+      } catch (error) {
       console.error('❌ Error during call cleanup:', error);
       // Still try to end the call even if cleanup fails
       if (callId) {
@@ -512,10 +485,9 @@ export const useCall = () => {
     }
 
     pc.ontrack = (event) => {
-      console.log('📥 Remote track received:', event.track.kind, event.track.label);
       const [remoteStream] = event.streams;
       if (remoteStream) {
-        console.log('📹 Remote stream received with tracks:', remoteStream.getTracks().map(t => t.kind));
+        console.log('Remote stream tracks:', remoteStream.getTracks().map(t => t.kind));
         
         // Update both local state and Redux state
         setWebrtcRemoteStream(remoteStream);
@@ -532,8 +504,7 @@ export const useCall = () => {
             const playPromise = remoteVideoRef.current.play();
             if (playPromise !== undefined) {
               playPromise.then(() => {
-                console.log('✅ Remote video playing successfully');
-              }).catch(error => {
+                }).catch(error => {
                 console.warn('⚠️ Remote video play failed, retrying...', error);
                 setTimeout(() => {
                   remoteVideoRef.current?.play().catch(err => {
@@ -564,11 +535,10 @@ export const useCall = () => {
   const initializeWebRTC = useCallback(async () => {
     // Prevent multiple simultaneous initializations using ref lock
     if (initializationLockRef.current) {
-      console.log('⏳ WebRTC initialization already in progress (ref lock), waiting...');
+      console.log('WebRTC initialization already in progress, waiting...');
       // Wait a bit and try again
       await new Promise(resolve => setTimeout(resolve, 1000));
       if (peerConnectionRef.current && localStreamRef.current) {
-        console.log('✅ WebRTC already initialized after wait, reusing existing connection');
         return { stream: localStreamRef.current, pc: peerConnectionRef.current };
       }
       return null;
@@ -576,11 +546,10 @@ export const useCall = () => {
 
     // Prevent multiple simultaneous initializations using state
     if (isInitializingWebRTC) {
-      console.log('⏳ WebRTC initialization already in progress (state lock), waiting...');
+      console.log('WebRTC initialization already in progress, waiting...');
       // Wait a bit and try again
       await new Promise(resolve => setTimeout(resolve, 1000));
       if (peerConnectionRef.current && localStreamRef.current) {
-        console.log('✅ WebRTC already initialized after wait, reusing existing connection');
         return { stream: localStreamRef.current, pc: peerConnectionRef.current };
       }
       return null;
@@ -595,7 +564,6 @@ export const useCall = () => {
     }
 
     if (peerConnectionRef.current && localStreamRef.current) {
-      console.log('✅ WebRTC already initialized, reusing existing connection');
       return { stream: localStreamRef.current, pc: peerConnectionRef.current };
     }
 
@@ -604,20 +572,15 @@ export const useCall = () => {
       initializationLockRef.current = true;
       setIsInitializingWebRTC(true);
       setInitializationAttempts(prev => prev + 1);
-      console.log(`🎬 Initializing WebRTC... (Attempt ${initializationAttempts + 1}/3)`);
+      console.log('Initializing WebRTC...');
       
-      console.log('📹 Getting local media stream...');
       const stream = await startLocalStream();
       if (!stream) {
         throw new Error('Failed to get local media stream');
       }
-      console.log('✅ Local media stream obtained');
-      
-      console.log('🔗 Creating peer connection...');
       const pc = createPeerConnection();
       
       if (localStreamRef.current && pc.getSenders().length === 0) {
-        console.log('📤 Adding tracks to peer connection...');
         localStreamRef.current.getTracks().forEach(track => {
           pc.addTrack(track, localStreamRef.current);
         });
@@ -627,7 +590,6 @@ export const useCall = () => {
         throw new Error('Peer connection was not created successfully');
       }
       
-      console.log('✅ WebRTC initialized successfully');
       setInitializationAttempts(0); // Reset on success
       return { stream, pc: peerConnectionRef.current };
     } catch (error) {
@@ -635,15 +597,12 @@ export const useCall = () => {
       
       // Handle specific device errors
       if (error.name === 'NotReadableError') {
-        console.log('🔧 Device in use error detected, attempting recovery...');
-        
         // Force cleanup and wait longer
         await releaseAllTracks();
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Try one more time with a longer delay
         if (initializationAttempts < 4) { // Increased retry limit
-          console.log('🔄 Retrying WebRTC initialization after device cleanup...');
           await new Promise(resolve => setTimeout(resolve, 3000));
           // Don't increment attempts here, let the main loop handle it
           return initializeWebRTC();
@@ -683,7 +642,6 @@ export const useCall = () => {
         localStreamRef.current.getTracks().forEach(track => {
           const hasTrack = existingSenders.some(sender => sender.track === track);
           if (!hasTrack) {
-            console.log(`📤 Adding ${track.kind} track to peer connection for offer`);
             pc.addTrack(track, localStreamRef.current);
           }
         });
@@ -727,7 +685,6 @@ export const useCall = () => {
         localStreamRef.current.getTracks().forEach(track => {
           const hasTrack = existingSenders.some(sender => sender.track === track);
           if (!hasTrack) {
-            console.log(`📤 Adding ${track.kind} track to peer connection for answer`);
             pc.addTrack(track, localStreamRef.current);
           }
         });
@@ -783,33 +740,25 @@ export const useCall = () => {
       const videoTrack = localStreamRef.current.getVideoTracks()[0];
       if (videoTrack) {
         const newVideoEnabled = !webrtcIsVideoEnabled;
-        console.log(`🎥 Toggling video: ${newVideoEnabled ? 'enabled' : 'disabled'}`);
         videoTrack.enabled = newVideoEnabled;
         setWebrtcIsVideoEnabled(newVideoEnabled);
         
         if (peerConnectionRef.current) {
           const senders = peerConnectionRef.current.getSenders();
-          console.log(`📤 Found ${senders.length} senders in peer connection`);
-          
           const videoSender = senders.find(sender => 
             sender.track && sender.track.kind === 'video'
           );
           
           if (videoSender) {
-            console.log(`🎥 Video sender found, setting enabled to: ${newVideoEnabled}`);
             videoSender.track.enabled = newVideoEnabled;
           } else {
-            console.log('⚠️ No video sender found in peer connection');
-          }
+            }
         } else {
-          console.log('⚠️ No peer connection available');
-        }
+          }
       } else {
-        console.log('⚠️ No video track found in local stream');
-      }
+        }
     } else {
-      console.log('⚠️ No local stream available');
-    }
+      }
   }, [webrtcIsVideoEnabled]);
 
   const toggleMute = useCallback(() => {
@@ -884,36 +833,29 @@ export const useCall = () => {
   // Call actions
   const startCall = async (chatId, retryCount = 0) => {
     try {
-      console.log(`🎥 Starting video call for chat: ${chatId} (attempt ${retryCount + 1})`);
-      console.log('🔍 Chat ID type and value:', typeof chatId, chatId);
-      
+      console.log('Starting call for chat:', chatId);
       if (!socket) {
         throw new Error('Socket not connected');
       }
 
       // Navigate to caller page immediately
       if (!location.pathname.includes('/video-call/')) {
-        navigate(`/video-call/caller/${chatId}`, { replace: true });
+        navigate('/video-call/caller/' + chatId, { replace: true });
       }
 
-      console.log('🔌 Socket connected, initializing WebRTC...');
       await initializeWebRTC();
 
-      console.log('📡 Starting call via socket...');
       await startCallSocket(chatId, 'one-to-one');
 
-      console.log('✅ Call started successfully');
-      
       // Don't save temporary call data - wait for real call ID from server
-      console.log('⏳ Waiting for real call ID from server...');
-    } catch (error) {
-      console.error(`❌ Error starting call (attempt ${retryCount + 1}):`, error);
-      
-      // Handle socket reconnection errors with retry
-      if (error.message.includes('Socket reconnection timeout') || error.message.includes('Socket not available')) {
-        if (retryCount < 2) {
-          console.log(`🔄 Socket reconnection failed, retrying... (${retryCount + 1}/3)`);
-          toast.error(`Connection lost. Retrying... (${retryCount + 1}/3)`, {
+      } catch (error) {
+        console.error('Error starting call (attempt ' + (retryCount + 1) + '):', error);
+        
+        // Handle socket reconnection errors with retry
+        if (error.message.includes('Socket reconnection timeout') || error.message.includes('Socket not available')) {
+          if (retryCount < 2) {
+            console.log('Retrying call start...');
+          toast.error('Connection lost. Retrying... (' + (retryCount + 1) + '/3)', {
             duration: 3000,
           });
           
@@ -921,7 +863,6 @@ export const useCall = () => {
           await new Promise(resolve => setTimeout(resolve, 2000));
           return startCall(chatId, retryCount + 1);
         } else {
-          console.log('🔄 Socket reconnection failed after 3 attempts');
           toast.error('Connection lost. Please check your internet connection and try again.', {
             duration: 5000,
             action: {
@@ -938,8 +879,6 @@ export const useCall = () => {
       
       // Handle different types of media device errors
       if (error.message.includes('Device in use') || error.name === 'NotReadableError') {
-        console.log('🔄 Device in use, attempting to release...');
-        
         // Increment device in use retry count
         setDeviceInUseRetryCount(prev => prev + 1);
         
@@ -969,7 +908,6 @@ export const useCall = () => {
           try {
             const testStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
             testStream.getTracks().forEach(track => track.stop());
-            console.log('✅ Devices released successfully');
             toast.success('Devices released. Please try starting the call again.', {
               duration: 3000,
             });
@@ -1015,13 +953,9 @@ export const useCall = () => {
       return;
     }
 
-    console.log('📞 Accepting call with data:', incomingCall);
-
     try {
-      console.log('🔇 Stopping call sounds...');
       stopCallSounds();
       
-      console.log('🔧 Initializing WebRTC...');
       await initializeWebRTC();
 
       // Use the correct callId from incomingCall
@@ -1030,15 +964,11 @@ export const useCall = () => {
         throw new Error('Call ID not found in incoming call data');
       }
 
-      console.log('📡 Joining call socket with callId:', callId);
       await joinCallSocket(callId);
 
       // Don't navigate when accepting a call - stay on current page
       // The handleCallJoined function will handle the proper state transition
-      console.log('🎯 Call accepted - staying on current page for state transition');
-      
-      console.log('✅ Call accepted successfully');
-    } catch (error) {
+      } catch (error) {
       if (error.message.includes('Device in use') || error.name === 'NotReadableError') {
         toast.error('Camera or microphone is being used by another application. Please close other apps and try again.', {
           duration: 5000,
@@ -1074,8 +1004,6 @@ export const useCall = () => {
       return;
     }
 
-    console.log('📞 Rejecting call...');
-    
     // Reset initialization attempts counter
     setInitializationAttempts(0);
     
@@ -1094,8 +1022,6 @@ export const useCall = () => {
       return;
     }
 
-    console.log('📞 Cancelling call...');
-    
     // Reset initialization attempts counter
     setInitializationAttempts(0);
     
@@ -1115,16 +1041,13 @@ export const useCall = () => {
       return;
     }
 
-    console.log('📞 Ending active call and cleaning up...');
-    
     // Reset initialization attempts counter
     setInitializationAttempts(0);
     
     // Use the enhanced end call function that includes media cleanup
     await endCallWithCleanup(callId);
     
-    console.log('✅ Call ended and cleanup completed');
-  };
+    };
 
   // Call history functions
   const handleDeleteCall = (callId) => {
@@ -1139,7 +1062,7 @@ export const useCall = () => {
     if (!seconds || seconds === 0) return '--:--';
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
   };
 
   const formatDate = (date) => {
@@ -1148,9 +1071,9 @@ export const useCall = () => {
     const diffInDays = Math.floor((now - callDate) / (1000 * 60 * 60 * 24));
 
     if (diffInDays === 0) {
-      return `Today, ${callDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      return 'Today, ' + callDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } else if (diffInDays === 1) {
-      return `Yesterday, ${callDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      return 'Yesterday, ' + callDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } else if (diffInDays < 7) {
       return callDate.toLocaleDateString([], { weekday: 'long', hour: '2-digit', minute: '2-digit' });
     } else {
@@ -1206,7 +1129,7 @@ export const useCall = () => {
       outgoing: 'Outgoing call'
     };
     
-    return `${statusText[status]} with ${otherParticipant.name}`;
+    return statusText[status] + ' with ' + otherParticipant.name;
   };
 
   // Timer for call duration
@@ -1225,7 +1148,6 @@ export const useCall = () => {
   // Auto cleanup when call status changes to idle or ends
   useEffect(() => {
     if (socketCallStatus === 'idle' || !socketCallStatus || socketCallStatus === 'ended') {
-      console.log('🧹 Call status changed to idle/ended, releasing media tracks...');
       releaseAllTracks();
     }
   }, [socketCallStatus, releaseAllTracks]);
@@ -1233,12 +1155,10 @@ export const useCall = () => {
   // Cleanup on unmount and page unload
   useEffect(() => {
     const handleBeforeUnload = () => {
-      console.log('🧹 Page unloading, releasing media tracks...');
       releaseAllTracks();
     };
 
     const handlePageHide = () => {
-      console.log('🧹 Page hidden, releasing media tracks...');
       releaseAllTracks();
     };
 
@@ -1247,7 +1167,6 @@ export const useCall = () => {
     window.addEventListener('pagehide', handlePageHide);
 
     return () => {
-      console.log('🧹 useCall hook unmounting, cleaning up...');
       releaseAllTracks();
       
       // Remove event listeners

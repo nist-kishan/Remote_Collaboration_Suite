@@ -17,23 +17,18 @@ const validateEnvironment = () => {
 
   const missingVars = requiredVars.filter(varName => !process.env[varName]);
   
-  if (missingVars.length > 0) {
-    console.error('❌ Missing required environment variables:', missingVars);
-    if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
-    }
+  if (missingVars.length > 0 && process.env.NODE_ENV === 'production') {
+    process.exit(1);
   }
 };
 
 // Set secure default environment variables
 const setDefaults = () => {
   if (!process.env.ACCESS_TOKEN_SECRET) {
-    console.warn('⚠️ ACCESS_TOKEN_SECRET not set, using default (NOT SECURE FOR PRODUCTION)');
     process.env.ACCESS_TOKEN_SECRET = "your_access_token_secret_key_here_make_it_long_and_secure_123456789";
   }
   
   if (!process.env.REFRESH_TOKEN_SECRET) {
-    console.warn('⚠️ REFRESH_TOKEN_SECRET not set, using default (NOT SECURE FOR PRODUCTION)');
     process.env.REFRESH_TOKEN_SECRET = "your_refresh_token_secret_key_here_make_it_long_and_secure_123456789";
   }
   
@@ -46,12 +41,10 @@ const setDefaults = () => {
   }
   
   if (!process.env.MONGODB_URI) {
-    console.warn('⚠️ MONGODB_URI not set, using default local MongoDB');
     process.env.MONGODB_URI = "mongodb://localhost:27017/remote_work_collaboration";
   }
   
   if (!process.env.FRONTEND_URL) {
-    console.warn('⚠️ FRONTEND_URL not set, using default local URL');
     process.env.FRONTEND_URL = "http://localhost:5173";
   }
   
@@ -63,7 +56,6 @@ const setDefaults = () => {
   // Production-specific settings
   if (process.env.NODE_ENV === 'production') {
     if (!process.env.PORT) {
-      console.warn('⚠️ PORT not set, using default port 5000');
       process.env.PORT = 5000;
     }
   }
@@ -94,7 +86,6 @@ const gracefulShutdown = (server) => {
     
     // Force close after 30 seconds
     setTimeout(() => {
-      console.error('❌ Could not close connections in time, forcefully shutting down');
       process.exit(1);
     }, parseInt(process.env.GRACEFUL_SHUTDOWN_TIMEOUT) || 30000);
   };
@@ -134,11 +125,9 @@ DbConnection()
       
       switch (error.code) {
         case 'EACCES':
-          console.error(`❌ ${bind} requires elevated privileges`);
           process.exit(1);
           break;
         case 'EADDRINUSE':
-          console.error(`❌ ${bind} is already in use`);
           process.exit(1);
           break;
         default:
@@ -147,7 +136,5 @@ DbConnection()
     });
   })
   .catch((err) => {
-    console.error('❌ Database connection failed:', err.message);
-    console.error('🔧 Make sure MongoDB is running and MONGODB_URI is correct');
     process.exit(1);
   });

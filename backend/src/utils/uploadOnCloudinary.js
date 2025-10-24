@@ -8,11 +8,8 @@ export const uploadOnCloudinary = async (localFilePath) => {
                              process.env.CLOUDINARY_API_SECRET;
 
   if (!hasCloudinaryConfig) {
-    console.warn('Cloudinary not configured, serving files locally');
-    
     // Return local file info instead of uploading to Cloudinary
     if (!localFilePath || !fs.existsSync(localFilePath)) {
-      console.error('Local file does not exist:', localFilePath);
       return null;
     }
 
@@ -39,13 +36,11 @@ export const uploadOnCloudinary = async (localFilePath) => {
 
   try {
     if (!localFilePath) {
-      console.error('No local file path provided');
       return null;
     }
 
     // Check if file exists
     if (!fs.existsSync(localFilePath)) {
-      console.error('Local file does not exist:', localFilePath);
       return null;
     }
 
@@ -76,8 +71,6 @@ export const uploadOnCloudinary = async (localFilePath) => {
     return response;
 
   } catch (error) {
-    console.error('Cloudinary upload error:', error);
-    
     // Clean up local file even on error
     if (fs.existsSync(localFilePath)) {
       fs.unlinkSync(localFilePath);
@@ -96,14 +89,12 @@ export const deleteFromUrl = async (fileUrl) => {
     });
 
     if (!fileUrl) {
-      console.error('No file URL provided for deletion');
       return false;
     }
 
     // Extract public ID from Cloudinary URL
     const urlParts = fileUrl.split("/upload/");
     if (urlParts.length < 2) {
-      console.error("Invalid Cloudinary URL:", fileUrl);
       return false;
     }
 
@@ -116,12 +107,10 @@ export const deleteFromUrl = async (fileUrl) => {
     if (result.result === 'ok') {
       return true;
     } else {
-      console.error('Failed to delete file from Cloudinary:', result);
       return false;
     }
 
   } catch (err) {
-    console.error('Error deleting file from Cloudinary:', err);
     return false;
   }
 };

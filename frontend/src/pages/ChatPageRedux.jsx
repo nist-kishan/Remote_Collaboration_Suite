@@ -144,18 +144,15 @@ const ChatPage = () => {
 
   const handleDelete = (chat) => {
     // Handle delete chat logic
-    console.log('Delete chat:', chat);
-  };
+    };
 
   const handleArchive = (chat) => {
     // Handle archive chat logic
-    console.log('Archive chat:', chat);
-  };
+    };
 
   const handleInfo = (chat) => {
     // Handle chat info logic
-    console.log('Show chat info:', chat);
-  };
+    };
 
   const handleBackToChatList = () => {
     navigate('/chat', { replace: true });

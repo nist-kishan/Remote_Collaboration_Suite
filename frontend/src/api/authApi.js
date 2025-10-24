@@ -1,6 +1,5 @@
 import ApiClient from "./ApiClient";
 
-
 export const signup = async (formData) => {
   try {
     const response = await ApiClient.post("/auth/signup", formData);
@@ -98,7 +97,6 @@ export const changePassword = async ({ password, newPassword }) => {
     throw error;
   }
 };
-
 
 export const sendOtp = async () => {
   try {

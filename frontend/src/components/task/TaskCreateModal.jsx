@@ -214,12 +214,18 @@ const TaskCreateModal = ({ isOpen, onClose, projectId, projectMembers, onCreateT
               <Calendar size={16} className="inline mr-1" />
               Due Date
             </label>
-            <CustomInput
-              name="dueDate"
-              type="datetime-local"
-              value={formData.dueDate}
-              onChange={handleChange}
-            />
+            <div className="relative">
+              <CustomInput
+                name="dueDate"
+                type="date"
+                value={formData.dueDate}
+                onChange={handleChange}
+                className="pr-10"
+              />
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                <Calendar className="w-5 h-5 text-gray-400" />
+              </div>
+            </div>
           </div>
 
           {/* Row 4: Tags */}

@@ -153,8 +153,7 @@ export default function NewWhiteboard() {
         invitedUsers: formData.invitedUsers
       });
       
-      console.log('✅ Whiteboard creation result:', result);
-    } finally {
+      } finally {
       setIsSubmitting(false);
     }
   };

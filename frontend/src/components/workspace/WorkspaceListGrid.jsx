@@ -105,7 +105,6 @@ const WorkspaceList = () => {
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
 
-
   const handleCreateWorkspace = () => {
     setShowCreateModal(true);
   };
@@ -238,7 +237,6 @@ const WorkspaceList = () => {
             <div className="flex flex-col sm:flex-row gap-4">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type="text"
                   placeholder="Search workspaces..."
@@ -403,28 +401,30 @@ const WorkspaceList = () => {
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditWorkspace(workspace);
-                      }}
-                      className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    {workspace.owner._id === workspace.owner._id && (
+                  {workspace.userRole === 'owner' && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditWorkspace(workspace);
+                        }}
+                        className="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+                        title="Edit workspace"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteWorkspace(workspace);
                         }}
                         className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                        title="Delete workspace"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">

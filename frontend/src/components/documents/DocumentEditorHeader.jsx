@@ -1,12 +1,11 @@
 import React from "react";
 import { 
-  Save, 
+  Save,
   Share, 
   Eye,
   Settings,
   ArrowLeft,
-  ToggleLeft,
-  ToggleRight
+  Clock
 } from "lucide-react";
 import Button from "../ui/Button";
 import Container from "../ui/CustomContainer";
@@ -31,9 +30,12 @@ const DocumentHeader = ({
   isAutoSaveEnabled = false,
   onToggleAutoSave = null,
   filename = "newDocument",
-  onFilenameChange = null
+  onFilenameChange = null,
+  activeUsers = [],
+  isConnected = false,
 }) => {
-
+  
+  // Debug logging
   return (
     <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 shadow-sm transition-colors duration-200 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -50,7 +52,7 @@ const DocumentHeader = ({
               <span className="hidden sm:inline">Back</span>
             </Button>
             
-            <div className="hidden sm:block">
+            <div>
               {canEdit && onFilenameChange ? (
                 <input
                   type="text"
@@ -64,19 +66,53 @@ const DocumentHeader = ({
                   {filename || title}
                 </h1>
               )}
-              <div className="flex items-center gap-2 mt-1">
-                {isAutoSaveEnabled ? (
-                  <AutoSaveIndicator 
-                    status={autoSaveStatus}
-                    lastSaved={lastSaved}
-                    isAutoSaveEnabled={isAutoSaveEnabled}
-                  />
-                ) : (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {document ? "All changes saved" : "New document"}
-                  </p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <AutoSaveIndicator 
+                  status={document ? autoSaveStatus : 'idle'}
+                  lastSaved={lastSaved}
+                  isAutoSaveEnabled={true}
+                />
+                {!document && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    (Click Save to enable auto-save)
+                  </span>
                 )}
-                <span className="px-2 py-1 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                
+                {/* Connection Status */}
+                <div className="flex items-center space-x-2 px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-800">
+                  <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                    {isConnected ? 'Connected' : 'Disconnected'}
+                  </span>
+                </div>
+                
+                {/* Active Users Indicator */}
+                {activeUsers.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <div className="flex -space-x-2">
+                      {activeUsers.slice(0, 3).map((user, index) => (
+                        <div
+                          key={index}
+                          className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 border-2 border-white dark:border-gray-800 flex items-center justify-center text-white text-xs font-semibold"
+                          title={user.name}
+                        >
+                          {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                        </div>
+                      ))}
+                    </div>
+                    {activeUsers.length > 3 && (
+                      <span className="text-xs text-gray-600 dark:text-gray-400">+{activeUsers.length - 3}</span>
+                    )}
+                  </div>
+                )}
+                
+                {/* Role Badge */}
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                  userRole === 'owner' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
+                  userRole === 'admin' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
+                  userRole === 'editor' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                  'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                }`}>
                   {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
                 </span>
               </div>
@@ -85,6 +121,13 @@ const DocumentHeader = ({
 
           {/* Right Section - Action Buttons */}
           <div className="flex items-center gap-2">
+            {/* View Only Badge */}
+            {!canEdit && (
+              <span className="px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                View Only
+              </span>
+            )}
+            
             {document && (
               <>
                 {canShare && (
@@ -108,31 +151,6 @@ const DocumentHeader = ({
               </>
             )}
             
-            {/* Auto-save Toggle Button - Show for all saved documents (not drafts) */}
-            
-            {/* Auto-save toggle button - Only show for published documents (not drafts) */}
-            {document && document.status !== 'draft' && canEdit && onToggleAutoSave && (
-              <Button
-                variant="outline"
-                onClick={onToggleAutoSave}
-                className={`flex items-center gap-2 px-3 py-2 rounded-md border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                  isAutoSaveEnabled 
-                    ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900 dark:border-green-600 dark:text-green-300' 
-                    : 'bg-gray-50 border-gray-300 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
-                }`}
-                title={isAutoSaveEnabled ? 'Disable auto-save' : 'Enable auto-save'}
-              >
-                {isAutoSaveEnabled ? (
-                  <ToggleRight className="w-4 h-4" />
-                ) : (
-                  <ToggleLeft className="w-4 h-4" />
-                )}
-                <span className="hidden md:inline">
-                  Auto-save {isAutoSaveEnabled ? 'ON' : 'OFF'}
-                </span>
-              </Button>
-            )}
-            
             {canChangeSettings && (
               <Button
                 variant="outline"
@@ -144,24 +162,17 @@ const DocumentHeader = ({
               </Button>
             )}
             
-            {canEdit && (
+            {/* Save button - only show for new documents that need initial save */}
+            {canEdit && !document && (
               <Button
                 onClick={onSave}
                 loading={loading}
                 disabled={loading}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-colors shadow-sm ${
-                  hasChanges 
-                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-600' 
-                    : 'bg-green-600 hover:bg-green-700 text-white border border-green-600'
-                } disabled:bg-gray-400 disabled:cursor-not-allowed disabled:border-gray-400`}
+                className="flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-colors shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:border-gray-400"
               >
                 <Save className="w-4 h-4" />
-                <span className="hidden sm:inline">
-                  {hasChanges ? "Save Changes" : "Saved"}
-                </span>
-                <span className="sm:hidden">
-                  {hasChanges ? "Save" : "✓"}
-                </span>
+                <span className="hidden sm:inline">Save Document</span>
+                <span className="sm:hidden">Save</span>
               </Button>
             )}
           </div>
@@ -183,9 +194,20 @@ const DocumentHeader = ({
             </h1>
           )}
           <div className="flex items-center gap-2 mt-1">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {document ? "All changes saved" : "New document"}
-            </p>
+            {document ? (
+              <AutoSaveIndicator 
+                status={autoSaveStatus}
+                lastSaved={lastSaved}
+                isAutoSaveEnabled={true}
+              />
+            ) : (
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                <p className="text-gray-500 dark:text-gray-400">
+                  Auto-save after initial save
+                </p>
+              </div>
+            )}
             <span className="px-2 py-1 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
               {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
             </span>

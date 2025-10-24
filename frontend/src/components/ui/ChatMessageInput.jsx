@@ -73,13 +73,6 @@ const MessageInput = forwardRef(({
         messageData.replyTo = replyTo._id;
       }
       
-      console.log('🔍 MessageInput sending message data:', {
-        ...messageData,
-        replyTo: messageData.replyTo,
-        replyToType: typeof messageData.replyTo,
-        replyToOriginal: replyTo,
-        replyToOriginalType: typeof replyTo
-      });
       onSendMessage?.(messageData);
       setMessage('');
       if (replyTo) {
@@ -96,22 +89,16 @@ const MessageInput = forwardRef(({
   };
 
   const handleFileSelect = (type) => {
-    // console.log('🔍 handleFileSelect called with type:', type);
-    // console.log('🔍 fileInputRef.current:', fileInputRef.current);
-    
     if (!fileInputRef.current) {
-      console.error('❌ fileInputRef.current is null');
+      console.error('fileInputRef.current is null');
       return;
     }
     
     const acceptType = getAcceptType(type);
-    // console.log('🔍 Setting accept type:', acceptType);
-    
-    fileInputRef.current.setAttribute('accept', acceptType);
+    // fileInputRef.current.setAttribute('accept', acceptType);
     fileInputRef.current.setAttribute('data-type', type);
     
-    // console.log('🔍 Clicking file input...');
-    fileInputRef.current.click();
+    // fileInputRef.current.click();
   };
 
   const getAcceptType = (type) => {
@@ -146,24 +133,13 @@ const MessageInput = forwardRef(({
   }, [previewFiles]);
 
   const handleFileChange = (e) => {
-    // console.log('🔍 handleFileChange called');
-    // console.log('🔍 e.target.files:', e.target.files);
-    
-    const file = e.target.files[0];
+    // // const file = e.target.files[0];
     if (!file) {
-      // console.log('❌ No file selected');
-      return;
+      // return;
     }
 
     const type = e.target.getAttribute('data-type');
-    // console.log('🔍 File selected:', {
-    //   name: file.name,
-    //   size: file.size,
-    //   type: file.type,
-    //   dataType: type
-    // });
-    
-    // Create file URL for preview
+    // // Create file URL for preview
     const fileUrl = URL.createObjectURL(file);
     
     // Add file to preview instead of sending immediately
@@ -175,10 +151,8 @@ const MessageInput = forwardRef(({
       file: file // Keep the actual file object for sending
     };
     
-    // console.log('🔍 Adding file to preview:', newFile);
     setPreviewFiles(prev => {
       const updated = [...prev, newFile];
-      // console.log('🔍 Updated preview files:', updated);
       return updated;
     });
 
@@ -411,8 +385,7 @@ const MessageInput = forwardRef(({
         <div className="relative media-menu-container flex-shrink-0">
           <button
             onClick={() => {
-              // console.log('🔍 Media menu button clicked, current state:', showMediaMenu);
-              setShowMediaMenu(!showMediaMenu);
+              // setShowMediaMenu(!showMediaMenu);
             }}
             disabled={disabled}
             className={`h-10 md:h-12 px-2 md:px-3 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 rounded-xl transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 hover:shadow-lg backdrop-blur-sm flex items-center justify-center ${
@@ -429,8 +402,7 @@ const MessageInput = forwardRef(({
               <div className="py-2">
                 <button
                   onClick={() => {
-                    // console.log('🔍 Image button clicked');
-                    handleFileSelect('image');
+                    // handleFileSelect('image');
                     setShowMediaMenu(false);
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 transition-all duration-200 ease-in-out hover:scale-[1.02] rounded-xl mx-2"
@@ -517,7 +489,6 @@ const MessageInput = forwardRef(({
           </div>
         </div>
       </div>
-
 
       {/* WhatsApp-style Upload Loader */}
       <WhatsAppLoader

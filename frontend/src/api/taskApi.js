@@ -18,6 +18,8 @@ export const taskApi = {
   // Get project tasks
   getProjectTasks: (projectId, params = {}) => {
     const queryParams = new URLSearchParams();
+    if (params.page) queryParams.append('page', params.page);
+    if (params.limit) queryParams.append('limit', params.limit);
     if (params.status) queryParams.append('status', params.status);
     if (params.assignedTo) queryParams.append('assignedTo', params.assignedTo);
     if (params.priority) queryParams.append('priority', params.priority);

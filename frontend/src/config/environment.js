@@ -202,14 +202,7 @@ if (isProduction) {
 
 // Development helpers
 if (isDevelopment) {
-  console.log('🔧 Environment Configuration:', {
-    mode,
-    API_CONFIG,
-    SOCKET_CONFIG,
-    APP_CONFIG,
-    FEATURE_FLAGS,
-  });
-}
+  }
 
 // Export all configuration
 export default {

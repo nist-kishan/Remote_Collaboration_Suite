@@ -38,43 +38,33 @@ export default function VideoCall() {
 
   useEffect(() => {
     if (callId && socket) {
-      console.log('VideoCall page loaded with callId:', callId);
-      
       // Check if this is an incoming call that we need to handle
       if (incomingCall && (incomingCall.callId === callId || incomingCall._id === callId)) {
-        console.log('Handling incoming call on VideoCall page');
         setIsInitialized(true);
         
         // Auto-accept the call if we have an incoming call and we're on the call page
         setTimeout(async () => {
-          console.log('Auto-accepting call from VideoCall page');
           try {
             await acceptCall();
-            console.log('Call auto-accepted successfully');
-          } catch (error) {
+            } catch (error) {
             console.error('Error auto-accepting call:', error);
             toast.error('Failed to accept call: ' + error.message);
           }
         }, 2000); // Increased delay to ensure everything is loaded
       } else if (activeCall && (activeCall._id === callId || activeCall.callId === callId)) {
-        console.log('Active call found, showing call interface');
         setIsInitialized(true);
       } else {
-        console.log('No active call found, initializing call interface');
         setIsInitialized(true);
         
         // Listen for call events to get the call data
         const handleIncomingCall = (data) => {
-          console.log('Received incoming call data:', data);
           if (data.callId === callId || data.call?._id === callId) {
             setIsInitialized(true);
           }
         };
 
         const handleCallJoined = (data) => {
-          console.log('Call joined data:', data);
           if (data.call && (data.call._id === callId || data.callId === callId)) {
-            console.log('Call joined - transitioning to active call interface');
             setIsInitialized(true);
           }
         };
@@ -84,7 +74,6 @@ export default function VideoCall() {
 
         // Set a timeout to show fallback if no call data comes
         const timeout = setTimeout(() => {
-          console.log('Timeout waiting for call data, showing fallback');
           setIsInitialized(true);
         }, 5000);
 
@@ -98,7 +87,6 @@ export default function VideoCall() {
   }, [callId, socket, incomingCall, activeCall]);
 
   const handleEndCall = () => {
-    console.log('Ending call and navigating back');
     endActiveCall();
     navigate('/chat');
   };
@@ -137,7 +125,6 @@ export default function VideoCall() {
       <OutgoingVideoCallModal
         call={outgoingCall}
         onCancel={() => {
-          console.log('Canceling outgoing call');
           navigate('/chat');
         }}
       />

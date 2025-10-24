@@ -12,7 +12,8 @@ import {
   User,
   Crown,
   Upload,
-  Download
+  Download,
+  UserPlus
 } from "lucide-react";
 import Button from "../ui/CustomButton";
 import Card from "../ui/CustomCard";
@@ -33,6 +34,7 @@ const DocumentCard = (props) => {
     onView,
     onUpload,
     onExport,
+    onCollaborate,
     className = "" 
   } = props;
 
@@ -50,9 +52,9 @@ const DocumentCard = (props) => {
       case 'viewer':
         return ['view']; // Only view button
       case 'editor':
-        return ['edit', 'download']; // Only edit and download buttons
+        return ['edit', 'collaborate']; // Only edit and collaborate buttons
       case 'owner':
-        return ['edit', 'download', 'share', 'delete']; // 4 buttons: edit, download, share, delete
+        return ['edit', 'collaborate', 'delete']; // 3 buttons: edit, collaborate, delete
       default:
         return ['view']; // Default to view only
     }
@@ -60,6 +62,7 @@ const DocumentCard = (props) => {
   
   const visibleActions = getVisibleActions();
   
+  // Debug logging
   const getStatusColor = (status) => {
     switch (status) {
       case "published":
@@ -173,29 +176,27 @@ const DocumentCard = (props) => {
                   </Button>
                 )}
                 
-                {/* Download Button - For editors and owners */}
-                {visibleActions.includes('download') && onExport && (
+                {/* Collaborate Button - For editors and owners */}
+                {visibleActions.includes('collaborate') && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onExport(document)}
-                    title="Download Document"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (onCollaborate) {
+                        onCollaborate(document);
+                      } else {
+                        console.warn('⚠️ onCollaborate handler not provided, falling back to onShare');
+                        if (onShare) {
+                          onShare(document);
+                        }
+                      }
+                    }}
+                    title="Manage Collaboration"
                     className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
-                    <Download className="w-4 h-4" />
-                  </Button>
-                )}
-                
-                {/* Share Button - For editors and owners */}
-                {visibleActions.includes('share') && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onShare(document)}
-                    title="Share Document"
-                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <Share className="w-4 h-4" />
+                    <Users className="w-4 h-4" />
                   </Button>
                 )}
                 
@@ -285,29 +286,23 @@ const DocumentCard = (props) => {
                     </Button>
                   )}
                   
-                  {/* Download Button - For editors and owners */}
-                  {visibleActions.includes('download') && onExport && (
+                  {/* Collaborate Button - For editors and owners */}
+                  {visibleActions.includes('collaborate') && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onExport(document)}
-                      title="Download Document"
+                      onClick={() => {
+                        if (onCollaborate) {
+                          onCollaborate(document);
+                        } else {
+                          console.warn('⚠️ onCollaborate handler not provided, falling back to onShare');
+                          onShare(document);
+                        }
+                      }}
+                      title="Manage Collaboration"
                       className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
-                      <Download className="w-4 h-4" />
-                    </Button>
-                  )}
-                  
-                  {/* Share Button - For editors and owners */}
-                  {visibleActions.includes('share') && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onShare(document)}
-                      title="Share Document"
-                      className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      <Share className="w-4 h-4" />
+                      <Users className="w-4 h-4" />
                     </Button>
                   )}
                   

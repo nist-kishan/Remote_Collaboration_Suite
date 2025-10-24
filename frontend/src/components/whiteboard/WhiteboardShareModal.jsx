@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useOrigin } from "../../hook/useOrigin";
 import { useSelector } from "react-redux";
 import { 
@@ -15,17 +15,17 @@ import {
   Link,
   Search,
   Settings,
-  FileText
+  Grid
 } from "lucide-react";
 import CustomButton from "../ui/CustomButton";
 import CustomInput from "../ui/CustomInput";
 import CustomCard from "../ui/CustomCard";
 import { toast } from "react-hot-toast";
 import { searchUsers } from "../../api/userApi";
-import { shareDocument, updateCollaboratorRole, removeCollaborator, shareDocumentViaEmail } from "../../api/documentApi";
+import { shareWhiteboard, updateCollaboratorRole, removeCollaborator, shareWhiteboardViaEmail } from "../../api/whiteboardApi";
 
-const ShareModal = ({ 
-  document, 
+const WhiteboardShareModal = ({ 
+  whiteboard, 
   isOpen, 
   onClose, 
   onShare, 
@@ -34,7 +34,7 @@ const ShareModal = ({
   onShareViaEmail,
   loading = false 
 }) => {
-  const { getDocumentShareUrl } = useOrigin();
+  const { getWhiteboardShareUrl } = useOrigin();
   const { user: currentUser } = useSelector((state) => state.auth);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("viewer");
@@ -48,24 +48,19 @@ const ShareModal = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const searchTimeoutRef = useRef(null);
-  const isSearchingRef = useRef(false);
-  
-  // Selected users to invite
-  const [selectedUsers, setSelectedUsers] = useState([]);
   
   // Visibility state
-  const [visibility, setVisibility] = useState(document?.visibility || "private");
+  const [visibility, setVisibility] = useState(whiteboard?.visibility || "private");
   
   // Check if current user is owner
-  const isOwner = document?.owner?._id === currentUser?._id;
+  const isOwner = whiteboard?.owner?._id === currentUser?._id;
 
   useEffect(() => {
-    if (document && isOpen) {
+    if (whiteboard && isOpen) {
       // Generate share link using the custom hook
-      setShareLink(getDocumentShareUrl(document._id));
+      setShareLink(getWhiteboardShareUrl(whiteboard._id));
     }
-  }, [document?._id, isOpen]); // Removed unnecessary fetch
+  }, [whiteboard?._id, isOpen]); // Removed unnecessary fetch and fixed dependencies
 
   // Close search results when clicking outside
   useEffect(() => {
@@ -76,19 +71,10 @@ const ShareModal = ({
     };
 
     if (showSearchResults) {
-      window.document.addEventListener('mousedown', handleClickOutside);
-      return () => window.document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showSearchResults]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // Helper component for user avatar with profile picture
   const UserAvatar = ({ user, size = "w-10 h-10", textSize = "text-sm" }) => {
@@ -135,7 +121,7 @@ const ShareModal = ({
   };
 
   const handleShare = async () => {
-    if (!email.trim() || !document?._id) return;
+    if (!email.trim() || !whiteboard?._id) return;
     
     try {
       // Find user by email first
@@ -146,126 +132,64 @@ const ShareModal = ({
       }
       
       const user = searchResults.data.users[0];
-      const response = await shareDocument(document._id, {
+      const response = await shareWhiteboard(whiteboard._id, {
         userIds: [user._id],
         role
       });
       
       if (response.success) {
-        toast.success(`Document shared with ${user.name} as ${role}`);
+        toast.success(`Whiteboard shared with ${user.name} as ${role}`);
         setEmail("");
-        // Refresh the document data
+        // Refresh the whiteboard data
         if (onShare) onShare(response.data);
       }
     } catch (error) {
-      console.error('Failed to share document:', error);
-      toast.error(error.response?.data?.message || "Failed to share document");
+      console.error('Failed to share whiteboard:', error);
+      toast.error(error.response?.data?.message || "Failed to share whiteboard");
     }
   };
 
   const handleSearchUsers = async (term) => {
-    // Skip if already searching
-    if (isSearchingRef.current) {
-      return;
-    }
-    
-    // Require at least 3 characters to search
-    if (term.length < 3) {
+    if (term.length < 2) {
       setSearchResults([]);
       setShowSearchResults(false);
       return;
     }
     
-    // Clear existing timeout
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
+    try {
+      const response = await searchUsers(term, 10); // Limit to 10 suggestions
+      const users = response.data?.users || [];
+      
+      // Filter out users who are already collaborators and the current user
+      const existingCollaboratorIds = (whiteboard?.collaborators || []).map(c => c.user._id.toString());
+      const filteredUsers = users.filter(user => 
+        !existingCollaboratorIds.includes(user._id.toString()) &&
+        user._id.toString() !== currentUser?._id?.toString()
+      );
+      
+      setSearchResults(filteredUsers);
+      setShowSearchResults(true);
+    } catch (error) {
+      console.error('Failed to search users:', error);
+      setSearchResults([]);
+      setShowSearchResults(false);
     }
-    
-    // Set new timeout for debounced search (1000ms)
-    searchTimeoutRef.current = setTimeout(async () => {
-      // Skip if already searching
-      if (isSearchingRef.current) {
-        return;
-      }
-      
-      isSearchingRef.current = true;
-      
-      try {
-        const response = await searchUsers(term, 10); // Limit to 10 suggestions
-        const users = response.data?.users || [];
-        
-        // Filter out users who are already collaborators and the current user
-        const existingCollaboratorIds = (document?.collaborators || []).map(c => c.user._id.toString());
-        const filteredUsers = users.filter(user => 
-          !existingCollaboratorIds.includes(user._id.toString()) &&
-          user._id.toString() !== currentUser?._id?.toString()
-        );
-        
-        setSearchResults(filteredUsers);
-        setShowSearchResults(true);
-      } catch (error) {
-        console.error('Failed to search users:', error);
-        setSearchResults([]);
-        setShowSearchResults(false);
-      } finally {
-        isSearchingRef.current = false;
-      }
-    }, 1000); // Debounce for 1000ms (1 second)
   };
 
   const handleUserSelect = (user) => {
-    // Check if user is already selected
-    if (selectedUsers.some(u => u._id === user._id)) {
-      toast.error('User already selected');
-      return;
-    }
-    
-    // Add user to selected list with current role
-    setSelectedUsers([...selectedUsers, { ...user, role }]);
-    toast.success(`${user.name} added to invite list`);
-    
-    // Clear search
-    setSearchTerm('');
+    setEmail(user.email);
+    setSearchTerm(user.name);
     setShowSearchResults(false);
-  };
-  
-  const handleRemoveSelectedUser = (userId) => {
-    setSelectedUsers(selectedUsers.filter(u => u._id !== userId));
-  };
-  
-  const handleInviteSelected = async () => {
-    if (selectedUsers.length === 0) {
-      toast.error('Please select at least one user');
-      return;
-    }
-    
-    try {
-      const userIds = selectedUsers.map(u => u._id);
-      const response = await shareDocument(document._id, {
-        userIds,
-        role
-      });
-      
-      if (response.success) {
-        toast.success(`Document shared with ${selectedUsers.length} user(s) as ${role}`);
-        setSelectedUsers([]);
-        // Refresh the document data
-        if (onShare) onShare(response.data);
-      }
-    } catch (error) {
-      console.error('Failed to share document:', error);
-      toast.error(error.response?.data?.message || "Failed to share document");
-    }
   };
 
   const handleUpdateRole = async (userId, newRole) => {
-    if (!document?._id) return;
+    if (!whiteboard?._id) return;
     
     try {
-      const response = await updateCollaboratorRole(document._id, userId, newRole);
+      const response = await updateCollaboratorRole(whiteboard._id, userId, newRole);
       if (response.success) {
         toast.success("Collaborator role updated successfully");
-        // Refresh the document data
+        // Refresh the whiteboard data
         if (onUpdateRole) onUpdateRole(userId, newRole);
       }
     } catch (error) {
@@ -275,18 +199,53 @@ const ShareModal = ({
   };
 
   const handleRemoveCollaborator = async (userId) => {
-    if (!document?._id) return;
+    if (!whiteboard?._id) return;
     
     try {
-      const response = await removeCollaborator(document._id, userId);
+      const response = await removeCollaborator(whiteboard._id, userId);
       if (response.success) {
         toast.success("Collaborator removed successfully");
-        // Refresh the document data
+        // Refresh the whiteboard data
         if (onRemoveCollaborator) onRemoveCollaborator(userId);
       }
     } catch (error) {
       console.error('Failed to remove collaborator:', error);
       toast.error(error.response?.data?.message || "Failed to remove collaborator");
+    }
+  };
+
+  const handleShareViaEmail = async () => {
+    if (!emailList.trim()) {
+      toast.error("Please enter at least one email address");
+      return;
+    }
+
+    if (!whiteboard?._id) return;
+
+    const emails = emailList.split(',').map(email => email.trim()).filter(email => email);
+    
+    if (emails.length === 0) {
+      toast.error("Please enter valid email addresses");
+      return;
+    }
+
+    try {
+      const response = await shareWhiteboardViaEmail(whiteboard._id, {
+        emails,
+        role: emailRole,
+        message: emailMessage
+      });
+
+      if (response.success) {
+        toast.success(`Email invitations sent to ${response.data.emailsSent} recipients`);
+        setEmailList("");
+        setEmailMessage("");
+        // Refresh the whiteboard data
+        if (onShareViaEmail) onShareViaEmail(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to send email invitations:', error);
+      toast.error(error.response?.data?.message || "Failed to send email invitations");
     }
   };
 
@@ -297,8 +256,8 @@ const ShareModal = ({
 
   const handleVisibilityChange = (newVisibility) => {
     setVisibility(newVisibility);
-    // You can add an API call here to update document visibility
-    toast.success(`Document visibility set to ${newVisibility}`);
+    // You can add an API call here to update whiteboard visibility
+    toast.success(`Whiteboard visibility set to ${newVisibility}`);
   };
 
   const getRoleIcon = (role) => {
@@ -327,18 +286,18 @@ const ShareModal = ({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-2 sm:p-4 lg:p-6" style={{ zIndex: 9999 }}>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden border border-gray-200 dark:border-gray-700 mx-2 sm:mx-0" style={{ zIndex: 10000 }}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-b border-gray-200 dark:border-gray-700">
+        <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between p-3 sm:p-4 md:p-6">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" />
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Grid className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 dark:text-green-400" />
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-                  Share Document
+                  Share Whiteboard
                 </h2>
                 <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 truncate">
-                  {document?.title || "Untitled Document"}
+                  {whiteboard?.title || "Untitled Whiteboard"}
                 </p>
               </div>
             </div>
@@ -360,7 +319,7 @@ const ShareModal = ({
               </h3>
               <button
                 onClick={handleCopyLink}
-                className="flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors w-full sm:w-auto"
+                className="flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md transition-colors w-full sm:w-auto"
               >
                 <Copy className="w-3 h-3" />
                 Copy Link
@@ -377,12 +336,12 @@ const ShareModal = ({
               onClick={() => setActiveTab("preview")}
               className={`flex-1 py-2 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors ${
                 activeTab === "preview"
-                  ? "bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                  ? "bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm"
                   : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
               }`}
             >
               <div className="flex items-center justify-center gap-1 sm:gap-2">
-                <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+                <Grid className="w-3 h-3 sm:w-4 sm:h-4" />
                 <span className="hidden xs:inline">Preview</span>
                 <span className="xs:hidden">View</span>
               </div>
@@ -391,7 +350,7 @@ const ShareModal = ({
               onClick={() => setActiveTab("add")}
               className={`flex-1 py-2 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors ${
                 activeTab === "add"
-                  ? "bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                  ? "bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm"
                   : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
               }`}
             >
@@ -405,7 +364,7 @@ const ShareModal = ({
               onClick={() => setActiveTab("view")}
               className={`flex-1 py-2 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors ${
                 activeTab === "view"
-                  ? "bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                  ? "bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm"
                   : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
               }`}
             >
@@ -420,7 +379,7 @@ const ShareModal = ({
                 onClick={() => setActiveTab("settings")}
                 className={`flex-1 py-2 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors ${
                   activeTab === "settings"
-                    ? "bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                    ? "bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 shadow-sm"
                     : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
                 }`}
               >
@@ -436,30 +395,33 @@ const ShareModal = ({
           {/* Tab Content */}
           {activeTab === "preview" && (
             <div className="space-y-6">
-              {/* Document Preview */}
+              {/* Whiteboard Preview */}
               <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    Document Preview
+                    Whiteboard Preview
                   </h3>
                 </div>
                 
-                {document?.content ? (
+                {whiteboard?.canvasData ? (
                   <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-600 p-4">
-                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-60 overflow-y-auto">
-                      {document.content.substring(0, 500)}
-                      {document.content.length > 500 && '...'}
-                    </div>
-                    <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                      {document.content.length} characters
+                    <div className="text-center text-gray-500 dark:text-gray-400">
+                      <Grid className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+                      <p className="text-sm">Canvas content loaded</p>
+                      <p className="text-xs mt-1">
+                        {whiteboard.canvasData ? 
+                          `${Object.keys(whiteboard.canvasData).length} elements` : 
+                          'No drawing content'
+                        }
+                      </p>
                     </div>
                   </div>
                 ) : (
                   <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-600 p-8">
                     <div className="text-center text-gray-500 dark:text-gray-400">
-                      <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-                      <p className="text-sm">No content found</p>
-                      <p className="text-xs mt-1">This document appears to be empty</p>
+                      <Grid className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+                      <p className="text-sm">No drawing content found</p>
+                      <p className="text-xs mt-1">This whiteboard appears to be empty</p>
                     </div>
                   </div>
                 )}
@@ -471,16 +433,16 @@ const ShareModal = ({
             <div className="space-y-6">
               {isOwner ? (
                 <>
-                  {/* Document Information */}
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 sm:p-4">
+                  {/* Whiteboard Info */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                     <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
-                      Document Information
+                      Whiteboard Information
                     </h3>
                     <div className="space-y-1 text-sm text-blue-700 dark:text-blue-300">
-                      <p><span className="font-medium">Title:</span> {document?.title || 'Untitled Document'}</p>
-                      <p><span className="font-medium">Status:</span> <span className="capitalize">{document?.status || 'draft'}</span></p>
-                      <p><span className="font-medium">Owner:</span> {document?.owner?.name || 'Unknown'}</p>
-                      <p><span className="font-medium">Created:</span> {document?.createdAt ? new Date(document.createdAt).toLocaleDateString() : 'Unknown'}</p>
+                      <p><span className="font-medium">Title:</span> {whiteboard?.title || 'Untitled Whiteboard'}</p>
+                      <p><span className="font-medium">Status:</span> <span className="capitalize">{whiteboard?.status || 'active'}</span></p>
+                      <p><span className="font-medium">Owner:</span> {whiteboard?.owner?.name || 'Unknown'}</p>
+                      <p><span className="font-medium">Created:</span> {whiteboard?.createdAt ? new Date(whiteboard.createdAt).toLocaleDateString() : 'Unknown'}</p>
                     </div>
                   </div>
 
@@ -501,22 +463,25 @@ const ShareModal = ({
                           setSearchTerm(e.target.value);
                           handleSearchUsers(e.target.value);
                         }}
-                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                       
-                      {/* Search Results */}
+                      {/* Search Results Dropdown */}
                       {showSearchResults && searchResults.length > 0 && (
-                        <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-40 sm:max-h-48 overflow-y-auto">
+                        <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                           {searchResults.map((user) => (
                             <button
                               key={user._id}
                               onClick={() => handleUserSelect(user)}
-                              className="w-full px-3 sm:px-4 py-2 sm:py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-2 sm:space-x-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                              className="w-full px-4 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-3 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                             >
-                              <UserAvatar user={user} size="w-6 h-6 sm:w-8 sm:h-8" textSize="text-xs" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white truncate">{user.name}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
+                              <UserAvatar user={user} size="w-10 h-10" textSize="text-sm" />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+                                {user.role && (
+                                  <p className="text-xs text-blue-600 dark:text-blue-400 capitalize">{user.role}</p>
+                                )}
                               </div>
                             </button>
                           ))}
@@ -524,8 +489,8 @@ const ShareModal = ({
                       )}
                       
                       {/* No results message */}
-                      {showSearchResults && searchResults.length === 0 && searchTerm.length >= 3 && (
-                        <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4">
+                      {showSearchResults && searchResults.length === 0 && searchTerm.length >= 2 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4">
                           <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
                             No users found matching "{searchTerm}". Make sure the user has an account in the system.
                           </p>
@@ -534,12 +499,12 @@ const ShareModal = ({
                     </div>
                   </div>
 
-                  {/* Invite by Email */}
+                  {/* Add People */}
                   <div>
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                       Invite by Email
                     </h3>
-                    <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex gap-2">
                       <CustomInput
                         placeholder="Enter email address"
                         value={email}
@@ -549,7 +514,7 @@ const ShareModal = ({
                       <select
                         value={role}
                         onChange={(e) => setRole(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
                         <option value="viewer">Viewer</option>
                         <option value="editor">Editor</option>
@@ -558,93 +523,69 @@ const ShareModal = ({
                         onClick={handleShare}
                         disabled={!email.trim() || loading}
                         loading={loading}
-                        className="px-4 py-2"
+                        className="flex items-center gap-2"
                       >
-                        <UserPlus className="w-4 h-4 mr-2" />
+                        <UserPlus className="w-4 h-4" />
                         Share
                       </CustomButton>
                     </div>
                   </div>
 
-                  {/* Selected Users List */}
-                  {selectedUsers.length > 0 && (
-                    <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 sm:p-4 border border-green-200 dark:border-green-800">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-medium text-green-800 dark:text-green-200">
-                          Selected Users ({selectedUsers.length})
-                        </h3>
-                        <button
-                          onClick={handleInviteSelected}
-                          className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium transition-colors flex items-center gap-2 text-sm"
-                        >
-                          <UserPlus className="w-4 h-4" />
-                          Invite All
-                        </button>
-                      </div>
-                      <div className="space-y-2">
-                        {selectedUsers.map((user) => (
-                          <div
-                            key={user._id}
-                            className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded-md border border-green-200 dark:border-green-700"
-                          >
-                            <div className="flex items-center gap-2">
-                              <UserAvatar user={user} size="w-6 h-6" textSize="text-xs" />
-                              <div>
-                                <p className="text-xs font-medium text-gray-900 dark:text-white">{user.name}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 capitalize">
-                                {user.role}
-                              </span>
-                              <button
-                                onClick={() => handleRemoveSelectedUser(user._id)}
-                                className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
-                              >
-                                <X className="w-4 h-4 text-red-600" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quick Invite */}
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 sm:p-4">
-                    <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-3">
-                      Quick Invite
+                  {/* Email Share Section */}
+                  <div className="space-y-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Or Share via Email
                     </h3>
-                    <div className="space-y-3">
-                      <input
-                        type="email"
-                        placeholder="Enter email address"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Email Addresses
+                      </h4>
+                      <textarea
+                        placeholder="Enter email addresses separated by commas (e.g., user1@example.com, user2@example.com)"
+                        value={emailList}
+                        onChange={(e) => setEmailList(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                        rows={3}
                       />
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <select
-                          value={role}
-                          onChange={(e) => setRole(e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
-                        >
-                          <option value="viewer">Viewer</option>
-                          <option value="editor">Editor</option>
-                        </select>
-                        <button
-                          onClick={handleShare}
-                          disabled={!email.trim() || loading}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-md font-medium transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
-                        >
-                          <UserPlus className="w-4 h-4" />
-                          Invite
-                        </button>
-                      </div>
                     </div>
-                  </div>
 
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Role
+                      </h4>
+                      <select
+                        value={emailRole}
+                        onChange={(e) => setEmailRole(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Personal Message (Optional)
+                      </h4>
+                      <textarea
+                        placeholder="Add a personal message to include in the email..."
+                        value={emailMessage}
+                        onChange={(e) => setEmailMessage(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                        rows={3}
+                      />
+                    </div>
+
+                    <CustomButton
+                      onClick={handleShareViaEmail}
+                      disabled={!emailList.trim() || loading}
+                      loading={loading}
+                      className="w-full flex items-center justify-center gap-2"
+                    >
+                      <Send className="w-4 h-4" />
+                      Send Email Invitations
+                    </CustomButton>
+                  </div>
                 </>
               ) : (
                 <div className="text-center py-8">
@@ -653,10 +594,10 @@ const ShareModal = ({
                     Access Restricted
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Only the document owner can manage collaborators and invite new people.
+                    Only the whiteboard owner can manage collaborators and invite new people.
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                    Contact the document owner if you need to invite collaborators.
+                    Contact the whiteboard owner if you need to invite collaborators.
                   </p>
                 </div>
               )}
@@ -665,24 +606,24 @@ const ShareModal = ({
 
           {activeTab === "view" && (
             <div>
-              {document?.collaborators && document.collaborators.length > 0 ? (
+              {whiteboard?.collaborators && whiteboard.collaborators.length > 0 ? (
                 <div className="space-y-3">
                   {/* Owner Section */}
-                  {document.owner && (
+                  {whiteboard.owner && (
                     <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3 sm:p-4">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                          <UserAvatar user={document.owner} size="w-10 h-10 sm:w-12 sm:h-12" textSize="text-base sm:text-lg" />
+                          <UserAvatar user={whiteboard.owner} size="w-10 h-10 sm:w-12 sm:h-12" textSize="text-base sm:text-lg" />
                           <div className="min-w-0 flex-1">
                             <div className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2 truncate">
-                              {document.owner.name || "Document Owner"}
+                              {whiteboard.owner.name || "Whiteboard Owner"}
                               <Crown className="w-4 h-4 text-purple-600 flex-shrink-0" />
                             </div>
                             <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 truncate">
-                              {document.owner.email || "No email"}
+                              {whiteboard.owner.email || "No email"}
                             </div>
-                              </div>
-                            </div>
+                          </div>
+                        </div>
                         <span className="px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 flex items-center gap-1 sm:gap-2 self-start sm:self-auto">
                           <Crown className="w-3 h-3 sm:w-4 sm:h-4" />
                           Owner
@@ -692,13 +633,13 @@ const ShareModal = ({
                   )}
 
                   {/* Collaborators Section */}
-                  {document.collaborators.filter(c => c.role !== "owner").length > 0 && (
+                  {whiteboard.collaborators.filter(c => c.role !== "owner").length > 0 && (
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                        Collaborators ({document.collaborators.filter(c => c.role !== "owner").length})
+                        Collaborators ({whiteboard.collaborators.filter(c => c.role !== "owner").length})
                       </h4>
                       <div className="space-y-2">
-                        {document.collaborators
+                        {whiteboard.collaborators
                           .filter(collaborator => collaborator.role !== "owner")
                           .map((collaborator, index) => (
                           <div
@@ -756,7 +697,7 @@ const ShareModal = ({
                 <div className="text-center py-8">
                   <Users className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    No collaborators yet. Add people to start collaborating on this document.
+                    No collaborators yet. Add people to start collaborating on this whiteboard.
                   </p>
                 </div>
               )}
@@ -768,10 +709,10 @@ const ShareModal = ({
             <div className="space-y-6">
               {isOwner ? (
                 <>
-                  {/* Document Visibility */}
+                  {/* Whiteboard Visibility */}
                   <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                     <h3 className="text-sm font-medium text-green-800 dark:text-green-200 mb-3">
-                      Document Visibility
+                      Whiteboard Visibility
                     </h3>
                     <div className="space-y-3">
                       <div className="flex items-center gap-3">
@@ -789,17 +730,17 @@ const ShareModal = ({
                         </select>
                       </div>
                       <div className="text-xs text-green-600 dark:text-green-400">
-                        {visibility === "private" && "Only you and invited collaborators can access this document"}
-                        {visibility === "shared" && "Anyone with the link can access this document"}
-                        {visibility === "public" && "This document is publicly accessible"}
+                        {visibility === "private" && "Only you and invited collaborators can access this whiteboard"}
+                        {visibility === "shared" && "Anyone with the link can access this whiteboard"}
+                        {visibility === "public" && "This whiteboard is publicly accessible"}
                       </div>
                     </div>
                   </div>
 
-                  {/* Document Settings */}
+                  {/* Whiteboard Settings */}
                   <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
                     <h3 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-3">
-                      Document Settings
+                      Whiteboard Settings
                     </h3>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
@@ -808,7 +749,7 @@ const ShareModal = ({
                             Allow Comments
                           </div>
                           <div className="text-xs text-purple-600 dark:text-purple-400">
-                            Let collaborators add comments to the document
+                            Let collaborators add comments to the whiteboard
                           </div>
                         </div>
                         <input
@@ -823,7 +764,7 @@ const ShareModal = ({
                             Allow Download
                           </div>
                           <div className="text-xs text-purple-600 dark:text-purple-400">
-                            Let collaborators download the document
+                            Let collaborators download the whiteboard
                           </div>
                         </div>
                         <input
@@ -842,33 +783,39 @@ const ShareModal = ({
                     Access Restricted
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Only the document owner can manage document settings and visibility.
+                    Only the whiteboard owner can manage whiteboard settings and visibility.
                   </p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Permission Info */}
-          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+          {/* Role Permissions */}
+          <div>
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
               Permission Levels
             </h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700 rounded">
                 <Crown className="w-4 h-4 text-purple-600" />
-                <span className="font-medium">Owner:</span>
-                <span className="text-gray-600 dark:text-gray-300">Full control</span>
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">Owner</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-300">Full control, can edit, share, and delete</div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700 rounded">
                 <Edit className="w-4 h-4 text-blue-600" />
-                <span className="font-medium">Editor:</span>
-                <span className="text-gray-600 dark:text-gray-300">Can edit and share</span>
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">Editor</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-300">Can edit and share</div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700 rounded">
                 <Eye className="w-4 h-4 text-gray-600" />
-                <span className="font-medium">Viewer:</span>
-                <span className="text-gray-600 dark:text-gray-300">Can only view</span>
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">Viewer</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-300">Can only view</div>
+                </div>
               </div>
             </div>
           </div>
@@ -878,4 +825,4 @@ const ShareModal = ({
   );
 };
 
-export default ShareModal;
+export default WhiteboardShareModal;

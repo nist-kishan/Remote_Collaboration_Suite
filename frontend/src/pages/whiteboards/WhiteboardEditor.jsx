@@ -44,11 +44,12 @@ export default function WhiteboardEditor() {
   // Canvas state
   const canvasRef = useRef(null);
   
-  // Responsive canvas state - full screen dimensions
-  const [canvasWidth, setCanvasWidth] = useState(typeof window !== 'undefined' ? Math.max(window.innerWidth || 1920, 300) : 1920);
-  const [canvasHeight, setCanvasHeight] = useState(typeof window !== 'undefined' ? Math.max(window.innerHeight || 1080, 200) : 1080);
+  // Canvas state - exact dimensions from whiteboard settings
+  const [canvasWidth, setCanvasWidth] = useState(1920); // Default size
+  const [canvasHeight, setCanvasHeight] = useState(1080); // Default size
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [isGridVisible, setIsGridVisible] = useState(false);
   
   // Fabric.js canvas state
@@ -62,6 +63,46 @@ export default function WhiteboardEditor() {
   const [strokeColor, setStrokeColor] = useState('#000000');
   const [strokeWidth, setStrokeWidth] = useState(2);
   const [opacity, setOpacity] = useState(1.0);
+  
+  // Theme detection - use state to make it reactive
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    return document.documentElement.classList.contains('dark');
+  });
+  
+  // Convert color based on theme
+  const convertColorForTheme = (color) => {
+    // Normalize color to lowercase
+    const normalizedColor = color.toLowerCase();
+    
+    // In dark mode: convert black to white
+    if (isDarkMode && (normalizedColor === '#000000' || normalizedColor === '#000' || normalizedColor === 'black')) {
+      return '#ffffff';
+    }
+    
+    // In light mode: convert white to black
+    if (!isDarkMode && (normalizedColor === '#ffffff' || normalizedColor === '#fff' || normalizedColor === 'white')) {
+      return '#000000';
+    }
+    
+    return color;
+  };
+  
+  // Listen for theme changes
+  useEffect(() => {
+    const handleThemeChange = () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      setIsDarkMode(isDark);
+    };
+    
+    // Watch for theme changes
+    const observer = new MutationObserver(handleThemeChange);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    
+    return () => observer.disconnect();
+  }, []);
   const [layers, setLayers] = useState([
     { id: 1, name: 'Background', visible: true, locked: false, elements: [] },
     { id: 2, name: 'Main', visible: true, locked: false, elements: [] },
@@ -96,47 +137,35 @@ export default function WhiteboardEditor() {
   // Effect to handle canvas data when whiteboardData changes - only load once
   useEffect(() => {
     if (whiteboardData?.data?.whiteboard && !hasLoadedInitialData.current) {
-      console.log('✅ Whiteboard loaded:', whiteboardData);
-      console.log('📊 Whiteboard data structure:', {
-        hasData: !!whiteboardData,
-        hasDataData: !!whiteboardData?.data,
-        hasWhiteboard: !!whiteboardData?.data?.whiteboard,
-        whiteboardKeys: whiteboardData?.data?.whiteboard ? Object.keys(whiteboardData.data.whiteboard) : [],
+      console.log('Loading whiteboard data:', {
         hasCanvasData: !!whiteboardData?.data?.whiteboard?.canvasData,
-        canvasDataKeys: whiteboardData?.data?.whiteboard?.canvasData ? Object.keys(whiteboardData.data.whiteboard.canvasData) : []
+        canvasDataKeys: whiteboardData?.data?.whiteboard?.canvasData ? Object.keys(whiteboardData.data.whiteboard.canvasData) : [],
+        hasCanvasSettings: !!whiteboardData?.data?.whiteboard?.canvasSettings,
+        canvasSettings: whiteboardData?.data?.whiteboard?.canvasSettings
       });
+      
+      // Set canvas dimensions from whiteboard settings if available
+      if (whiteboardData.data.whiteboard.canvasSettings) {
+        const { width, height } = whiteboardData.data.whiteboard.canvasSettings;
+        setCanvasWidth(width || 1920);
+        setCanvasHeight(height || 1080);
+      }
       
       // Set canvas data if it exists and we haven't loaded initial data yet
       if (whiteboardData.data.whiteboard.canvasData) {
-        console.log('📸 Setting canvas data:', whiteboardData.data.whiteboard.canvasData);
         setCanvasData(whiteboardData.data.whiteboard.canvasData);
         hasLoadedInitialData.current = true;
       } else {
-        console.log('⚠️ No canvas data found in whiteboard');
         hasLoadedInitialData.current = true;
       }
     }
   }, [whiteboardData?.data?.whiteboard?._id]); // Only run when whiteboard ID changes
 
   // Debug logging for canvas data
-  console.log('WhiteboardEditor Debug:', {
-    whiteboardId,
-    isAuthenticated,
-    authLoading,
-    isLoading,
-    error,
-    hasWhiteboardData: !!whiteboardData,
-    whiteboard: whiteboardData?.data?.whiteboard,
-    canvasData: whiteboardData?.data?.whiteboard?.canvasData,
-    hasCanvasData: !!whiteboardData?.data?.whiteboard?.canvasData,
-    canvasDataState: canvasData
-  });
-
   // Update whiteboard mutation (for manual saves)
   const updateWhiteboardMutation = useMutation({
     mutationFn: ({ whiteboardId, data }) => updateWhiteboard(whiteboardId, data),
     onSuccess: () => {
-      console.log('✅ Whiteboard saved successfully');
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
       queryClient.invalidateQueries(['whiteboard', whiteboardId]);
@@ -151,7 +180,6 @@ export default function WhiteboardEditor() {
   const autoSaveMutation = useMutation({
     mutationFn: ({ whiteboardId, canvasData }) => autoSaveWhiteboard(whiteboardId, canvasData),
     onSuccess: () => {
-      console.log('✅ Whiteboard auto-saved successfully');
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
       // Don't invalidate queries to avoid refetching during auto-save
@@ -189,36 +217,138 @@ export default function WhiteboardEditor() {
     }
   });
 
-  // Keyboard shortcuts for toolbar toggle
+  // Zoom controls
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev * 1.2, 5)); // Max zoom 5x
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev / 1.2, 0.1)); // Min zoom 0.1x
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
+  }, []);
+
+  const handleZoomFit = useCallback(() => {
+    // Fit to viewport
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
+  }, [viewportSize]);
+
+  // Pan controls
+  const handlePan = useCallback((direction) => {
+    const panStep = 50;
+    switch (direction) {
+      case 'left':
+        setPanOffset(prev => ({ ...prev, x: prev.x + panStep }));
+        break;
+      case 'right':
+        setPanOffset(prev => ({ ...prev, x: prev.x - panStep }));
+        break;
+      case 'up':
+        setPanOffset(prev => ({ ...prev, y: prev.y + panStep }));
+        break;
+      case 'down':
+        setPanOffset(prev => ({ ...prev, y: prev.y - panStep }));
+        break;
+      default:
+        break;
+    }
+  }, []);
+
+  // Keyboard shortcuts for toolbar toggle and navigation
   useEffect(() => {
     const handleKeyPress = (e) => {
+      // Only handle shortcuts when not typing in input fields
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
       // Press 'T' to toggle toolbar
       if (e.key === 't' || e.key === 'T') {
-        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-          setIsToolbarCollapsed(!isToolbarCollapsed);
-        }
+        setIsToolbarCollapsed(!isToolbarCollapsed);
+      }
+      
+      // Zoom shortcuts
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        handleZoomIn();
+      }
+      if (e.key === '-') {
+        e.preventDefault();
+        handleZoomOut();
+      }
+      if (e.key === '0') {
+        e.preventDefault();
+        handleZoomReset();
+      }
+      
+      // Pan shortcuts (arrow keys)
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePan('left');
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handlePan('right');
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        handlePan('up');
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        handlePan('down');
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isToolbarCollapsed]);
+  }, [isToolbarCollapsed, handleZoomIn, handleZoomOut, handleZoomReset, handlePan]);
 
-  // Handle responsive canvas sizing - full screen dimensions
+  // Set canvas dimensions to user-selected dimensions (non-responsive)
   useEffect(() => {
     const handleResize = () => {
-      // Use full screen dimensions with validation
-      const width = window.innerWidth || 1920;
-      const height = window.innerHeight || 1080;
+      // Get whiteboard's canvas settings if available
+      const whiteboardCanvasSettings = whiteboardData?.data?.whiteboard?.canvasSettings;
+      const whiteboardWidth = whiteboardCanvasSettings?.width || 1920;
+      const whiteboardHeight = whiteboardCanvasSettings?.height || 1080;
       
-      setCanvasWidth(Math.max(Number(width) || 1920, 300));
-      setCanvasHeight(Math.max(Number(height) || 1080, 200));
-    };
+      // Use the exact whiteboard dimensions - no responsive scaling
+      setCanvasWidth(whiteboardWidth);
+      setCanvasHeight(whiteboardHeight);
+      
+      // Calculate viewport size for UI positioning
+      const windowWidth = window.innerWidth || 1920;
+      const windowHeight = window.innerHeight || 1080;
+      
+      // Account for toolbar height (approximately 60px)
+      const toolbarHeight = isToolbarCollapsed ? 0 : 60;
+      
+      // Account for collaboration panel if open (approximately 300px width)
+      const panelWidth = isCollaborationPanelOpen ? 300 : 0;
+      
+      // Account for layer panel if visible (approximately 250px width)
+      const layerPanelWidth = isLayerPanelVisible ? 250 : 0;
+      
+      // Calculate available viewport space for UI elements
+      const availableWidth = Math.max(windowWidth - panelWidth - layerPanelWidth, 400);
+      const availableHeight = Math.max(windowHeight - toolbarHeight, 300);
+      
+      // Set viewport size for UI positioning
+      setViewportSize({
+        width: availableWidth,
+        height: availableHeight
+      });
+      
+      };
 
     handleResize(); // Set initial size
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [isToolbarCollapsed, isCollaborationPanelOpen, isLayerPanelVisible, whiteboardData?.data?.whiteboard?.canvasSettings]);
 
   // Fabric.js event handlers
   const handleShapeSelect = useCallback((shapeId) => {
@@ -229,7 +359,6 @@ export default function WhiteboardEditor() {
   const handleShapeResize = useCallback((shapeId, newProperties) => {
     setHasUnsavedChanges(true);
   }, []);
-
 
   // Tool functions
   const handleUndo = useCallback(() => {
@@ -245,6 +374,27 @@ export default function WhiteboardEditor() {
       setHasUnsavedChanges(true);
     }
   }, []);
+
+  // Sync history state from canvas
+  useEffect(() => {
+    const syncHistory = () => {
+      if (canvasRef.current && canvasRef.current.getHistoryIndex && canvasRef.current.getHistoryLength) {
+        const currentIndex = canvasRef.current.getHistoryIndex();
+        const length = canvasRef.current.getHistoryLength();
+        setHistoryIndex(currentIndex);
+        // Store dummy history array for length tracking
+        setHistory(Array(length).fill(null));
+      }
+    };
+    
+    // Sync immediately
+    syncHistory();
+    
+    // Sync periodically to catch updates
+    const interval = setInterval(syncHistory, 100);
+    
+    return () => clearInterval(interval);
+  }, [hasUnsavedChanges]); // Update when changes occur
 
   const handleClearCanvas = useCallback(() => {
     if (canvasRef.current) {
@@ -271,12 +421,9 @@ export default function WhiteboardEditor() {
 
   // Manual save functionality
   const handleManualSave = useCallback(() => {
-    console.log('💾 Manual save triggered');
     if (whiteboardId && canvasRef.current) {
       
       const canvasDataUrl = canvasRef.current.exportCanvas();
-      console.log('📸 Canvas exported, data URL length:', canvasDataUrl.length);
-      
       const canvasData = {
         canvasImage: canvasDataUrl,
         layers,
@@ -287,8 +434,6 @@ export default function WhiteboardEditor() {
         panOffset,
         isGridVisible
       };
-      
-      console.log('💾 Saving canvas data:', canvasData);
       
       updateWhiteboardMutation.mutate({
         whiteboardId,
@@ -313,8 +458,7 @@ export default function WhiteboardEditor() {
       message: 'Are you sure you want to delete this whiteboard? This action cannot be undone.',
       onConfirm: () => {
         // Delete functionality will be implemented
-        console.log('Delete whiteboard');
-      }
+        }
     });
   }, []);
 
@@ -367,7 +511,6 @@ export default function WhiteboardEditor() {
     setIsLayerPanelVisible(prev => !prev);
   }, []);
 
-
   // Socket connection for real-time collaboration
   useEffect(() => {
     if (user && whiteboardId) {
@@ -377,7 +520,7 @@ export default function WhiteboardEditor() {
 
       newSocket.on('connect', () => {
         setIsConnected(true);
-        newSocket.emit('join-whiteboard', { whiteboardId, userId: user._id });
+        newSocket.emit('join_whiteboard', { whiteboardId, userId: user._id });
       });
 
       newSocket.on('disconnect', () => {
@@ -387,8 +530,23 @@ export default function WhiteboardEditor() {
       newSocket.on('whiteboard-update', (data) => {
         if (data.whiteboardId === whiteboardId) {
           // Handle real-time updates for HTML5 canvas
-          console.log('Whiteboard update received:', data);
-        }
+          // Update the canvas with the new shapes/elements from other users
+          if (data.shapes || data.elements) {
+            const newShapes = data.shapes || data.elements || [];
+            // Add the new shapes to the current canvas
+            if (canvasRef.current && canvasRef.current.addShapes) {
+              canvasRef.current.addShapes(newShapes);
+            } else {
+              console.warn('⚠️ Canvas ref or addShapes method not available');
+            }
+          }
+          
+          // Update canvas data if provided
+          if (data.canvasData) {
+            setCanvasData(data.canvasData);
+          }
+        } else {
+          }
       });
 
       newSocket.on('user-joined', (data) => {
@@ -409,25 +567,27 @@ export default function WhiteboardEditor() {
 
   // Auto-save functionality using dedicated auto-save endpoint
   const handleAutoSave = useCallback(() => {
-    console.log('🔄 Auto-save triggered, hasUnsavedChanges:', hasUnsavedChanges);
-    if (hasUnsavedChanges && whiteboardId && canvasRef.current) {
-      console.log('💾 Auto-saving canvas data using dedicated endpoint');
-      
-      const canvasDataUrl = canvasRef.current.exportCanvas();
-      console.log('📸 Canvas exported for auto-save, data URL length:', canvasDataUrl.length);
-      
+    // Prevent multiple simultaneous auto-saves
+    if (autoSaveMutation.isPending) {
+      return;
+    }
+    
+    if (whiteboardId && canvasRef.current) {
+      // Get shapes data from canvas instead of exporting the entire canvas image
+      const shapesData = canvasRef.current.getShapes ? canvasRef.current.getShapes() : [];
       const canvasData = {
-        canvasImage: canvasDataUrl,
+        shapes: shapesData,
+        elements: shapesData, // Support both naming conventions
         layers,
         activeLayer,
         canvasWidth,
         canvasHeight,
         zoomLevel,
         panOffset,
-        isGridVisible
+        isGridVisible,
+        lastModifiedBy: user?._id,
+        lastModifiedAt: new Date()
       };
-      
-      console.log('💾 Auto-saving canvas data:', canvasData);
       
       // Use dedicated auto-save endpoint instead of main update route
       autoSaveMutation.mutate({
@@ -435,27 +595,33 @@ export default function WhiteboardEditor() {
         canvasData
       });
     } else {
-      console.log('⚠️ Auto-save skipped:', {
-        hasUnsavedChanges,
-        hasWhiteboardId: !!whiteboardId,
-        hasCanvasRef: !!canvasRef.current
-      });
-    }
-  }, [hasUnsavedChanges, whiteboardId, canvasData, layers, activeLayer, canvasWidth, canvasHeight, zoomLevel, panOffset, isGridVisible, autoSaveMutation]);
+      }
+  }, [whiteboardId, layers, activeLayer, canvasWidth, canvasHeight, zoomLevel, panOffset, isGridVisible, autoSaveMutation, user?._id]);
+
+  // Store handleAutoSave in a ref to avoid dependency issues
+  const handleAutoSaveRef = useRef(handleAutoSave);
+  
+  // Update the ref when handleAutoSave changes
+  useEffect(() => {
+    handleAutoSaveRef.current = handleAutoSave;
+  }, [handleAutoSave]);
 
   // Auto-save effect
   useEffect(() => {
-    console.log('🔄 Auto-save effect triggered, hasUnsavedChanges:', hasUnsavedChanges, 'whiteboardId:', whiteboardId);
     if (hasUnsavedChanges && whiteboardId) {
-      console.log('⏰ Setting auto-save timeout for 5 seconds');
-      
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
       }
       
       autoSaveTimeoutRef.current = setTimeout(() => {
-        handleAutoSave();
+        handleAutoSaveRef.current();
       }, 5000); // Auto-save every 5 seconds
+    } else {
+      // Clear timeout if hasUnsavedChanges becomes false
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
     }
     
     return () => {
@@ -463,16 +629,21 @@ export default function WhiteboardEditor() {
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [hasUnsavedChanges, whiteboardId, handleAutoSave]);
+  }, [hasUnsavedChanges, whiteboardId]);
 
   // Event handlers
   const handlePathCreated = () => {
-    setHasUnsavedChanges(true);
     if (socket && canvasRef.current) {
+      // Get ALL shapes to sync the complete state
+      const shapesData = canvasRef.current.getShapes ? canvasRef.current.getShapes() : [];
       socket.emit('whiteboard-update', {
         whiteboardId,
-        canvasData: canvasRef.current.exportCanvas()
+        shapes: shapesData,
+        elements: shapesData, // Support both naming conventions
+        userId: user?._id
       });
+    } else {
+      console.warn('⚠️ Cannot send live update - socket or canvas ref not available');
     }
   };
 
@@ -487,7 +658,6 @@ export default function WhiteboardEditor() {
   const handleObjectRemoved = () => {
     setHasUnsavedChanges(true);
   };
-
 
   const handleShareViaEmail = (shareData) => {
     shareWhiteboardMutation.mutate({
@@ -514,8 +684,6 @@ export default function WhiteboardEditor() {
       }
     });
   };
-
-
 
   // Loading state
   if (authLoading || isLoading || !isAuthenticated) {
@@ -557,6 +725,28 @@ export default function WhiteboardEditor() {
   }
 
   const whiteboard = whiteboardData?.data?.whiteboard;
+  
+  // Determine user role and permissions
+  const getUserRole = () => {
+    if (!whiteboard || !user) return 'viewer';
+    
+    // Check if user is the owner
+    if (whiteboard.owner && whiteboard.owner._id === user._id) {
+      return 'owner';
+    }
+    
+    // Check collaborators
+    const collaborator = whiteboard.collaborators?.find(
+      collab => collab.user?._id === user._id
+    );
+    
+    return collaborator?.role || 'viewer';
+  };
+  
+  const userRole = getUserRole();
+  const canEdit = ['owner', 'admin', 'editor'].includes(userRole);
+  const canDelete = ['owner', 'admin'].includes(userRole);
+  const canShare = ['owner', 'admin'].includes(userRole);
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-white dark:bg-gray-950 relative">
@@ -587,13 +777,35 @@ export default function WhiteboardEditor() {
               </span>
             </div>
             
+            {/* Active Users Indicator */}
             {activeUsers.length > 0 && (
-              <div className="flex items-center space-x-1 px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                  {activeUsers.length} online
-                </span>
+              <div className="flex items-center space-x-2">
+                <div className="flex -space-x-2">
+                  {activeUsers.slice(0, 3).map((user, index) => (
+                    <div
+                      key={index}
+                      className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 border-2 border-white dark:border-gray-800 flex items-center justify-center text-white text-xs font-semibold"
+                      title={user.name}
+                    >
+                      {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                  ))}
+                </div>
+                {activeUsers.length > 3 && (
+                  <span className="text-xs text-gray-600 dark:text-gray-400">+{activeUsers.length - 3}</span>
+                )}
               </div>
             )}
+            
+            {/* Role Badge */}
+            <div className={`px-2 py-1 rounded-lg text-xs font-medium ${
+              userRole === 'owner' ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-200' :
+              userRole === 'admin' ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200' :
+              userRole === 'editor' ? 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200' :
+              'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+            }`}>
+              {userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+            </div>
           </div>
           
           <div className="flex items-center space-x-2">
@@ -628,13 +840,13 @@ export default function WhiteboardEditor() {
       </button>
 
       {/* Floating Toolbar - Microsoft Whiteboard Style */}
-      <div className={`absolute top-16 left-1/2 transform -translate-x-1/2 z-40 transition-all duration-300 ${
+      <div className={`absolute top-16 left-1/2 transform -translate-x-1/2 z-40 transition-all duration-300 max-w-[95vw] ${
         isToolbarCollapsed ? '-translate-y-20 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
       }`}>
         <WhiteboardToolbar
         selectedTool={selectedTool}
         onToolChange={handleToolChange}
-        strokeColor={strokeColor}
+        strokeColor={convertColorForTheme(strokeColor)}
         onColorChange={handleColorChange}
         strokeWidth={strokeWidth}
         onStrokeWidthChange={handleStrokeWidthChange}
@@ -655,15 +867,38 @@ export default function WhiteboardEditor() {
         hasUnsavedChanges={hasUnsavedChanges}
         lastSaved={lastSaved}
         onLayerPanelToggle={handleLayerPanelToggle}
+        canEdit={canEdit}
+        userRole={userRole}
+        // Zoom and pan controls
+        zoomLevel={zoomLevel}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onZoomReset={handleZoomReset}
+        onZoomFit={handleZoomFit}
+        onPan={handlePan}
+        panOffset={panOffset}
+        viewportSize={viewportSize}
         />
       </div>
 
-      {/* Full-Screen Canvas - Microsoft Whiteboard Style */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 pt-12">
+      {/* Full Canvas Container - Non-Responsive */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-950 dark:to-gray-900 pt-12 overflow-auto">
+        {/* Canvas Wrapper with exact dimensions */}
+        <div 
+          className="relative"
+          style={{
+            width: `${canvasWidth}px`,
+            height: `${canvasHeight}px`,
+            minWidth: '400px',
+            minHeight: '300px',
+            transform: `scale(${zoomLevel}) translate(${panOffset.x / zoomLevel}px, ${panOffset.y / zoomLevel}px)`,
+            transformOrigin: 'top left'
+          }}
+        >
         <HTML5WhiteboardCanvas
           ref={canvasRef}
           selectedTool={selectedTool}
-          strokeColor={strokeColor}
+          strokeColor={convertColorForTheme(strokeColor)}
           strokeWidth={strokeWidth}
           canvasWidth={canvasWidth}
           canvasHeight={canvasHeight}
@@ -671,16 +906,19 @@ export default function WhiteboardEditor() {
           stageX={panOffset.x}
           stageY={panOffset.y}
           isGridVisible={isGridVisible}
+          backgroundColor={whiteboard?.canvasSettings?.backgroundColor}
           onShapeSelect={handleShapeSelect}
           onShapeResize={handleShapeResize}
           selectedShapeId={selectedShapeId}
           savedCanvasData={canvasData}
           whiteboardId={whiteboardId}
+          canEdit={canEdit}
           onChange={() => {
-            console.log('🎨 onChange callback triggered, setting hasUnsavedChanges to true');
             setHasUnsavedChanges(true);
-          }}
+            }}
+          onPathCreated={handlePathCreated}
         />
+        </div>
       </div>
 
       {/* Layer Panel */}
@@ -708,6 +946,10 @@ export default function WhiteboardEditor() {
         isOpen={isCollaborationPanelOpen}
         onClose={() => setIsCollaborationPanelOpen(false)}
         activeUsers={activeUsers}
+        onCollaboratorUpdate={() => {
+          // Refetch whiteboard data to get updated collaborators
+          queryClient.invalidateQueries(['whiteboard', whiteboardId]);
+        }}
       />
 
       {/* Share Modal */}

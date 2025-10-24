@@ -16,6 +16,7 @@ export const getUserDocuments = async (params = {}) => {
     const response = await ApiClient.get("/documents", { params });
     return response.data;
   } catch (error) {
+    console.error('❌ getUserDocuments API Error:', error);
     throw error.response || error;
   }
 };
@@ -26,6 +27,7 @@ export const getAllDocuments = async (params = {}) => {
     const response = await ApiClient.get("/documents/all", { params });
     return response.data;
   } catch (error) {
+    console.error('❌ getAllDocuments API Error:', error);
     throw error.response || error;
   }
 };
@@ -126,7 +128,6 @@ export const removeCollaborator = async (documentId, userId) => {
   }
 };
 
-
 // Share document via email
 export const shareDocumentViaEmail = async (documentId, data) => {
   try {
@@ -160,11 +161,19 @@ export const searchDocuments = async (params = {}) => {
 // Auto-save document
 export const autoSaveDocument = async (documentId, content) => {
   try {
+    console.log('Auto-saving document:', documentId, content || 'empty');
+    
     const response = await ApiClient.post(`/documents/${documentId}/autosave`, {
       content,
     });
+    
     return response.data;
   } catch (error) {
+    console.error('❌ [AUTO-SAVE API] Auto-save error:', {
+      documentId,
+      error: error.response?.data || error.message,
+      status: error.response?.status
+    });
     throw error.response || error;
   }
 };

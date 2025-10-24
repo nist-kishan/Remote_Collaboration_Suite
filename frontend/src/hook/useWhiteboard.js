@@ -139,14 +139,12 @@ export const useWhiteboard = (whiteboardId = null, params = {}) => {
         type: activeTab === 'all' ? undefined : activeTab,
         search: searchQuery || undefined
       };
-      console.log('🔍 Whiteboard API Call - getUserWhiteboards with params:', params);
       return getUserWhiteboards(params);
     },
     staleTime: 30000, // 30 seconds
     cacheTime: 5 * 60 * 1000, // 5 minutes
     onSuccess: (data) => {
-      console.log('✅ Whiteboard API Success - getUserWhiteboards response:', data);
-    },
+      },
     onError: (error) => {
       console.error('❌ Whiteboard API Error - getUserWhiteboards failed:', error);
     }
@@ -165,15 +163,13 @@ export const useWhiteboard = (whiteboardId = null, params = {}) => {
         type: activeTab === 'all' ? undefined : activeTab,
         search: searchQuery || undefined
       };
-      console.log('🔍 All Whiteboards API Call - getAllWhiteboards with params:', params);
       return getAllWhiteboards(params);
     },
     staleTime: 30000, // 30 seconds
     cacheTime: 5 * 60 * 1000, // 5 minutes
     enabled: false, // Only fetch when explicitly called
     onSuccess: (data) => {
-      console.log('✅ All Whiteboards API Success - getAllWhiteboards response:', data);
-    },
+      },
     onError: (error) => {
       console.error('❌ All Whiteboards API Error - getAllWhiteboards failed:', error);
     }
@@ -196,7 +192,6 @@ export const useWhiteboard = (whiteboardId = null, params = {}) => {
   const createWhiteboardMutation = useMutation({
     mutationFn: createWhiteboard,
     onSuccess: (data) => {
-      console.log('✅ Whiteboard created successfully:', data);
       const whiteboard = data?.data?.whiteboard || data?.whiteboard;
       
       if (!whiteboard || !whiteboard._id) {
@@ -214,7 +209,6 @@ export const useWhiteboard = (whiteboardId = null, params = {}) => {
       // Navigate only if shouldNavigateAfterCreate is true (for /boards/new route)
       if (shouldNavigateAfterCreate) {
         const targetPath = `/boards/${whiteboard._id}`;
-        console.log('🚀 Navigating to created whiteboard:', targetPath);
         navigate(targetPath);
       }
     },
@@ -280,7 +274,6 @@ export const useWhiteboard = (whiteboardId = null, params = {}) => {
   const autoSaveMutation = useMutation({
     mutationFn: ({ whiteboardId, canvasData }) => autoSaveWhiteboard(whiteboardId, canvasData),
     onSuccess: (data, variables) => {
-      console.log('✅ Auto-save successful:', data);
       // Update the whiteboard version in Redux state
       if (currentWhiteboard?._id === variables.whiteboardId) {
         dispatch(setCurrentWhiteboard({
@@ -359,17 +352,6 @@ export const useWhiteboard = (whiteboardId = null, params = {}) => {
   }, [enableAutoSaveMutation]);
 
   const handleEditWhiteboard = useCallback((whiteboard) => {
-    console.log('🔄 handleEditWhiteboard called with:', {
-      whiteboard: whiteboard ? {
-        id: whiteboard._id,
-        title: whiteboard.title,
-        owner: whiteboard.owner?._id,
-        visibility: whiteboard.visibility,
-        collaborators: whiteboard.collaborators?.length || 0
-      } : null,
-      currentUser: user?._id
-    });
-    
     if (!whiteboard || !whiteboard._id) {
       toast.error('Invalid whiteboard selected');
       return;
@@ -377,8 +359,6 @@ export const useWhiteboard = (whiteboardId = null, params = {}) => {
     
     // Check if user has edit permissions
     const userRole = getUserRole(whiteboard, user);
-    console.log('👤 User role for whiteboard:', userRole);
-    
     if (userRole === 'viewer') {
       toast.error('You only have view access to this whiteboard');
       return;
@@ -391,7 +371,6 @@ export const useWhiteboard = (whiteboardId = null, params = {}) => {
       ? `/boards/shared/${whiteboard._id}`
       : `/boards/${whiteboard._id}`;
     
-    console.log('🚀 Navigating to:', targetPath);
     navigate(targetPath);
   }, [dispatch, navigate, user]);
 

@@ -170,8 +170,7 @@ const ChatItem = ({
                 <span>{chat.memberCount || chat.participants?.length || 0}</span>
               </div>
             )}
-            
-            
+
             {/* Action Buttons */}
             <div className="flex items-center gap-1">
               {chat.type === 'one-to-one' && (

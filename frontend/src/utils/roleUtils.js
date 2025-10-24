@@ -27,19 +27,19 @@ export const ROLE_PERMISSIONS = {
     canCreateProjects: true
   },
   admin: {
-    canEdit: true,
+    canEdit: false,
     canDelete: false,
     canShare: true,
     canView: true,
     canManageCollaborators: true,
-    canChangeSettings: true,
+    canChangeSettings: false,
     canManageMembers: true,
     canCreateProjects: true
   },
   member: {
-    canEdit: true,
+    canEdit: false,
     canDelete: false,
-    canShare: true,
+    canShare: false,
     canView: true,
     canManageCollaborators: false,
     canChangeSettings: false,
@@ -47,7 +47,7 @@ export const ROLE_PERMISSIONS = {
     canCreateProjects: true
   },
   employee: {
-    canEdit: true,
+    canEdit: false,
     canDelete: false,
     canShare: false,
     canView: true,
@@ -57,7 +57,7 @@ export const ROLE_PERMISSIONS = {
     canCreateProjects: false
   },
   hr: {
-    canEdit: true,
+    canEdit: false,
     canDelete: false,
     canShare: true,
     canView: true,
@@ -67,7 +67,7 @@ export const ROLE_PERMISSIONS = {
     canCreateProjects: true
   },
   mr: {
-    canEdit: true,
+    canEdit: false,
     canDelete: false,
     canShare: true,
     canView: true,
@@ -77,7 +77,7 @@ export const ROLE_PERMISSIONS = {
     canCreateProjects: true
   },
   tr: {
-    canEdit: true,
+    canEdit: false,
     canDelete: false,
     canShare: false,
     canView: true,

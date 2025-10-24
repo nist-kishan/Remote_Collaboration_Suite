@@ -20,19 +20,7 @@ export const createDocument = asyncHandle(async (req, res) => {
   } = req.body;
   const userId = req.user._id;
 
-  console.log('🔄 Backend createDocument called:', {
-    userId,
-    title,
-    content: content ? content.substring(0, 100) + '...' : content,
-    tags,
-    collaborationSettings,
-    visibility,
-    status,
-    invitedUsersCount: invitedUsers.length
-  });
-
   if (!title || title.trim() === "") {
-    console.error('❌ Create failed: No title provided');
     throw new ApiError(400, "Document title is required");
   }
 
@@ -83,20 +71,10 @@ export const createDocument = asyncHandle(async (req, res) => {
     }
   }
 
-  console.log('💾 Saving new document to database...');
   const savedDocument = await document.save();
-  console.log('✅ Document created successfully:', {
-    id: savedDocument._id,
-    title: savedDocument.title,
-    status: savedDocument.status,
-    visibility: savedDocument.visibility,
-    collaboratorsCount: savedDocument.collaborators.length
-  });
-
   // Populate owner details
   await savedDocument.populate("owner", "name email username avatar");
 
-  console.log('📤 Sending response to client');
   return res.status(201).json(
     new ApiResponse(201, "Document created successfully", {
       document: savedDocument,
@@ -109,15 +87,6 @@ export const getUserDocuments = asyncHandle(async (req, res) => {
   const userId = req.user._id;
   const { type, status, search, page = 1, limit = 10 } = req.query;
 
-  console.log('🔍 Backend getUserDocuments called with:', {
-    userId,
-    type,
-    status,
-    search,
-    page,
-    limit
-  });
-
   // Build query
   let query = {
     $or: [
@@ -126,8 +95,6 @@ export const getUserDocuments = asyncHandle(async (req, res) => {
     ],
     isDeleted: false,
   };
-
-  console.log('🔧 Base query:', query);
 
   // Filter by document type
   if (type === "own") {
@@ -142,8 +109,6 @@ export const getUserDocuments = asyncHandle(async (req, res) => {
   if (status) {
     query.status = status;
   }
-
-  console.log('🔧 Final query:', query);
 
   // Search functionality
   if (search) {
@@ -166,19 +131,6 @@ export const getUserDocuments = asyncHandle(async (req, res) => {
 
   const total = await Document.countDocuments(query);
 
-  console.log('📊 Query Results:', {
-    documentsFound: documents.length,
-    totalCount: total,
-    documents: documents.map(doc => ({
-      id: doc._id,
-      title: doc.title,
-      owner: doc.owner?._id,
-      status: doc.status,
-      visibility: doc.visibility,
-      isDeleted: doc.isDeleted
-    }))
-  });
-
   return res.status(200).json(
     new ApiResponse(200, "Documents fetched successfully", {
       documents,
@@ -197,7 +149,6 @@ export const getDocument = asyncHandle(async (req, res) => {
   const { documentId } = req.params;
   const userId = req.user._id;
 
-
   const document = await Document.findOne({
     _id: documentId,
     isDeleted: false,
@@ -205,7 +156,6 @@ export const getDocument = asyncHandle(async (req, res) => {
     .populate("owner", "name email username avatar")
     .populate("lastModifiedBy", "name email username avatar")
     .populate("collaborators.user", "name email username avatar");
-
 
   if (!document) {
     throw new ApiError(404, "Document not found");
@@ -217,7 +167,6 @@ export const getDocument = asyncHandle(async (req, res) => {
   if (!userRole) {
     throw new ApiError(403, "You don't have access to this document");
   }
-
 
   return res.status(200).json(
     new ApiResponse(200, "Document fetched successfully", {
@@ -233,36 +182,17 @@ export const updateDocument = asyncHandle(async (req, res) => {
   const { title, content, tags, status, visibility } = req.body;
   const userId = req.user._id;
 
-  console.log('🔄 Backend updateDocument called:', {
-    documentId,
-    userId,
-    title,
-    content: content ? content.substring(0, 100) + '...' : content,
-    tags,
-    status,
-    visibility
-  });
-
   const document = await Document.findOne({
     _id: documentId,
     isDeleted: false,
   });
 
   if (!document) {
-    console.error('❌ Document not found:', documentId);
     throw new ApiError(404, "Document not found");
   }
 
-  console.log('📄 Found document:', {
-    id: document._id,
-    title: document.title,
-    owner: document.owner,
-    status: document.status
-  });
-
   // Check permissions
   if (!document.hasPermission(userId, "editor")) {
-    console.error('❌ Permission denied for user:', userId);
     throw new ApiError(403, "You don't have permission to edit this document");
   }
 
@@ -285,20 +215,12 @@ export const updateDocument = asyncHandle(async (req, res) => {
 
   document.lastModifiedBy = userId;
 
-  console.log('💾 Saving document to database...');
   const updatedDocument = await document.save();
-  console.log('✅ Document saved successfully:', {
-    id: updatedDocument._id,
-    title: updatedDocument.title,
-    status: updatedDocument.status
-  });
-
   // Populate fields
   await updatedDocument.populate("owner", "name email username avatar");
   await updatedDocument.populate("lastModifiedBy", "name email username avatar");
   await updatedDocument.populate("collaborators.user", "name email username avatar");
 
-  console.log('📤 Sending response to client');
   return res.status(200).json(
     new ApiResponse(200, "Document updated successfully", {
       document: updatedDocument,
@@ -882,25 +804,17 @@ export const updateDocumentCollaborationSettings = asyncHandle(async (req, res) 
   const { collaborationSettings } = req.body;
   const userId = req.user._id;
 
-  console.log('🔄 Backend updateDocumentCollaborationSettings called:', {
-    documentId,
-    userId,
-    collaborationSettings
-  });
-
   const document = await Document.findOne({
     _id: documentId,
     isDeleted: false,
   });
 
   if (!document) {
-    console.error('❌ Document not found:', documentId);
     throw new ApiError(404, "Document not found");
   }
 
   // Check permissions (only owner can change collaboration settings)
   if (!document.hasPermission(userId, "owner")) {
-    console.error('❌ Permission denied for user:', userId);
     throw new ApiError(403, "You don't have permission to modify collaboration settings");
   }
 
@@ -914,10 +828,7 @@ export const updateDocumentCollaborationSettings = asyncHandle(async (req, res) 
 
   document.lastModifiedBy = userId;
 
-  console.log('💾 Saving collaboration settings...');
   const updatedDocument = await document.save();
-  console.log('✅ Collaboration settings updated successfully');
-
   return res.status(200).json(
     new ApiResponse(200, "Collaboration settings updated successfully", {
       document: {
@@ -933,24 +844,17 @@ export const getDocumentCollaborationSettings = asyncHandle(async (req, res) => 
   const { documentId } = req.params;
   const userId = req.user._id;
 
-  console.log('🔍 Backend getDocumentCollaborationSettings called:', {
-    documentId,
-    userId
-  });
-
   const document = await Document.findOne({
     _id: documentId,
     isDeleted: false,
   });
 
   if (!document) {
-    console.error('❌ Document not found:', documentId);
     throw new ApiError(404, "Document not found");
   }
 
   // Check permissions
   if (!document.hasPermission(userId, "viewer")) {
-    console.error('❌ Permission denied for user:', userId);
     throw new ApiError(403, "You don't have permission to view this document");
   }
 
@@ -971,16 +875,6 @@ export const getDocumentCollaborationSettings = asyncHandle(async (req, res) => 
 export const getAllDocuments = asyncHandle(async (req, res) => {
   const { type, status, search, owner, page = 1, limit = 10 } = req.query;
   const currentUserId = req.user._id;
-
-  console.log('🔍 Backend getAllDocuments called with:', {
-    currentUserId,
-    type,
-    status,
-    search,
-    owner,
-    page,
-    limit
-  });
 
   // Build query - only show documents the user has access to
   let query = {
@@ -1054,8 +948,6 @@ export const getAllDocuments = asyncHandle(async (req, res) => {
     ];
   }
 
-  console.log('🔧 Final query:', query);
-
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   const documents = await Document.find(query)
@@ -1067,19 +959,6 @@ export const getAllDocuments = asyncHandle(async (req, res) => {
     .limit(parseInt(limit));
 
   const total = await Document.countDocuments(query);
-
-  console.log('📊 Query Results:', {
-    documentsFound: documents.length,
-    totalCount: total,
-    documents: documents.map(doc => ({
-      id: doc._id,
-      title: doc.title,
-      owner: doc.owner?._id,
-      status: doc.status,
-      visibility: doc.visibility,
-      isDeleted: doc.isDeleted
-    }))
-  });
 
   return res.status(200).json(
     new ApiResponse(200, "All documents fetched successfully", {
@@ -1177,25 +1056,17 @@ export const downloadDocument = asyncHandle(async (req, res) => {
   const { format = 'pdf' } = req.query;
   const userId = req.user._id;
 
-  console.log('🔄 Backend downloadDocument called:', {
-    documentId,
-    format,
-    userId
-  });
-
   const document = await Document.findOne({
     _id: documentId,
     isDeleted: false,
   });
 
   if (!document) {
-    console.error('❌ Document not found:', documentId);
     throw new ApiError(404, "Document not found");
   }
 
   // Check permissions
   if (!document.hasPermission(userId, "viewer")) {
-    console.error('❌ Permission denied for user:', userId);
     throw new ApiError(403, "You don't have permission to download this document");
   }
 
@@ -1283,19 +1154,11 @@ export const downloadDocument = asyncHandle(async (req, res) => {
         throw new ApiError(400, "Unsupported format. Supported formats: pdf, txt, md, html");
     }
 
-    console.log('✅ Document download prepared:', {
-      format,
-      fileName,
-      contentType,
-      contentLength: fileContent.length
-    });
-
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(fileContent);
 
   } catch (error) {
-    console.error('❌ Download failed:', error);
     throw new ApiError(500, "Failed to generate download file");
   }
 });

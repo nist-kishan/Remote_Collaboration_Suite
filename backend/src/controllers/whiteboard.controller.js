@@ -116,8 +116,6 @@ export const getWhiteboard = asyncHandle(async (req, res) => {
   const { whiteboardId } = req.params;
   const userId = req.user._id;
 
-  console.log('🔍 Getting whiteboard:', whiteboardId);
-
   const whiteboard = await Whiteboard.findOne({
     _id: whiteboardId,
     isDeleted: false,
@@ -127,26 +125,16 @@ export const getWhiteboard = asyncHandle(async (req, res) => {
     .populate("collaborators.user", "name email username avatar");
 
   if (!whiteboard) {
-    console.log('❌ Whiteboard not found:', whiteboardId);
     throw new ApiError(404, "Whiteboard not found");
   }
-
-  console.log('📊 Whiteboard found:', {
-    id: whiteboard._id,
-    title: whiteboard.title,
-    hasCanvasData: !!whiteboard.canvasData,
-    canvasDataKeys: whiteboard.canvasData ? Object.keys(whiteboard.canvasData) : []
-  });
 
   // Check if user has access to this whiteboard
   const userRole = whiteboard.getUserRole(userId);
   
   if (!userRole) {
-    console.log('❌ User has no access to whiteboard:', userId);
     throw new ApiError(403, "You don't have access to this whiteboard");
   }
 
-  console.log('✅ Returning whiteboard data');
   return res.status(200).json(
     new ApiResponse(200, "Whiteboard fetched successfully", {
       whiteboard,
@@ -161,27 +149,17 @@ export const updateWhiteboard = asyncHandle(async (req, res) => {
   const { title, description, tags, status, visibility, canvasData, canvasSettings } = req.body;
   const userId = req.user._id;
 
-  console.log('💾 Updating whiteboard:', whiteboardId);
-  console.log('📊 Update data:', {
-    hasTitle: !!title,
-    hasDescription: !!description,
-    hasCanvasData: !!canvasData,
-    canvasDataKeys: canvasData ? Object.keys(canvasData) : []
-  });
-
   const whiteboard = await Whiteboard.findOne({
     _id: whiteboardId,
     isDeleted: false,
   });
 
   if (!whiteboard) {
-    console.log('❌ Whiteboard not found for update:', whiteboardId);
     throw new ApiError(404, "Whiteboard not found");
   }
 
   // Check permissions
   if (!whiteboard.hasPermission(userId, "editor")) {
-    console.log('❌ User has no edit permission:', userId);
     throw new ApiError(403, "You don't have permission to edit this whiteboard");
   }
 
@@ -202,13 +180,57 @@ export const updateWhiteboard = asyncHandle(async (req, res) => {
     whiteboard.visibility = visibility;
   }
   if (canvasData !== undefined) {
-    console.log('📸 Saving canvas data:', {
-      hasCanvasImage: !!canvasData.canvasImage,
-      imageLength: canvasData.canvasImage ? canvasData.canvasImage.length : 0,
-      hasLayers: !!canvasData.layers,
-      layersCount: canvasData.layers ? canvasData.layers.length : 0
-    });
-    whiteboard.canvasData = canvasData;
+    // Merge canvas data instead of replacing it for collaborative editing
+    if (typeof canvasData === 'object' && canvasData !== null) {
+      const existingCanvasData = whiteboard.canvasData || {};
+      
+      // Merge shapes if they exist
+      if (canvasData.shapes || canvasData.elements) {
+        const existingShapes = existingCanvasData.shapes || existingCanvasData.elements || [];
+        const newShapes = canvasData.shapes || canvasData.elements || [];
+        
+        // Create a map of existing shapes by ID to avoid duplicates
+        const existingShapesMap = new Map();
+        existingShapes.forEach(shape => {
+          if (shape.id) {
+            existingShapesMap.set(shape.id, shape);
+          }
+        });
+        
+        // Add new shapes that don't already exist
+        const mergedShapes = [...existingShapes];
+        newShapes.forEach(shape => {
+          if (shape.id && !existingShapesMap.has(shape.id)) {
+            mergedShapes.push(shape);
+          } else if (!shape.id) {
+            // Add shapes without IDs (they are new)
+            mergedShapes.push(shape);
+          }
+        });
+        
+        // Update the canvas data with merged shapes
+        whiteboard.canvasData = {
+          ...existingCanvasData,
+          ...canvasData,
+          shapes: mergedShapes,
+          elements: mergedShapes, // Support both naming conventions
+          lastModifiedBy: userId,
+          lastModifiedAt: new Date()
+        };
+      } else {
+        // For other canvas data types, merge the objects
+        whiteboard.canvasData = {
+          ...existingCanvasData,
+          ...canvasData,
+          lastModifiedBy: userId,
+          lastModifiedAt: new Date()
+        };
+      }
+      
+      } else {
+      // For non-object data, replace it (fallback behavior)
+      whiteboard.canvasData = canvasData;
+    }
   }
   if (canvasSettings !== undefined) {
     whiteboard.canvasSettings = { ...whiteboard.canvasSettings, ...canvasSettings };
@@ -217,8 +239,6 @@ export const updateWhiteboard = asyncHandle(async (req, res) => {
   whiteboard.lastModifiedBy = userId;
 
   const updatedWhiteboard = await whiteboard.save();
-  console.log('✅ Whiteboard updated successfully');
-
   // Populate fields
   await updatedWhiteboard.populate("owner", "name email username avatar");
   await updatedWhiteboard.populate("lastModifiedBy", "name email username avatar");
@@ -634,52 +654,80 @@ export const autoSaveWhiteboard = asyncHandle(async (req, res) => {
   const { canvasData } = req.body;
   const userId = req.user._id;
 
-  console.log('🔄 Backend autoSaveWhiteboard called:', {
-    whiteboardId,
-    userId,
-    hasCanvasData: !!canvasData
-  });
-
   const whiteboard = await Whiteboard.findOne({
     _id: whiteboardId,
     isDeleted: false,
   });
 
   if (!whiteboard) {
-    console.error('❌ Whiteboard not found:', whiteboardId);
     throw new ApiError(404, "Whiteboard not found");
   }
 
-  console.log('📄 Found whiteboard:', {
-    id: whiteboard._id,
-    title: whiteboard.title,
-    owner: whiteboard.owner,
-    status: whiteboard.status
-  });
-
   // Check permissions
   if (!whiteboard.hasPermission(userId, "editor")) {
-    console.error('❌ Permission denied for user:', userId);
     throw new ApiError(403, "You don't have permission to edit this whiteboard");
   }
 
-  // Update canvas data
+  // Update canvas data - merge instead of replace for collaborative editing
   if (canvasData !== undefined) {
-    whiteboard.canvasData = canvasData;
+    // If canvasData is an object with shapes or elements, merge them
+    if (typeof canvasData === 'object' && canvasData !== null) {
+      // Merge the new canvas data with existing data
+      const existingCanvasData = whiteboard.canvasData || {};
+      
+      // Merge shapes if they exist
+      if (canvasData.shapes || canvasData.elements) {
+        const existingShapes = existingCanvasData.shapes || existingCanvasData.elements || [];
+        const newShapes = canvasData.shapes || canvasData.elements || [];
+        
+        // Create a map of existing shapes by ID to avoid duplicates
+        const existingShapesMap = new Map();
+        existingShapes.forEach(shape => {
+          if (shape.id) {
+            existingShapesMap.set(shape.id, shape);
+          }
+        });
+        
+        // Add new shapes that don't already exist
+        const mergedShapes = [...existingShapes];
+        newShapes.forEach(shape => {
+          if (shape.id && !existingShapesMap.has(shape.id)) {
+            mergedShapes.push(shape);
+          } else if (!shape.id) {
+            // Add shapes without IDs (they are new)
+            mergedShapes.push(shape);
+          }
+        });
+        
+        // Update the canvas data with merged shapes
+        whiteboard.canvasData = {
+          ...existingCanvasData,
+          ...canvasData,
+          shapes: mergedShapes,
+          elements: mergedShapes, // Support both naming conventions
+          lastModifiedBy: userId,
+          lastModifiedAt: new Date()
+        };
+      } else {
+        // For other canvas data types, merge the objects
+        whiteboard.canvasData = {
+          ...existingCanvasData,
+          ...canvasData,
+          lastModifiedBy: userId,
+          lastModifiedAt: new Date()
+        };
+      }
+      
+      } else {
+      // For non-object data, replace it (fallback behavior)
+      whiteboard.canvasData = canvasData;
+    }
   }
 
   whiteboard.lastModifiedBy = userId;
   whiteboard.version += 1;
 
-  console.log('💾 Auto-saving whiteboard to database...');
   const updatedWhiteboard = await whiteboard.save();
-  console.log('✅ Whiteboard auto-saved successfully:', {
-    id: updatedWhiteboard._id,
-    title: updatedWhiteboard.title,
-    version: updatedWhiteboard.version
-  });
-
-  console.log('📤 Sending response to client');
   return res.status(200).json(
     new ApiResponse(200, "Whiteboard auto-saved successfully", {
       whiteboard: {
@@ -698,25 +746,17 @@ export const enableAutoSave = asyncHandle(async (req, res) => {
   const { enabled = true } = req.body;
   const userId = req.user._id;
 
-  console.log('🔄 Backend enableAutoSave called:', {
-    whiteboardId,
-    userId,
-    enabled
-  });
-
   const whiteboard = await Whiteboard.findOne({
     _id: whiteboardId,
     isDeleted: false,
   });
 
   if (!whiteboard) {
-    console.error('❌ Whiteboard not found:', whiteboardId);
     throw new ApiError(404, "Whiteboard not found");
   }
 
   // Check permissions (only owner can change auto-save settings)
   if (!whiteboard.hasPermission(userId, "owner")) {
-    console.error('❌ Permission denied for user:', userId);
     throw new ApiError(403, "You don't have permission to modify auto-save settings");
   }
 
@@ -724,10 +764,7 @@ export const enableAutoSave = asyncHandle(async (req, res) => {
   whiteboard.collaborationSettings.autoSave = enabled;
   whiteboard.lastModifiedBy = userId;
 
-  console.log('💾 Saving auto-save settings...');
   await whiteboard.save();
-  console.log('✅ Auto-save settings updated successfully');
-
   return res.status(200).json(
     new ApiResponse(200, `Auto-save ${enabled ? 'enabled' : 'disabled'} successfully`, {
       whiteboard: {
@@ -771,16 +808,6 @@ export const getWhiteboardCollaborators = asyncHandle(async (req, res) => {
 export const getAllWhiteboards = asyncHandle(async (req, res) => {
   const { type, status, search, owner, page = 1, limit = 10 } = req.query;
   const currentUserId = req.user._id;
-
-  console.log('🔍 Backend getAllWhiteboards called with:', {
-    currentUserId,
-    type,
-    status,
-    search,
-    owner,
-    page,
-    limit
-  });
 
   // Build query - only show whiteboards the user has access to
   let query = {
@@ -854,8 +881,6 @@ export const getAllWhiteboards = asyncHandle(async (req, res) => {
     ];
   }
 
-  console.log('🔧 Final query:', query);
-
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   const whiteboards = await Whiteboard.find(query)
@@ -867,19 +892,6 @@ export const getAllWhiteboards = asyncHandle(async (req, res) => {
     .limit(parseInt(limit));
 
   const total = await Whiteboard.countDocuments(query);
-
-  console.log('📊 Query Results:', {
-    whiteboardsFound: whiteboards.length,
-    totalCount: total,
-    whiteboards: whiteboards.map(wb => ({
-      id: wb._id,
-      title: wb.title,
-      owner: wb.owner?._id,
-      status: wb.status,
-      visibility: wb.visibility,
-      isDeleted: wb.isDeleted
-    }))
-  });
 
   return res.status(200).json(
     new ApiResponse(200, "All whiteboards fetched successfully", {

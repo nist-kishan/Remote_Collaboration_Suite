@@ -200,8 +200,9 @@ documentSchema.methods.enableAutoSave = function () {
 
 // Method to perform auto-save
 documentSchema.methods.autoSave = function (newContent, userId) {
-  // Only auto-save if enabled and document is not a draft
-  if (this.isAutoSaveEnabled && this.status !== "draft") {
+  // Auto-save if document is not a draft (published documents always have auto-save)
+  // Note: isAutoSaveEnabled is a legacy field, we now auto-save all published documents
+  if (this.status !== "draft") {
     this.content = newContent;
     this.lastAutoSaveContent = newContent;
     this.autoSavedAt = new Date();

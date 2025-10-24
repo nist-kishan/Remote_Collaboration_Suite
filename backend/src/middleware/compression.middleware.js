@@ -83,7 +83,6 @@ export const compressImage = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('Image compression error:', error);
     next(); // Continue without compression if it fails
   }
 };

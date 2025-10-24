@@ -34,21 +34,12 @@ const CallWindow = ({ chat, onEndCall }) => {
   useEffect(() => {
     const initializeCall = async () => {
       try {
-        console.log('Initializing call with chat:', chat);
-        
         // Start local stream first
-        console.log('Starting local stream...');
         const stream = await startLocalStream();
-        console.log('Local stream started:', stream);
-
         // Create peer connection
-        console.log('Creating peer connection...');
         createPeerConnection();
-        console.log('Peer connection created');
-
         // Start call
         if (socket && chat) {
-          console.log('Emitting start_call event...');
           socket.emit('start_call', {
             chatId: chat._id,
             type: chat.type
@@ -81,13 +72,11 @@ const CallWindow = ({ chat, onEndCall }) => {
   useEffect(() => {
     if (socket) {
       socket.on('call_started', (data) => {
-        console.log('Call started:', data);
         setCallStatus('ringing');
         setParticipants(data.call.participants);
       });
 
       socket.on('call_joined', (data) => {
-        console.log('Call joined:', data);
         setCallStatus('ongoing');
         setParticipants(data.call.participants);
         
@@ -170,9 +159,7 @@ const CallWindow = ({ chat, onEndCall }) => {
 
   const handleTestCamera = async () => {
     try {
-      console.log('Testing camera...');
       const stream = await startLocalStream();
-      console.log('Camera test successful:', stream);
       toast.success('Camera is working! Check the small video window.');
     } catch (error) {
       console.error('Camera test failed:', error);
@@ -189,7 +176,6 @@ const CallWindow = ({ chat, onEndCall }) => {
       });
     }
   };
-
 
   const handleToggleScreenShare = async () => {
     if (isScreenSharing) {
@@ -222,9 +208,9 @@ const CallWindow = ({ chat, onEndCall }) => {
           playsInline
           className="w-full h-full object-cover"
           style={{ backgroundColor: '#1f2937' }} // Dark background while loading
-          onLoadedMetadata={() => console.log('Remote video metadata loaded')}
-          onCanPlay={() => console.log('Remote video can play')}
-          onPlay={() => console.log('Remote video started playing')}
+          onLoadedMetadata={() => }
+          onCanPlay={() => }
+          onPlay={() => }
           onError={(e) => console.error('Remote video error:', e)}
         />
         
@@ -271,9 +257,9 @@ const CallWindow = ({ chat, onEndCall }) => {
               backgroundColor: '#1f2937',
               transform: 'scaleX(-1)' // Mirror the local video
             }}
-            onLoadedMetadata={() => console.log('Local video metadata loaded')}
-            onCanPlay={() => console.log('Local video can play')}
-            onPlay={() => console.log('Local video started playing')}
+            onLoadedMetadata={() => }
+            onCanPlay={() => }
+            onPlay={() => }
             onError={(e) => console.error('Local video error:', e)}
           />
           {/* Fallback if no video stream */}

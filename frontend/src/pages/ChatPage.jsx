@@ -158,7 +158,7 @@ const ChatPage = () => {
                   <div className="flex items-center justify-between p-3 md:p-4">
                     <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                       <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                        <Search className="w-4 h-4 md:w-6 md:h-6 text-gray-400" />
+                        
                       </div>
                       <div className="min-w-0 flex-1">
                         <h2 className="text-sm md:text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
@@ -176,7 +176,7 @@ const ChatPage = () => {
                 <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-800 min-h-0 overflow-hidden">
                   <div className="text-center text-gray-500 dark:text-gray-400 p-8 max-w-md">
                     <div className="w-24 h-24 mx-auto mb-6 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
-                      <Search size={32} className="text-gray-400" />
+                      
                     </div>
                     <h3 className="text-xl font-semibold mb-2">Select a chat to start messaging</h3>
                     <p className="text-sm mb-6">Choose from your existing conversations or start a new one</p>

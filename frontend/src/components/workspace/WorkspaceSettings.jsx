@@ -5,9 +5,14 @@ import { toast } from 'react-hot-toast';
 import { workspaceApi } from '../../api/workspaceApi';
 import CustomButton from '../ui/CustomButton';
 import CustomCard from '../ui/CustomCard';
+import { useSelector } from 'react-redux';
 
 const WorkspaceSettings = ({ workspace, canManageSettings }) => {
   const queryClient = useQueryClient();
+  const currentUser = useSelector((state) => state.auth.user);
+  
+  // Check if current user is the owner
+  const isOwner = workspace?.owner?._id === currentUser?._id;
   
   const [settings, setSettings] = useState({
     allowMemberInvites: workspace?.settings?.allowMemberInvites ?? true,
@@ -36,8 +41,8 @@ const WorkspaceSettings = ({ workspace, canManageSettings }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (!canManageSettings) {
-      toast.error('You don\'t have permission to change settings');
+    if (!isOwner) {
+      toast.error('Only the workspace owner can change settings');
       return;
     }
 
@@ -49,14 +54,22 @@ const WorkspaceSettings = ({ workspace, canManageSettings }) => {
   };
 
   const handleSettingChange = (key, value) => {
+    if (!isOwner) {
+      toast.error('Only the workspace owner can change settings');
+      return;
+    }
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
   const handleInfoChange = (key, value) => {
+    if (!isOwner) {
+      toast.error('Only the workspace owner can change settings');
+      return;
+    }
     setWorkspaceInfo(prev => ({ ...prev, [key]: value }));
   };
 
-  if (!canManageSettings) {
+  if (!isOwner) {
     return (
       <div className="space-y-6">
         <CustomCard className="p-6">
@@ -66,7 +79,7 @@ const WorkspaceSettings = ({ workspace, canManageSettings }) => {
               Settings Restricted
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              You don't have permission to change workspace settings
+              Only the workspace owner can change workspace settings
             </p>
           </div>
         </CustomCard>

@@ -173,9 +173,17 @@ export const useTask = () => {
         dispatch(setSelectedTask(updatedTask));
       }
       
+      // Update Kanban data to reflect new comment
+      dispatch(updateKanbanTask({
+        taskId: updatedTask._id,
+        status: updatedTask.status,
+        task: updatedTask
+      }));
+      
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['task', variables.taskId] });
       queryClient.invalidateQueries({ queryKey: ['project-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['kanban-boards'] });
       
       toast.success('Comment added successfully');
     },

@@ -162,7 +162,6 @@ export const getOrCreateOneToOneChat = asyncHandle(async (req, res) => {
   if (!otherUser) {
     throw new ApiError(404, 'User not found');
   }
-  
 
   // Check if chat already exists
   let chat = await Chat.findOne({

@@ -35,8 +35,7 @@ export const withRetry = async (operation, maxRetries = 3, delay = 2000) => {
       if (!isRetryableError || attempt === maxRetries - 1) {
         throw error;
       }
-      
-      
+
       // Wait before retrying with exponential backoff
       await new Promise(resolve => setTimeout(resolve, delay * (attempt + 1)));
     }

@@ -198,8 +198,7 @@ const MediaViewer = ({
           url: currentMedia.url
         });
       } catch (error) {
-        console.log('Share cancelled');
-      }
+        }
     } else {
       // Fallback: copy to clipboard
       navigator.clipboard.writeText(currentMedia?.url || '');

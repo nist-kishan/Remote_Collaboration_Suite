@@ -84,8 +84,7 @@ const VideoCallInterface = ({
     if (localStream && localVideoRef.current) {
       try {
         localVideoRef.current.srcObject = localStream;
-        console.log('✅ Local video stream set successfully');
-      } catch (error) {
+        } catch (error) {
         console.error('❌ Error setting local video stream:', error);
       }
     }
@@ -97,14 +96,11 @@ const VideoCallInterface = ({
         remoteVideoRef.current.srcObject = remoteStream;
         remoteVideoRef.current.load();
         
-        console.log('✅ Remote video stream set successfully');
-        
         // Try to play the video
         const playPromise = remoteVideoRef.current.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
-            console.log('✅ Remote video playing successfully');
-          }).catch(error => {
+            }).catch(error => {
             console.warn('⚠️ Remote video play failed:', error);
             // Retry after a short delay
             setTimeout(() => {
@@ -138,7 +134,6 @@ const VideoCallInterface = ({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      console.log('🧹 VideoCallInterface unmounting, ensuring media cleanup...');
       // The useCall hook will handle the actual cleanup, but we log here for debugging
     };
   }, []);

@@ -74,8 +74,7 @@ export const uploadLimiter = createRateLimit(60 * 1000, 10); // 10 uploads per m
 // MongoDB injection prevention
 export const sanitizeMongo = mongoSanitize({
   onSanitize: ({ req, key }) => {
-    console.warn(`MongoDB injection attempt detected in ${key}:`, req[key]);
-  },
+    },
 });
 
 // HTTP Parameter Pollution prevention
@@ -132,7 +131,6 @@ export const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn('🚫 CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -180,8 +178,7 @@ export const securityLogger = (req, res, next) => {
     
     // Log only critical errors (500+)
     if (res.statusCode >= 500) {
-      console.error('Critical Error:', logData);
-    }
+      }
   });
   
   next();

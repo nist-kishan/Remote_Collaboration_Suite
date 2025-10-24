@@ -114,58 +114,9 @@ const ProjectBudget = ({ project }) => {
             </div>
           </div>
         </div>
-
-        {/* Update Spent Amount */}
-        {!isEditing ? (
-          <CustomButton
-            variant="outline"
-            className="w-full"
-            onClick={() => setIsEditing(true)}
-          >
-            <TrendingUp className="w-4 h-4 inline mr-2" />
-            Update Spent Amount
-          </CustomButton>
-        ) : (
-          <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Spent Amount ({budget.currency})
-              </label>
-              <input
-                type="number"
-                value={spentAmount}
-                onChange={(e) => setSpentAmount(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Enter spent amount"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div className="flex gap-2">
-              <CustomButton
-                variant="outline"
-                onClick={() => {
-                  setIsEditing(false);
-                  setSpentAmount('');
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </CustomButton>
-              <CustomButton
-                onClick={handleUpdateSpent}
-                className="flex-1"
-                disabled={updateBudgetMutation.isPending}
-              >
-                {updateBudgetMutation.isPending ? 'Updating...' : 'Update'}
-              </CustomButton>
-            </div>
-          </div>
-        )}
       </div>
     </CustomCard>
   );
 };
 
 export default ProjectBudget;
-

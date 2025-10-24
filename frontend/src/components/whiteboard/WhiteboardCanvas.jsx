@@ -380,7 +380,7 @@ const WhiteboardCanvas = React.forwardRef(({
         })}
 
         {/* Temporary Shape (while drawing) with preview */}
-        {tempShape && console.log('🎨 Rendering tempShape:', tempShape)}
+        {tempShape && }
         {tempShape && (
           <>
             {tempShape.type === 'rectangle' && (

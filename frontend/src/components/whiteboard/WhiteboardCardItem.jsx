@@ -30,6 +30,7 @@ const WhiteboardCard = (props) => {
     onShare, 
     onDelete, 
     onView,
+    onCollaborate,
     className = "" 
   } = props;
 
@@ -47,9 +48,9 @@ const WhiteboardCard = (props) => {
       case 'viewer':
         return ['view']; // Only view button
       case 'editor':
-        return ['edit']; // Only edit button
+        return ['edit', 'collaborate']; // Only edit and collaborate buttons
       case 'owner':
-        return ['edit', 'share', 'delete']; // 3 buttons: edit, share, delete
+        return ['edit', 'collaborate', 'delete']; // 3 buttons: edit, collaborate, delete
       default:
         return ['view']; // Default to view only
     }
@@ -155,16 +156,23 @@ const WhiteboardCard = (props) => {
                   </Button>
                 )}
                 
-                {/* Share Button - For editors and owners */}
-                {visibleActions.includes('share') && (
+                {/* Collaborate Button - For editors and owners */}
+                {visibleActions.includes('collaborate') && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onShare(whiteboard)}
-                    title="Share Whiteboard"
+                    onClick={() => {
+                      if (onCollaborate) {
+                        onCollaborate(whiteboard);
+                      } else {
+                        console.warn('⚠️ onCollaborate handler not provided, falling back to onShare');
+                        onShare(whiteboard);
+                      }
+                    }}
+                    title="Manage Collaboration"
                     className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
-                    <Share className="w-4 h-4" />
+                    <Users className="w-4 h-4" />
                   </Button>
                 )}
                 
@@ -273,16 +281,23 @@ const WhiteboardCard = (props) => {
                   </Button>
                 )}
                 
-                {/* Share Button - For editors and owners */}
-                {visibleActions.includes('share') && (
+                {/* Collaborate Button - For editors and owners */}
+                {visibleActions.includes('collaborate') && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onShare(whiteboard)}
-                    title="Share Whiteboard"
+                    onClick={() => {
+                      if (onCollaborate) {
+                        onCollaborate(whiteboard);
+                      } else {
+                        console.warn('⚠️ onCollaborate handler not provided, falling back to onShare');
+                        onShare(whiteboard);
+                      }
+                    }}
+                    title="Manage Collaboration"
                     className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
-                    <Share className="w-4 h-4" />
+                    <Users className="w-4 h-4" />
                   </Button>
                 )}
                 
