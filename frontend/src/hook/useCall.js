@@ -321,13 +321,17 @@ export const useCall = () => {
 
   const startLocalStream = useCallback(async () => {
     try {
+      console.log('🎥 Starting local media stream...');
+      
       // Check if devices are in use first
       const devicesInUse = await checkDeviceInUse();
       if (devicesInUse) {
+        console.error('❌ Devices are in use');
         throw new Error('Camera or microphone is being used by another application. Please close other applications and try again.');
       }
       
       // More aggressive cleanup
+      console.log('🧹 Cleaning up existing streams...');
       await releaseAllTracks();
       
       // Wait a bit longer for devices to be fully released
@@ -335,12 +339,16 @@ export const useCall = () => {
       
       // Check if we already have a valid stream
       if (localStreamRef.current && localStreamRef.current.active) {
+        console.log('✅ Reusing existing active stream');
         return localStreamRef.current;
       }
       
+      console.log('🔍 Checking device availability...');
       const deviceInfo = await checkDeviceAvailability();
+      console.log('📱 Available devices:', deviceInfo);
       
       if (!deviceInfo.hasVideo) {
+        console.error('❌ No video devices found');
         throw new Error('No video devices found');
       }
       
@@ -355,6 +363,7 @@ export const useCall = () => {
           }
       }
       
+      console.log('🎬 Requesting media stream with optimal constraints...');
       const strategies = [
         getOptimalMediaConstraints(),
         createFallbackConstraints(),
@@ -369,13 +378,21 @@ export const useCall = () => {
       
       for (let i = 0; i < strategies.length; i++) {
         try {
+          console.log(`📝 Trying constraint strategy ${i + 1}/${strategies.length}`);
           stream = await navigator.mediaDevices.getUserMedia(strategies[i]);
+          console.log('✅ Media stream obtained successfully');
+          
+          // Log stream details
+          const tracks = stream.getTracks();
+          console.log('📹 Stream tracks:', tracks.map(t => `${t.kind} - ${t.label} (${t.enabled ? 'enabled' : 'disabled'})`));
           break;
         } catch (error) {
           lastError = error;
+          console.warn(`⚠️ Strategy ${i + 1} failed:`, error.name, error.message);
           
           if (error.name === 'NotReadableError' && i < strategies.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Increased delay
+            console.log('⏳ Waiting for devices to be released...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
       }
@@ -388,7 +405,9 @@ export const useCall = () => {
         throw lastError || new Error('All media constraint strategies failed');
       }
       
+      console.log('🔍 Validating media stream...');
       const validation = validateMediaStream(stream);
+      console.log('✅ Stream validation:', validation);
       
       localStreamRef.current = stream;
       originalCameraStreamRef.current = stream;
@@ -402,27 +421,43 @@ export const useCall = () => {
       // Reset retry count on success
       setDeviceInUseRetryCount(0);
       setWebrtcLocalStream(stream);
+      dispatch(setLocalStream(stream));
       
+      console.log('🎬 Setting local video element source...');
       if (localVideoRef.current) {
         try {
-          localVideoRef.current.srcObject = null;
+          // Clear previous stream
+          if (localVideoRef.current.srcObject) {
+            const oldStream = localVideoRef.current.srcObject;
+            oldStream.getTracks().forEach(track => track.stop());
+          }
+          
           localVideoRef.current.srcObject = stream;
-          localVideoRef.current.load();
+          localVideoRef.current.autoplay = true;
+          localVideoRef.current.muted = true; // Mute local video to prevent feedback
+          localVideoRef.current.playsInline = true;
           
           const playPromise = localVideoRef.current.play();
           if (playPromise !== undefined) {
             playPromise.then(() => {
+              console.log('✅ Local video playing');
             }).catch(error => {
+              console.warn('⚠️ Local video play failed, retrying...', error);
               setTimeout(() => {
                 localVideoRef.current?.play().catch(err => {
+                  console.error('❌ Local video retry failed:', err);
                 });
               }, 1000);
             });
           }
         } catch (error) {
+          console.error('❌ Error setting local video stream:', error);
         }
+      } else {
+        console.warn('⚠️ Local video ref not available');
       }
       
+      console.log('✅ Local stream started successfully');
       return stream;
     } catch (error) {
       if (isExtensionError(error)) {
@@ -467,27 +502,49 @@ export const useCall = () => {
 
   const createPeerConnection = useCallback(() => {
     if (peerConnectionRef.current) {
+      console.log('⚠️ Closing existing peer connection');
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
 
+    console.log('🔄 Creating new peer connection with ICE servers:', WEBRTC_CONFIG.ICE_SERVERS);
+    
     const configuration = {
-      iceServers: WEBRTC_CONFIG.ICE_SERVERS.map(server => ({ urls: server }))
+      iceServers: WEBRTC_CONFIG.ICE_SERVERS.map(server => ({ urls: server })),
+      iceTransportPolicy: 'all',
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require'
     };
 
     const pc = new RTCPeerConnection(configuration);
+    console.log('✅ Peer connection created');
+    
     peerConnectionRef.current = pc;
 
+    // Add local stream tracks to peer connection
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStreamRef.current);
+      const tracks = localStreamRef.current.getTracks();
+      console.log('📹 Adding local tracks to peer connection:', tracks.length, tracks.map(t => t.kind));
+      
+      tracks.forEach(track => {
+        try {
+          pc.addTrack(track, localStreamRef.current);
+          console.log('✅ Added track:', track.kind, track.id);
+        } catch (error) {
+          console.error('❌ Error adding track:', track.kind, error);
+        }
       });
+    } else {
+      console.warn('⚠️ No local stream available when creating peer connection');
     }
 
+    // Handle remote stream when receiving tracks
     pc.ontrack = (event) => {
+      console.log('📥 Received remote track:', event.track.kind, event.track.id);
+      
       const [remoteStream] = event.streams;
       if (remoteStream) {
-        console.log('Remote stream tracks:', remoteStream.getTracks().map(t => t.kind));
+        console.log('✅ Remote stream received with tracks:', remoteStream.getTracks().map(t => `${t.kind} (${t.id})`));
         
         // Update both local state and Redux state
         setWebrtcRemoteStream(remoteStream);
@@ -495,16 +552,23 @@ export const useCall = () => {
         
         if (remoteVideoRef.current) {
           try {
+            console.log('🎬 Setting remote video element source');
             // Clear previous stream first
-            remoteVideoRef.current.srcObject = null;
+            if (remoteVideoRef.current.srcObject) {
+              const oldStream = remoteVideoRef.current.srcObject;
+              oldStream.getTracks().forEach(track => track.stop());
+            }
+            
             remoteVideoRef.current.srcObject = remoteStream;
             remoteVideoRef.current.muted = false;
-            remoteVideoRef.current.load();
+            remoteVideoRef.current.autoplay = true;
+            remoteVideoRef.current.playsInline = true;
             
             const playPromise = remoteVideoRef.current.play();
             if (playPromise !== undefined) {
               playPromise.then(() => {
-                }).catch(error => {
+                console.log('✅ Remote video playing');
+              }).catch(error => {
                 console.warn('⚠️ Remote video play failed, retrying...', error);
                 setTimeout(() => {
                   remoteVideoRef.current?.play().catch(err => {
@@ -516,16 +580,40 @@ export const useCall = () => {
           } catch (error) {
             console.error('❌ Error setting remote video stream:', error);
           }
+        } else {
+          console.warn('⚠️ Remote video ref not available');
         }
       }
     };
 
+    // Handle ICE candidates for NAT traversal
     pc.onicecandidate = (event) => {
-      if (event.candidate && socket) {
+      if (event.candidate && socket && socket.connected) {
+        console.log('🧊 Sending ICE candidate:', event.candidate.candidate.substring(0, 50) + '...');
         socket.emit('ice_candidate', {
           candidate: event.candidate
         });
+      } else if (event.candidate === null) {
+        console.log('✅ ICE gathering complete');
       }
+    };
+
+    // Handle ICE connection state changes
+    pc.oniceconnectionstatechange = () => {
+      console.log('🧊 ICE connection state changed:', pc.iceConnectionState);
+      
+      if (pc.iceConnectionState === 'failed') {
+        console.error('❌ ICE connection failed');
+        // Try to restart ICE
+        pc.restartIce();
+      } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        console.log('✅ ICE connection established');
+      }
+    };
+
+    // Handle signaling state changes
+    pc.onsignalingstatechange = () => {
+      console.log('📡 Signaling state changed:', pc.signalingState);
     };
 
     peerConnectionRef.current = pc;

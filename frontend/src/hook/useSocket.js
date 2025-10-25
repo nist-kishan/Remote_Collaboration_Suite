@@ -33,12 +33,17 @@ export const useSocket = () => {
       });
 
       socketRef.current.on('connect', () => {
-        // setIsConnected(true);
+        setIsConnected(true);
         setConnectionError(null);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('✅ Socket connected successfully');
+        }
       });
 
       socketRef.current.on('connection_confirmed', (data) => {
-        // Connection confirmed
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('Socket connection confirmed:', data);
+        }
       });
 
       socketRef.current.on('user_status_changed', (data) => {
@@ -59,7 +64,10 @@ export const useSocket = () => {
       });
 
       socketRef.current.on('disconnect', (reason) => {
-        // setIsConnected(false);
+        setIsConnected(false);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('Socket disconnected:', reason);
+        }
         if (reason === 'io server disconnect') {
           // Server disconnected, try to reconnect
           socketRef.current.connect();
@@ -74,19 +82,31 @@ export const useSocket = () => {
 
         setConnectionError(error.message);
         setIsConnected(false);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.error('Socket connection error:', error.message);
+        }
       });
 
       socketRef.current.on('reconnect', (attemptNumber) => {
         setIsConnected(true);
         setConnectionError(null);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('✅ Socket reconnected after', attemptNumber, 'attempts');
+        }
       });
 
       socketRef.current.on('reconnect_error', (error) => {
         setConnectionError(error.message);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.error('Socket reconnection error:', error.message);
+        }
       });
 
       socketRef.current.on('reconnect_failed', () => {
         setConnectionError('Failed to reconnect to server');
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.error('❌ Socket reconnection failed');
+        }
       });
 
       socketRef.current.on('error', (error) => {
@@ -101,6 +121,7 @@ export const useSocket = () => {
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
   }, [user]);
@@ -111,6 +132,9 @@ export const useSocket = () => {
     connectionError,
     reconnect: () => {
       if (socketRef.current && !socketRef.current.connected) {
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('Attempting to reconnect socket...');
+        }
         socketRef.current.connect();
       }
     }

@@ -1699,6 +1699,55 @@ class SocketServer {
         socket.to(`project:${projectId}`).emit("meeting_ended", { meeting });
       });
 
+      // Meeting room events
+      socket.on("join_meeting_room", (data) => {
+        const { meetingId } = data;
+        if (meetingId) {
+          console.log(`🔌 User ${socket.userId} joining meeting room: ${meetingId}`);
+          socket.join(`meeting:${meetingId}`);
+          socket.currentMeetingId = meetingId;
+          
+          // Notify others in the meeting room
+          socket.to(`meeting:${meetingId}`).emit("participant_joined", {
+            meetingId,
+            participant: {
+              user: socket.user,
+              userId: socket.userId,
+              joinedAt: new Date()
+            }
+          });
+          
+          // Confirm join to the user
+          socket.emit("meeting_room_joined", {
+            meetingId,
+            message: "Joined meeting room successfully"
+          });
+        }
+      });
+
+      socket.on("leave_meeting_room", (data) => {
+        const { meetingId } = data;
+        if (meetingId && socket.currentMeetingId === meetingId) {
+          console.log(`👋 User ${socket.userId} leaving meeting room: ${meetingId}`);
+          
+          // Notify others in the meeting room
+          socket.to(`meeting:${meetingId}`).emit("participant_left", {
+            meetingId,
+            userId: socket.userId,
+            user: socket.user
+          });
+          
+          socket.leave(`meeting:${meetingId}`);
+          socket.currentMeetingId = null;
+          
+          // Confirm leave to the user
+          socket.emit("meeting_room_left", {
+            meetingId,
+            message: "Left meeting room successfully"
+          });
+        }
+      });
+
       // Notification events
       socket.on("join_notifications", () => {
         socket.join(`notifications:${socket.userId}`);
@@ -1787,6 +1836,18 @@ class SocketServer {
           socket.to(`chat:${socket.currentChatId}`).emit("user_left_chat", {
             userId: socket.userId
           });
+        }
+
+        // Handle meeting room disconnect
+        if (socket.currentMeetingId) {
+          console.log(`👋 User ${socket.userId} disconnected from meeting: ${socket.currentMeetingId}`);
+          socket.to(`meeting:${socket.currentMeetingId}`).emit("participant_left", {
+            meetingId: socket.currentMeetingId,
+            userId: socket.userId,
+            user: socket.user
+          });
+          socket.leave(`meeting:${socket.currentMeetingId}`);
+          socket.currentMeetingId = null;
         }
 
         // Handle call disconnect

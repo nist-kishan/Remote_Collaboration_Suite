@@ -69,48 +69,39 @@ const ChatWindow = forwardRef(({
     if (!socket || !chat?._id) return;
 
     // Socket connection status check
+    if (!socket.connected) {
+      console.log('Socket not connected, attempting to connect...');
+      socket.connect();
+      return; // Wait for socket to connect
+    }
 
     // Join the chat room
-
-    // Ensure socket is connected before joining chat
-    if (socket && socket.connected) {
-      socket.emit('join_chat', { chatId: chat._id });
-
-    } else {
-
-      // Retry connection
-      setTimeout(() => {
-        if (socket) {
-          socket.connect();
-          socket.emit('join_chat', { chatId: chat._id });
-        }
-      }, 1000);
-    }
+    console.log('Joining chat room:', chat._id);
+    socket.emit('join_chat', { chatId: chat._id });
     
     // Mark messages as read when opening the chat
-    socket.emit('mark_as_read', { chatId: chat._id });
+    debouncedMarkAsRead();
 
     const handleNewMessage = (data) => {
+      console.log('📨 Received new message:', data);
 
       // Validate message data
       if (!data || !data.message) {
-
+        console.warn('Invalid message data received:', data);
         return;
       }
 
       // Update for all messages in the current chat (including own messages)
       if (data.chatId === chat._id) {
-
-        // Simply refresh messages to show new message in real-time
+        console.log('✅ Message belongs to current chat, refreshing...');
 
         // Force refresh messages to ensure real-time updates
         queryClient.invalidateQueries(['messages', chat._id]);
         queryClient.invalidateQueries(['chats']);
         queryClient.invalidateQueries(['recentChats']);
         queryClient.invalidateQueries(['groupChats']);
-
       } else {
-
+        console.log('Message for different chat:', data.chatId);
       }
     };
 
@@ -186,20 +177,15 @@ const ChatWindow = forwardRef(({
     // Try Socket.IO first
 
     if (socket && socket.connected) {
+      console.log('📤 Sending message via socket:', messageData);
 
       // Reset sending flag immediately for better UX
       setIsSendingMessage(false);
       
-      socket.emit('send_message', messageData);
-
-      // Immediately invalidate queries to update chat list
-      queryClient.invalidateQueries(['recentChats']);
-      queryClient.invalidateQueries(['chats']);
-      queryClient.invalidateQueries(['groupChats']);
-      
       // Listen for confirmation from Socket.IO
       const confirmationHandler = (data) => {
-
+        console.log('✅ Message confirmed by server:', data);
+        
         // Refresh messages and chat list to show the confirmed message
         queryClient.invalidateQueries(['messages', chat._id]);
         queryClient.invalidateQueries(['chats']);
@@ -215,6 +201,14 @@ const ChatWindow = forwardRef(({
       setTimeout(() => {
         socket.off('message_confirmed', confirmationHandler);
       }, 5000);
+      
+      // Emit the message
+      socket.emit('send_message', messageData);
+
+      // Immediately invalidate queries to update chat list
+      queryClient.invalidateQueries(['recentChats']);
+      queryClient.invalidateQueries(['chats']);
+      queryClient.invalidateQueries(['groupChats']);
     } else {
       // Socket.IO not available, use API directly
 
