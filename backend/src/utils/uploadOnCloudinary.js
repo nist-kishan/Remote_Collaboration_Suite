@@ -32,6 +32,7 @@ export const uploadOnCloudinary = async (localFilePath) => {
     cloud_name: process.env.CLOUDINARY_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
+    secure: true, // Force HTTPS URLs
   });
 
   try {
@@ -86,6 +87,7 @@ export const deleteFromUrl = async (fileUrl) => {
       cloud_name: process.env.CLOUDINARY_NAME,
       api_key: process.env.CLOUDINARY_API_KEY,
       api_secret: process.env.CLOUDINARY_API_SECRET,
+      secure: true, // Force HTTPS URLs
     });
 
     if (!fileUrl) {
@@ -113,4 +115,19 @@ export const deleteFromUrl = async (fileUrl) => {
   } catch (err) {
     return false;
   }
+};
+
+/**
+ * Convert HTTP Cloudinary URLs to HTTPS
+ * This fixes mixed content warnings on HTTPS sites
+ */
+export const ensureSecureUrl = (url) => {
+  if (!url) return url;
+  
+  // If it's a Cloudinary URL with HTTP, convert to HTTPS
+  if (url.startsWith('http://res.cloudinary.com/')) {
+    return url.replace('http://', 'https://');
+  }
+  
+  return url;
 };

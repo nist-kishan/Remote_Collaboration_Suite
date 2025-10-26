@@ -11,8 +11,30 @@ const VideoTile = ({ stream, userName, isMuted, isLocal = false }) => {
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      
+      // Log audio tracks for debugging
+      const audioTracks = stream.getAudioTracks();
+      const videoTracks = stream.getVideoTracks();
+      console.log(`🎬 [VideoTile] ${userName}:`, {
+        isLocal,
+        audioTracks: audioTracks.length,
+        videoTracks: videoTracks.length,
+        audioEnabled: audioTracks[0]?.enabled,
+        videoEnabled: videoTracks[0]?.enabled
+      });
+      
+      // Ensure audio plays for remote videos
+      if (!isLocal && videoRef.current) {
+        videoRef.current.volume = 1.0;
+        videoRef.current.muted = false;
+        
+        // Try to play (browsers may block auto-play)
+        videoRef.current.play().catch(err => {
+          console.log('⚠️ Auto-play prevented for', userName, '- User interaction required');
+        });
+      }
     }
-  }, [stream]);
+  }, [stream, userName, isLocal]);
 
   return (
     <div className="relative bg-gray-800 rounded-lg overflow-hidden aspect-video">

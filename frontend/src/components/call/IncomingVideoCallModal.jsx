@@ -35,14 +35,19 @@ const IncomingCallModal = ({
     }
   }, [isVisible, incomingCall, onDecline]);
 
-  if (!isVisible || !incomingCall) return null;
+  if (!isVisible || !incomingCall) {
+    console.log('🚫 Modal not showing:', { isVisible, hasIncomingCall: !!incomingCall });
+    return null;
+  }
 
   // Extract caller info from incomingCall
   const fromUserName = incomingCall?.fromUserName || incomingCall?.caller?.name || 'Unknown User';
   const fromUserAvatar = incomingCall?.fromUserAvatar || incomingCall?.caller?.avatar || null;
 
+  console.log('✅ Showing incoming call modal:', { fromUserName, fromUserAvatar, incomingCall });
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[99999]">
       {/* Background Animation */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 to-purple-600/20 animate-pulse" />

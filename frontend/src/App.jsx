@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { setNavigateFunction } from "./utils/navigation";
+import { toast } from "react-hot-toast";
 
 import ApplicationLayout from "./components/ApplicationLayout";
 import ToastNotification from "./components/ui/ToastNotification";
@@ -244,13 +245,35 @@ export default function App() {
           <IncomingVideoCallModal
             incomingCall={incomingCall}
             onAccept={async () => {
-              const callId = incomingCall.callId || incomingCall._id;
-              await joinCall(callId);
-              navigate("/video-call");
+              try {
+                const callId = incomingCall.callId || incomingCall._id;
+                console.log('📞 Accepting call:', callId);
+                await joinCall(callId);
+                navigate("/video-call");
+              } catch (error) {
+                console.error('❌ Error accepting call:', error);
+                toast.error('Failed to accept call');
+              }
             }}
             onReject={async () => {
-              const callId = incomingCall.callId || incomingCall._id;
-              await rejectCall(callId);
+              try {
+                const callId = incomingCall.callId || incomingCall._id;
+                console.log('📞 Rejecting call:', callId);
+                await rejectCall(callId);
+              } catch (error) {
+                console.error('❌ Error rejecting call:', error);
+                toast.error('Failed to reject call');
+              }
+            }}
+            onDecline={async () => {
+              try {
+                const callId = incomingCall.callId || incomingCall._id;
+                console.log('📞 Declining call:', callId);
+                await rejectCall(callId);
+              } catch (error) {
+                console.error('❌ Error declining call:', error);
+                toast.error('Failed to decline call');
+              }
             }}
             isVisible={showIncomingCallModal}
           />
