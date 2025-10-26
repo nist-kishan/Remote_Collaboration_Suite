@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useCallback, forwardRef } from 'react';
-import { useSelector } from 'react-redux';
 import ChatWindowHeader from './ChatWindowHeader';
 import ChatMessageList from './ChatMessageList';
 import ChatMessageInput from '../ui/ChatMessageInput';
 import ChatGroupMembersModal from './ChatGroupMembersModal';
 import { useSocket } from '../../hook/useSocket';
-import { useChat } from '../../hook/useChat';
 import { useTyping } from '../../hook/useTyping';
 import { useQueryClient } from '@tanstack/react-query';
-import { createOptimizedMessageSender } from '../../utils/messageOptimizer';
 
-// Debounce utility function
 const debounce = (func, wait) => {
   let timeout;
   return function executedFunction(...args) {
@@ -33,84 +29,61 @@ const ChatWindow = forwardRef(({
   isMobile = false,
   className = '' 
 }, ref) => {
-  const { user } = useSelector((state) => state.auth);
   const [replyTo, setReplyTo] = useState(null);
-  const [editingMessage, setEditingMessage] = useState(null);
+  const [ setEditingMessage] = useState(null);
   const [showGroupMembers, setShowGroupMembers] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   
   const { socket } = useSocket();
   const { 
-    isTyping, 
     typingUsers, 
-    startTyping, 
-    stopTyping, 
+    startTyping,  
     handleTypingEvent, 
     handleStopTypingEvent 
   } = useTyping(chat?._id);
   
-  // Note: These mutations would be implemented using React Query's useMutation
-  // For now, we'll handle them directly in the component
   const queryClient = useQueryClient();
 
-  // Create debounced mark as read function
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedMarkAsRead = useCallback(
     debounce(() => {
       if (socket && socket.connected && chat?._id) {
-        // Marking messages as read for chat
         socket.emit('mark_as_read', { chatId: chat._id });
       }
-    }, 1000), // Debounce for 1 second
+    }, 1000),
     [socket, chat?._id]
   );
 
-  // Join chat room and handle Socket.IO events
   useEffect(() => {
     if (!socket || !chat?._id) return;
 
-    // Socket connection status check
     if (!socket.connected) {
-      console.log('Socket not connected, attempting to connect...');
       socket.connect();
-      return; // Wait for socket to connect
+      return; 
     }
 
-    // Join the chat room
-    console.log('Joining chat room:', chat._id);
     socket.emit('join_chat', { chatId: chat._id });
-    
-    // Mark messages as read when opening the chat
+
     debouncedMarkAsRead();
 
     const handleNewMessage = (data) => {
-      console.log('📨 Received new message:', data);
-
-      // Validate message data
       if (!data || !data.message) {
-        console.warn('Invalid message data received:', data);
         return;
       }
 
-      // Update for all messages in the current chat (including own messages)
       if (data.chatId === chat._id) {
-        console.log('✅ Message belongs to current chat, refreshing...');
-
-        // Force refresh messages to ensure real-time updates
         queryClient.invalidateQueries(['messages', chat._id]);
         queryClient.invalidateQueries(['chats']);
         queryClient.invalidateQueries(['recentChats']);
         queryClient.invalidateQueries(['groupChats']);
-      } else {
-        console.log('Message for different chat:', data.chatId);
       }
     };
 
-    const handleChatJoined = (data) => {
+    const handleChatJoined = () => {
       // Chat joined successfully
     };
 
     const handleError = (error) => {
-      // Handle different types of errors
       if (typeof error === 'string') {
         if (error === 'Failed to send message' || error.includes('Failed to send message')) {
           socket.connect();
@@ -118,14 +91,12 @@ const ChatWindow = forwardRef(({
       }
     };
 
-    // Register event listeners
     socket.on('new_message', handleNewMessage);
     socket.on('chat_joined', handleChatJoined);
     socket.on('user_typing', handleTypingEvent);
     socket.on('user_stop_typing', handleStopTypingEvent);
     socket.on('error', handleError);
-    
-    // Listen for socket connection to ensure chat room is joined
+
     const handleConnect = () => {
 
       socket.emit('join_chat', { chatId: chat._id });
@@ -142,7 +113,7 @@ const ChatWindow = forwardRef(({
       socket.off('error', handleError);
       socket.off('connect', handleConnect);
     };
-  }, [socket, chat?._id, queryClient, handleTypingEvent, handleStopTypingEvent]);
+  }, [socket, chat._id, queryClient, handleTypingEvent, handleStopTypingEvent, debouncedMarkAsRead]);
 
   const handleSendMessage = (data) => {
     if (!chat?._id || isSendingMessage) {
@@ -151,42 +122,28 @@ const ChatWindow = forwardRef(({
     }
 
     setIsSendingMessage(true);
-
-    // Prepare message data, excluding undefined values
     const messageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const messageData = {
       chatId: chat._id,
       content: data.content,
       type: data.type || 'text',
-      tempId: messageId // Add temporary ID to track this specific message
+      tempId: messageId 
     };
 
-    // Only include media if it exists
     if (data.media) {
       messageData.media = data.media;
     }
 
-    // Only include replyTo if it exists
+
     if (data.replyTo) {
       messageData.replyTo = data.replyTo;
     }
 
-    // For real-time messaging, we'll rely on Socket.IO events rather than optimistic updates
-    // This ensures messages appear consistently for both sender and receiver
-
-    // Try Socket.IO first
-
     if (socket && socket.connected) {
-      console.log('📤 Sending message via socket:', messageData);
-
-      // Reset sending flag immediately for better UX
       setIsSendingMessage(false);
-      
-      // Listen for confirmation from Socket.IO
+
       const confirmationHandler = (data) => {
-        console.log('✅ Message confirmed by server:', data);
-        
-        // Refresh messages and chat list to show the confirmed message
+
         queryClient.invalidateQueries(['messages', chat._id]);
         queryClient.invalidateQueries(['chats']);
         queryClient.invalidateQueries(['recentChats']);
@@ -196,8 +153,7 @@ const ChatWindow = forwardRef(({
       };
       
       socket.on('message_confirmed', confirmationHandler);
-      
-      // Clean up confirmation handler after timeout
+
       setTimeout(() => {
         socket.off('message_confirmed', confirmationHandler);
       }, 5000);
@@ -212,11 +168,11 @@ const ChatWindow = forwardRef(({
     } else {
       // Socket.IO not available, use API directly
 
+      // eslint-disable-next-line no-undef
       sendMessageMutation.mutate({
         chatId: chat._id,
-        data: { ...messageData, wasSentViaSocket: false } // Mark as API fallback
+        data: { ...messageData, wasSentViaSocket: false } 
       });
-      // Reset flag after API call
       setTimeout(() => setIsSendingMessage(false), 1000);
     }
   };
@@ -226,16 +182,11 @@ const ChatWindow = forwardRef(({
     setEditingMessage(null);
   };
 
-  const handleEdit = (message) => {
-    setEditingMessage(message);
-    setReplyTo(null);
-  };
 
   const handleCancelReply = () => {
     setReplyTo(null);
   };
 
-  // Use the handler functions passed as props
 
   if (!chat) {
     return (
@@ -257,15 +208,10 @@ const ChatWindow = forwardRef(({
     );
   }
 
-  // Add error boundary for socket errors
-  if (isSendingMessage && !socket?.connected) {
-
-  }
 
   return (
     <div className={`chat-container bg-white dark:bg-gray-900 flex flex-col h-full w-full overflow-hidden relative ${className}`}>
-      {/* Chat Header - Fixed at top */}
-      <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 relative z-50 sticky top-0">
+      <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 relative z-50 top-0">
         <ChatWindowHeader
           chat={chat}
           onVideoCall={onVideoCall}
@@ -284,7 +230,6 @@ const ChatWindow = forwardRef(({
         />
       </div>
 
-      {/* Messages - Scrollable Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50 dark:bg-gray-800 min-h-0 pb-2 px-2 sm:px-4 relative z-10">
         <ChatMessageList
           chatId={chat._id}
@@ -295,7 +240,6 @@ const ChatWindow = forwardRef(({
         />
       </div>
 
-      {/* Message Input - Fixed at bottom */}
       <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 min-h-[80px] px-2 sm:px-4 relative z-20">
         <ChatMessageInput
           ref={ref}
@@ -310,7 +254,6 @@ const ChatWindow = forwardRef(({
         />
       </div>
 
-      {/* Group Members Modal */}
       {chat.type === 'group' && (
         <ChatGroupMembersModal
           isOpen={showGroupMembers}

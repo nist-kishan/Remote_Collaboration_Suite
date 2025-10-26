@@ -2,16 +2,13 @@ import React from 'react';
 import { useUnreadCount } from '../../hook/useChat';
 
 const UnreadBadge = ({ chatId, className = '' }) => {
-  // Check if this is a virtual chat ID (chatted_user_ or chatted_group_)
   const isVirtualChat = chatId && (chatId.startsWith('chatted_user_') || chatId.startsWith('chatted_group_'));
-  
-  // For virtual chats, don't fetch unread count as they don't exist in the database
+
   const { data: unreadData, isLoading, error } = useUnreadCount(chatId, {
-    enabled: !isVirtualChat // Only fetch for real chat IDs
+    enabled: !isVirtualChat 
   });
   
   if (isVirtualChat) {
-    // For virtual chats, return null (no unread count)
     return null;
   }
   

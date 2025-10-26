@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import React, { useState, useEffect } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import CustomButton from './CustomButton';
@@ -7,7 +8,6 @@ const BrowserExtensionWarning = () => {
   const [extensionErrors, setExtensionErrors] = useState(0);
 
   useEffect(() => {
-    // Listen for console errors that might be from extensions
     const originalConsoleError = console.error;
     console.error = (...args) => {
       const message = args.join(' ');
@@ -49,7 +49,6 @@ const BrowserExtensionWarning = () => {
 
   const handleIgnore = () => {
     setShowWarning(false);
-    // Don't reset extensionErrors so we don't show again
   };
 
   if (!showWarning) return null;

@@ -9,7 +9,7 @@ const MeetingCreateModal = ({ isOpen, onClose, onCreateMeeting }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    accessType: 'protected',
+    accessType: 'private',
     password: '',
     maxParticipants: 50,
     attendees: [],
@@ -198,21 +198,21 @@ const MeetingCreateModal = ({ isOpen, onClose, onCreateMeeting }) => {
               </button>
               <button
                 type="button"
-                onClick={() => handleInputChange('accessType', 'protected')}
+                onClick={() => handleInputChange('accessType', 'private')}
                 className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                  formData.accessType === 'protected'
+                  formData.accessType === 'private'
                     ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                     : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                 }`}
               >
                 <Lock className="w-5 h-5" />
-                <span className="font-medium">Protected</span>
+                <span className="font-medium">Private</span>
               </button>
             </div>
           </div>
 
-          {/* Password for Protected Meetings */}
-          {formData.accessType === 'protected' && (
+          {/* Password for Private Meetings */}
+          {formData.accessType === 'private' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Meeting Password (optional)

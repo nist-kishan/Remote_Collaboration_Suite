@@ -1,10 +1,6 @@
-// Global error handler for browser extension conflicts and other issues
 export const setupGlobalErrorHandling = () => {
-  // Handle unhandled promise rejections
   window.addEventListener('unhandledrejection', (event) => {
     const error = event.reason;
-    
-    // Filter out common browser extension errors
     if (error && typeof error === 'string') {
       if (error.includes('message channel closed') || 
           error.includes('listener indicated an asynchronous response') ||
@@ -14,7 +10,6 @@ export const setupGlobalErrorHandling = () => {
           error.includes('NotSupportedError') ||
           error.includes('The element has no supported sources') ||
           error.includes('WebSocket is closed before the connection is established')) {
-        // These are typically browser extension, video, or WebSocket transport errors, ignore them
         event.preventDefault();
         return;
       }
@@ -35,15 +30,11 @@ export const setupGlobalErrorHandling = () => {
         return;
       }
     }
-    
-    // Log other errors for debugging
   });
 
-  // Handle general errors
+
   window.addEventListener('error', (event) => {
     const error = event.error;
-    
-    // Filter out common browser extension errors
     if (error && typeof error === 'string') {
       if (error.includes('message channel closed') || 
           error.includes('listener indicated an asynchronous response') ||
@@ -56,8 +47,7 @@ export const setupGlobalErrorHandling = () => {
         return;
       }
     }
-    
-    // Also check error objects
+
     if (error && error.message) {
       const errorMessage = error.message;
       if (errorMessage.includes('message channel closed') || 

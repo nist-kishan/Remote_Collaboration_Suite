@@ -1,5 +1,5 @@
-import React from 'react';
-import { useCall } from '../../hook/useCall';
+import React from "react";
+import { useCall } from "../../hook/useCallIntegration";
 import {
   FilterButtons,
   EmptyState,
@@ -8,10 +8,10 @@ import {
   CallIcon,
   CallInfo,
   CallActions,
-  PaginationInfo
-} from './CallHistoryComponents';
+  PaginationInfo,
+} from "./CallHistoryComponents";
 
-const CallHistory = ({ onStartCall, onViewCallDetails, className = '' }) => {
+const CallHistory = ({ onStartCall, onViewCallDetails, className = "" }) => {
   const {
     user,
     filter,
@@ -29,7 +29,7 @@ const CallHistory = ({ onStartCall, onViewCallDetails, className = '' }) => {
     getOtherParticipant,
     getCallTitle,
     isDeleting,
-    isClearing
+    isClearing,
   } = useCall();
 
   // Show loading if user is not loaded yet
@@ -43,7 +43,9 @@ const CallHistory = ({ onStartCall, onViewCallDetails, className = '' }) => {
       <div className={`p-4 ${className}`}>
         <div className="text-center py-8">
           <p className="text-red-500 mb-4">User not authenticated</p>
-          <p className="text-sm text-gray-500">Please log in to view call history</p>
+          <p className="text-sm text-gray-500">
+            Please log in to view call history
+          </p>
         </div>
       </div>
     );
@@ -73,7 +75,7 @@ const CallHistory = ({ onStartCall, onViewCallDetails, className = '' }) => {
             {calls.map((call) => {
               // Skip rendering if user is not available
               if (!user?._id) return null;
-              
+
               return (
                 <div
                   key={call._id}

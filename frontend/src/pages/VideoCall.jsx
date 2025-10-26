@@ -1,17 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useCall } from '../hook/useCall';
-import { useSocket } from '../hook/useSocket';
-import IncomingVideoCallModal from '../components/call/IncomingVideoCallModal';
-import OutgoingVideoCallModal from '../components/call/OutgoingVideoCallModal';
-import VideoCallInterface from '../components/call/VideoCallInterface';
-import { toast } from 'react-hot-toast';
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useCall } from "../hook/useCallIntegration";
+import { useSocket } from "../hook/useSocket";
+import { useSelector } from "react-redux";
+import { selectActiveCall, selectCallStatus } from "../store/slice/callSlice";
+import IncomingVideoCallModal from "../components/call/IncomingVideoCallModal";
+import OutgoingVideoCallModal from "../components/call/OutgoingVideoCallModal";
+import VideoCallInterface from "../components/call/VideoCallInterface";
+import { toast } from "react-hot-toast";
 
 export default function VideoCall() {
   const { callId } = useParams();
   const navigate = useNavigate();
   const { socket } = useSocket();
   
+  // Get call state from Redux
+  const reduxActiveCall = useSelector(selectActiveCall);
+  const reduxCallStatus = useSelector(selectCallStatus);
+
   const {
     incomingCall,
     outgoingCall,
@@ -31,31 +37,79 @@ export default function VideoCall() {
     endActiveCall,
     toggleMute,
     toggleVideo,
-    toggleScreenShare
+    toggleScreenShare,
+    fetchCallById,
   } = useCall();
 
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  // Restore call state on page refresh
+  useEffect(() => {
+    const restoreCall = async () => {
+      if (!callId || isRestoring) return;
+      
+      // Check if we have an active call in Redux (restored from localStorage)
+      if (reduxActiveCall && reduxCallStatus === 'connected') {
+        const savedCallId = reduxActiveCall._id || reduxActiveCall.callId;
+        if (savedCallId === callId) {
+          console.log('🔄 Call state restored from localStorage');
+          setIsInitialized(true);
+          return;
+        }
+      }
+      
+      // Try to fetch call data from backend
+      if (callId && !activeCall && !incomingCall && !outgoingCall) {
+        setIsRestoring(true);
+        try {
+          console.log('🔍 Fetching call data for:', callId);
+          const callData = await fetchCallById(callId);
+          if (callData) {
+            console.log('✅ Call data fetched successfully');
+            setIsInitialized(true);
+          } else {
+            console.warn('⚠️ Call not found:', callId);
+            setIsInitialized(true);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching call:', error);
+          setIsInitialized(true);
+        } finally {
+          setIsRestoring(false);
+        }
+      }
+    };
+    
+    restoreCall();
+  }, [callId, reduxActiveCall, reduxCallStatus, activeCall, incomingCall, outgoingCall, fetchCallById, isRestoring]);
 
   useEffect(() => {
     if (callId && socket) {
       // Check if this is an incoming call that we need to handle
-      if (incomingCall && (incomingCall.callId === callId || incomingCall._id === callId)) {
+      if (
+        incomingCall &&
+        (incomingCall.callId === callId || incomingCall._id === callId)
+      ) {
         setIsInitialized(true);
-        
+
         // Auto-accept the call if we have an incoming call and we're on the call page
         setTimeout(async () => {
           try {
             await acceptCall();
-            } catch (error) {
-            console.error('Error auto-accepting call:', error);
-            toast.error('Failed to accept call: ' + error.message);
+          } catch (error) {
+            console.error("Error auto-accepting call:", error);
+            toast.error("Failed to accept call: " + error.message);
           }
         }, 2000); // Increased delay to ensure everything is loaded
-      } else if (activeCall && (activeCall._id === callId || activeCall.callId === callId)) {
+      } else if (
+        activeCall &&
+        (activeCall._id === callId || activeCall.callId === callId)
+      ) {
         setIsInitialized(true);
-      } else {
+      } else if (!isRestoring) {
         setIsInitialized(true);
-        
+
         // Listen for call events to get the call data
         const handleIncomingCall = (data) => {
           if (data.callId === callId || data.call?._id === callId) {
@@ -64,13 +118,16 @@ export default function VideoCall() {
         };
 
         const handleCallJoined = (data) => {
-          if (data.call && (data.call._id === callId || data.callId === callId)) {
+          if (
+            data.call &&
+            (data.call._id === callId || data.callId === callId)
+          ) {
             setIsInitialized(true);
           }
         };
 
-        socket.on('incoming_call', handleIncomingCall);
-        socket.on('call_joined', handleCallJoined);
+        socket.on("incoming_call", handleIncomingCall);
+        socket.on("call_joined", handleCallJoined);
 
         // Set a timeout to show fallback if no call data comes
         const timeout = setTimeout(() => {
@@ -78,22 +135,28 @@ export default function VideoCall() {
         }, 5000);
 
         return () => {
-          socket.off('incoming_call', handleIncomingCall);
-          socket.off('call_joined', handleCallJoined);
+          socket.off("incoming_call", handleIncomingCall);
+          socket.off("call_joined", handleCallJoined);
           clearTimeout(timeout);
         };
       }
     }
-  }, [callId, socket, incomingCall, activeCall]);
+  }, [callId, socket, incomingCall, activeCall, acceptCall, isRestoring]);
 
-  const handleEndCall = () => {
-    endActiveCall();
-    navigate('/chat');
+  const handleEndCall = async () => {
+    try {
+      await endActiveCall();
+    } catch (error) {
+      console.error('Error ending call:', error);
+    } finally {
+      // Always navigate away after ending call
+      navigate("/chat");
+    }
   };
 
   const handleToggleChat = () => {
     // Navigate to chat if needed
-    navigate('/chat');
+    navigate("/chat");
   };
 
   // Show loading state while initializing
@@ -106,6 +169,12 @@ export default function VideoCall() {
         </div>
       </div>
     );
+  }
+
+  // If call has ended, navigate away immediately
+  if (callStatus === 'ended' || callStatus === 'idle') {
+    navigate("/chat");
+    return null;
   }
 
   // Show incoming call modal
@@ -125,7 +194,7 @@ export default function VideoCall() {
       <OutgoingVideoCallModal
         call={outgoingCall}
         onCancel={() => {
-          navigate('/chat');
+          navigate("/chat");
         }}
       />
     );
@@ -135,6 +204,7 @@ export default function VideoCall() {
   if (showActiveCall && activeCall) {
     return (
       <VideoCallInterface
+        callData={activeCall}
         localStream={localStream}
         remoteStream={remoteStream}
         isMuted={isMuted}
@@ -146,7 +216,7 @@ export default function VideoCall() {
         onToggleVideo={toggleVideo}
         onToggleScreenShare={toggleScreenShare}
         onEndCall={handleEndCall}
-        onMinimize={() => navigate('/chat')}
+        onMinimize={() => navigate("/chat")}
         onMaximize={() => window.focus()}
         isMinimized={false}
       />
@@ -158,16 +228,28 @@ export default function VideoCall() {
     <div className="flex items-center justify-center min-h-screen bg-black">
       <div className="text-center text-white">
         <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
-          <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+          <svg
+            className="w-12 h-12 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+            />
           </svg>
         </div>
         <h2 className="text-2xl font-semibold mb-2">No Active Call</h2>
         <p className="text-gray-400 mb-6">
-          {callId ? `Call ${callId} not found or has ended` : 'Start a call from the chat interface'}
+          {callId
+            ? `Call ${callId} not found or has ended`
+            : "Start a call from the chat interface"}
         </p>
         <button
-          onClick={() => navigate('/chat')}
+          onClick={() => navigate("/chat")}
           className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
         >
           Go to Chat

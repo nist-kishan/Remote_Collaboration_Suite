@@ -24,7 +24,9 @@ export const verifyToken = async (req, res, next) => {
       throw new ApiError(404, "User not found");
     }
 
+    // Add id property for consistency with JWT payload
     req.user = user;
+    req.user.id = user._id.toString();
     next();
   } catch (error) {
     return next(new ApiError(401, error.message || "Invalid or expired token"));

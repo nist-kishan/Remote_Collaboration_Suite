@@ -14,8 +14,6 @@ const initialState = {
   // Meeting room state
   isInMeeting: false,
   participants: [],
-  localStream: null,
-  remoteStreams: {},
   
   // Meeting settings
   isMuted: false,
@@ -29,6 +27,10 @@ const initialState = {
   // Modals
   showCreateMeetingModal: false,
   showJoinMeetingModal: false,
+  
+  // Minimized meeting (picture-in-picture)
+  isMinimized: false,
+  minimizedMeetingId: null,
   
   // Pagination
   pagination: {
@@ -108,22 +110,10 @@ const meetingSlice = createSlice({
       );
     },
     
-    // Stream actions
-    setLocalStream: (state, action) => {
-      state.localStream = action.payload;
-    },
-    
-    addRemoteStream: (state, action) => {
-      state.remoteStreams[action.payload.userId] = action.payload.stream;
-    },
-    
-    removeRemoteStream: (state, action) => {
-      delete state.remoteStreams[action.payload];
-    },
-    
+    // Note: Streams are managed in useWebRTC hook refs, not in Redux
+    // This is because MediaStream objects are not serializable
     clearStreams: (state) => {
-      state.localStream = null;
-      state.remoteStreams = {};
+      // Placeholder for cleanup actions if needed
     },
     
     // Meeting controls
@@ -177,6 +167,24 @@ const meetingSlice = createSlice({
       state.showJoinMeetingModal = action.payload;
     },
     
+    // Minimized meeting actions
+    setMinimized: (state, action) => {
+      state.isMinimized = action.payload;
+    },
+    
+    setMinimizedMeetingId: (state, action) => {
+      state.minimizedMeetingId = action.payload;
+    },
+    
+    minimizeMeeting: (state, action) => {
+      state.isMinimized = true;
+      state.minimizedMeetingId = action.payload;
+    },
+    
+    restoreMeeting: (state) => {
+      state.isMinimized = false;
+    },
+    
     // Pagination
     setPagination: (state, action) => {
       state.pagination = { ...state.pagination, ...action.payload };
@@ -198,9 +206,6 @@ export const {
   setParticipants,
   addParticipant,
   removeParticipant,
-  setLocalStream,
-  addRemoteStream,
-  removeRemoteStream,
   clearStreams,
   toggleMute,
   setMuted,
@@ -214,6 +219,10 @@ export const {
   setChatOpen,
   setShowCreateMeetingModal,
   setShowJoinMeetingModal,
+  setMinimized,
+  setMinimizedMeetingId,
+  minimizeMeeting,
+  restoreMeeting,
   setPagination
 } = meetingSlice.actions;
 
@@ -224,8 +233,6 @@ export const selectMeetingLoading = (state) => state.meeting.isLoading;
 export const selectMeetingError = (state) => state.meeting.error;
 export const selectIsInMeeting = (state) => state.meeting.isInMeeting;
 export const selectParticipants = (state) => state.meeting.participants;
-export const selectLocalStream = (state) => state.meeting.localStream;
-export const selectRemoteStreams = (state) => state.meeting.remoteStreams;
 export const selectIsMuted = (state) => state.meeting.isMuted;
 export const selectIsVideoOn = (state) => state.meeting.isVideoOn;
 export const selectIsScreenSharing = (state) => state.meeting.isScreenSharing;
@@ -233,6 +240,8 @@ export const selectChatMessages = (state) => state.meeting.chatMessages;
 export const selectIsChatOpen = (state) => state.meeting.isChatOpen;
 export const selectShowCreateMeetingModal = (state) => state.meeting.showCreateMeetingModal;
 export const selectShowJoinMeetingModal = (state) => state.meeting.showJoinMeetingModal;
+export const selectIsMinimized = (state) => state.meeting.isMinimized;
+export const selectMinimizedMeetingId = (state) => state.meeting.minimizedMeetingId;
 export const selectMeetingPagination = (state) => state.meeting.pagination;
 
 export default meetingSlice.reducer;

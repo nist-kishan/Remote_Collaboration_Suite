@@ -1,5 +1,9 @@
 import ApiClient from './ApiClient';
 
+/**
+ * Meeting API - Integrated with backend meeting controller
+ * Uses /meetings endpoints from backend
+ */
 export const meetingApi = {
   // Create instant meeting
   createInstantMeeting: (data) => {

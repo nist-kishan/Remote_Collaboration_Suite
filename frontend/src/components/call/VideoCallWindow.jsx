@@ -34,15 +34,21 @@ const CallWindow = ({ chat, onEndCall }) => {
   useEffect(() => {
     const initializeCall = async () => {
       try {
+        // Only initialize if we have a valid chat
+        if (!chat || !chat._id) {
+          console.warn('VideoCallWindow: No valid chat provided, skipping call initialization');
+          return;
+        }
+        
         // Start local stream first
         const stream = await startLocalStream();
         // Create peer connection
         createPeerConnection();
         // Start call
-        if (socket && chat) {
+        if (socket && socket.connected) {
           socket.emit('start_call', {
             chatId: chat._id,
-            type: chat.type
+            type: chat.type || 'video'
           });
         }
       } catch (error) {
@@ -208,9 +214,9 @@ const CallWindow = ({ chat, onEndCall }) => {
           playsInline
           className="w-full h-full object-cover"
           style={{ backgroundColor: '#1f2937' }} // Dark background while loading
-          onLoadedMetadata={() => }
-          onCanPlay={() => }
-          onPlay={() => }
+          onLoadedMetadata={() => {}}
+          onCanPlay={() => {}}
+          onPlay={() => {}}
           onError={(e) => console.error('Remote video error:', e)}
         />
         
@@ -257,9 +263,9 @@ const CallWindow = ({ chat, onEndCall }) => {
               backgroundColor: '#1f2937',
               transform: 'scaleX(-1)' // Mirror the local video
             }}
-            onLoadedMetadata={() => }
-            onCanPlay={() => }
-            onPlay={() => }
+            onLoadedMetadata={() => {}}
+            onCanPlay={() => {}}
+            onPlay={() => {}}
             onError={(e) => console.error('Local video error:', e)}
           />
           {/* Fallback if no video stream */}

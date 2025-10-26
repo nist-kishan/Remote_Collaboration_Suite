@@ -20,8 +20,8 @@ const meetingSchema = new mongoose.Schema(
     },
     accessType: {
       type: String,
-      enum: ["public", "protected"],
-      default: "protected"
+      enum: ["public", "private"],
+      default: "private"
     },
     project: {
       type: mongoose.Schema.Types.ObjectId,
@@ -82,7 +82,7 @@ const meetingSchema = new mongoose.Schema(
       type: String,
       trim: true,
       required: function() {
-        return this.accessType === "protected";
+        return this.accessType === "private";
       }
     },
     maxParticipants: {

@@ -34,7 +34,7 @@ authRouter
   .post(changePasswordWithLinkHandler);
 authRouter.route("/send_otp").post(verifyToken, otpSendHandler);
 authRouter.route("/otp_verification").post(verifyToken, otpVerifyHandler);
-authRouter.route("/update-profile").put(verifyToken, updateProfileHandler);
+authRouter.route("/update-profile").put(verifyToken, upload.single("avatar"), updateProfileHandler);
 authRouter.route("/theme").put(themeHandler);
 
 export { authRouter };

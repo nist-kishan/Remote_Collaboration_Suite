@@ -47,7 +47,7 @@ router.get('/recent', verifyToken, getRecentChats);
 router.get('/chatted-users', verifyToken, getChattedUsers);
 router.get('/one-to-one/:otherUserId', verifyToken, getOrCreateOneToOneChat);
 router.post('/group', verifyToken, createGroupChat);
-router.put('/group/:chatId', verifyToken, updateGroupChat);
+router.put('/group/:chatId', verifyToken, upload.single('avatar'), updateGroupChat);
 router.post('/group/:chatId/members', verifyToken, addGroupMembers);
 router.delete('/group/:chatId/members/:memberId', verifyToken, removeGroupMember);
 router.put('/group/:chatId/members/:memberId/role', verifyToken, updateMemberRole);

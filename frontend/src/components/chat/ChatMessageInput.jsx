@@ -1,71 +1,72 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { 
-  Send, 
-  Image as ImageIcon, 
-  Video, 
-  FileText, 
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import {
+  Send,
+  Image as ImageIcon,
+  Video,
+  FileText,
   Mic,
   Smile,
   X,
-  Loader2
-} from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import Button from '../ui/Button';
-import MediaPreview from './MediaPreview';
-import { 
-  optimizeFiles, 
-  validateFile, 
-  formatFileSize,
-  UploadProgressTracker 
-} from '../../utils/mediaOptimizer';
-import { 
+  Loader2,
+} from "lucide-react";
+import { toast } from "react-hot-toast";
+import Button from "../ui/Button";
+import MediaPreview from "./MediaPreview";
+import {
+  optimizeFiles,
+  validateFile,
+  UploadProgressTracker,
+} from "../../utils/mediaOptimizer";
+import {
   createOptimizedMessageSender,
-  validateMessage 
-} from '../../utils/messageOptimizer';
+  validateMessage,
+} from "../../utils/messageOptimizer";
 
-const MessageInput = ({ 
-  onSendMessage, 
-  onTyping, 
+const MessageInput = ({
+  onSendMessage,
+  onTyping,
   disabled = false,
   replyTo = null,
   onCancelReply,
-  autoFocus = false
+  autoFocus = false,
 }) => {
-  const [message, setMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [message, setMessage] = useState("");
+  const [ setIsTyping] = useState(false);
   const [previewFiles, setPreviewFiles] = useState([]);
   const [fileCaptions, setFileCaptions] = useState({});
   const [uploadProgress, setUploadProgress] = useState({});
   const [isUploading, setIsUploading] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
-  
+
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const uploadTrackerRef = useRef(new UploadProgressTracker());
   const messageSenderRef = useRef(createOptimizedMessageSender());
 
-  const handleInputChange = useCallback((e) => {
-    const value = e.target.value;
-    setMessage(value);
-    
-    // Optimized typing detection
-    messageSenderRef.current.typingOptimizer.startTyping((isTyping) => {
-      onTyping(isTyping);
-      setIsTyping(isTyping);
-    });
-  }, [onTyping]);
+  const handleInputChange = useCallback(
+    (e) => {
+      const value = e.target.value;
+      setMessage(value);
+
+      // Optimized typing detection
+      messageSenderRef.current.typingOptimizer.startTyping((isTyping) => {
+        onTyping(isTyping);
+        setIsTyping(isTyping);
+      });
+    },
+    [onTyping, setIsTyping]
+  );
 
   const handleSend = useCallback(async () => {
     if (!message.trim() && !replyTo && previewFiles.length === 0) return;
 
-    const startTime = Date.now();
-    
+
     try {
       // Validate message
       const messageData = {
         content: message.trim(),
         replyTo: replyTo?._id || null,
-        type: previewFiles.length > 0 ? 'media' : 'text'
+        type: previewFiles.length > 0 ? "media" : "text",
       };
 
       const validation = validateMessage(messageData);
@@ -80,48 +81,46 @@ const MessageInput = ({
       );
 
       // Clear state
-      setMessage('');
+      setMessage("");
       if (replyTo) {
         onCancelReply();
       }
-      
-      // Clear preview files
-      previewFiles.forEach(file => {
+
+      previewFiles.forEach((file) => {
         if (file.url) {
           URL.revokeObjectURL(file.url);
         }
       });
       setPreviewFiles([]);
       setFileCaptions({});
-
     } catch (error) {
-      // Error handled by toast notification
+      toast.error(`Failed to send message: ${error.message}`);
     }
   }, [message, replyTo, previewFiles, onSendMessage, onCancelReply]);
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
   const handleFileSelect = (type) => {
-    fileInputRef.current.setAttribute('accept', getAcceptType(type));
-    fileInputRef.current.setAttribute('data-type', type);
+    fileInputRef.current.setAttribute("accept", getAcceptType(type));
+    fileInputRef.current.setAttribute("data-type", type);
     fileInputRef.current.click();
   };
 
   const getAcceptType = (type) => {
     switch (type) {
-      case 'image':
-        return 'image/*';
-      case 'video':
-        return 'video/*';
-      case 'audio':
-        return 'audio/*';
+      case "image":
+        return "image/*";
+      case "video":
+        return "video/*";
+      case "audio":
+        return "audio/*";
       default:
-        return '*/*';
+        return "*/*";
     }
   };
 
@@ -134,13 +133,14 @@ const MessageInput = ({
 
   // Cleanup object URLs when component unmounts
   useEffect(() => {
+    const currentMessageSender = messageSenderRef.current;
     return () => {
-      previewFiles.forEach(file => {
+      previewFiles.forEach((file) => {
         if (file.url) {
           URL.revokeObjectURL(file.url);
         }
       });
-      messageSenderRef.current.clear();
+      currentMessageSender.clear();
     };
   }, [previewFiles]);
 
@@ -156,12 +156,12 @@ const MessageInput = ({
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    const type = e.target.getAttribute('data-type');
+    const type = e.target.getAttribute("data-type");
     setIsOptimizing(true);
 
     try {
       // Validate files
-      files.forEach(file => {
+      files.forEach((file) => {
         validateFile(file, type);
       });
 
@@ -169,24 +169,23 @@ const MessageInput = ({
       const optimizedFiles = await optimizeFiles(files, {
         maxImageSize: 1920,
         quality: 0.8,
-        maxFileSize: type === 'image' ? 5 * 1024 * 1024 : 10 * 1024 * 1024
+        maxFileSize: type === "image" ? 5 * 1024 * 1024 : 10 * 1024 * 1024,
       });
 
       // Create preview objects
-      const newPreviewFiles = optimizedFiles.map(optimizedFile => ({
+      const newPreviewFiles = optimizedFiles.map((optimizedFile) => ({
         ...optimizedFile,
-        originalFile: files.find(f => f.name === optimizedFile.name),
+        originalFile: files.find((f) => f.name === optimizedFile.name),
         optimized: true,
-        compressionRatio: optimizedFile.compressionRatio
+        compressionRatio: optimizedFile.compressionRatio,
       }));
 
-      setPreviewFiles(prev => [...prev, ...newPreviewFiles]);
-
+      setPreviewFiles((prev) => [...prev, ...newPreviewFiles]);
     } catch (error) {
       toast.error(`File error: ${error.message}`);
     } finally {
       setIsOptimizing(false);
-      e.target.value = '';
+      e.target.value = "";
     }
   }, []);
 
@@ -196,16 +195,16 @@ const MessageInput = ({
     if (fileToRemove.url) {
       URL.revokeObjectURL(fileToRemove.url);
     }
-    
-    setPreviewFiles(prev => prev.filter((_, i) => i !== index));
-    
+
+    setPreviewFiles((prev) => prev.filter((_, i) => i !== index));
+
     // Remove caption for this file
-    setFileCaptions(prev => {
+    setFileCaptions((prev) => {
       const newCaptions = { ...prev };
       delete newCaptions[index];
       // Adjust indices for remaining captions
       const adjustedCaptions = {};
-      Object.keys(newCaptions).forEach(key => {
+      Object.keys(newCaptions).forEach((key) => {
         const keyNum = parseInt(key);
         if (keyNum > index) {
           adjustedCaptions[keyNum - 1] = newCaptions[key];
@@ -218,9 +217,9 @@ const MessageInput = ({
   };
 
   const handleCaptionChange = (index, caption) => {
-    setFileCaptions(prev => ({
+    setFileCaptions((prev) => ({
       ...prev,
-      [index]: caption
+      [index]: caption,
     }));
   };
 
@@ -228,33 +227,34 @@ const MessageInput = ({
     if (previewFiles.length === 0) return;
 
     setIsUploading(true);
-    const startTime = Date.now();
 
     try {
       // Send files in parallel
       const sendPromises = previewFiles.map(async (previewFile, index) => {
-        const caption = fileCaptions[index] || '';
-        
+        const caption = fileCaptions[index] || "";
+
         // Update upload progress
         uploadTrackerRef.current.setProgress(index, 0);
-        
+
         const messageData = {
           content: caption,
           type: previewFile.type,
-          media: [{
-            url: previewFile.url,
-            type: previewFile.type,
-            name: previewFile.name,
-            size: previewFile.size,
-            optimized: previewFile.optimized,
-            compressionRatio: previewFile.compressionRatio
-          }]
+          media: [
+            {
+              url: previewFile.url,
+              type: previewFile.type,
+              name: previewFile.name,
+              size: previewFile.size,
+              optimized: previewFile.optimized,
+              compressionRatio: previewFile.compressionRatio,
+            },
+          ],
         };
 
         // Simulate upload progress
         for (let progress = 0; progress <= 100; progress += 10) {
           uploadTrackerRef.current.setProgress(index, progress);
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise((resolve) => setTimeout(resolve, 50));
         }
 
         await messageSenderRef.current.messageOptimizer.sendMessage(
@@ -268,7 +268,7 @@ const MessageInput = ({
       await Promise.all(sendPromises);
 
       // Clear state
-      previewFiles.forEach(file => {
+      previewFiles.forEach((file) => {
         if (file.url) {
           URL.revokeObjectURL(file.url);
         }
@@ -276,9 +276,6 @@ const MessageInput = ({
       setPreviewFiles([]);
       setFileCaptions({});
       uploadTrackerRef.current.clear();
-
-    } catch (error) {
-      // Error handled by toast notification
     } finally {
       setIsUploading(false);
     }
@@ -292,7 +289,8 @@ const MessageInput = ({
           <div className="flex items-center gap-2 mb-2">
             <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
             <span className="text-sm text-blue-600 dark:text-blue-400">
-              Uploading {previewFiles.length} file{previewFiles.length > 1 ? 's' : ''}...
+              Uploading {previewFiles.length} file
+              {previewFiles.length > 1 ? "s" : ""}...
             </span>
           </div>
           {Array.from(uploadProgress.entries()).map(([index, progress]) => (
@@ -302,7 +300,7 @@ const MessageInput = ({
                 <span>{progress}%</span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
-                <div 
+                <div
                   className="bg-blue-600 h-1 rounded-full transition-all duration-300"
                   style={{ width: `${progress}%` }}
                 />
@@ -333,7 +331,7 @@ const MessageInput = ({
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
               {replyTo.content?.substring(0, 50)}
-              {replyTo.content?.length > 50 && '...'}
+              {replyTo.content?.length > 50 && "..."}
             </p>
           </div>
           <button
@@ -349,7 +347,7 @@ const MessageInput = ({
         {/* Attachment Button */}
         <div className="relative">
           <button
-            onClick={() => handleFileSelect('image')}
+            onClick={() => handleFileSelect("image")}
             disabled={disabled}
             className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Send image"
@@ -360,7 +358,7 @@ const MessageInput = ({
 
         {/* Video Button */}
         <button
-          onClick={() => handleFileSelect('video')}
+          onClick={() => handleFileSelect("video")}
           disabled={disabled}
           className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Send video"
@@ -370,7 +368,7 @@ const MessageInput = ({
 
         {/* File Button */}
         <button
-          onClick={() => handleFileSelect('file')}
+          onClick={() => handleFileSelect("file")}
           disabled={disabled}
           className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Send file"
@@ -393,11 +391,11 @@ const MessageInput = ({
             value={message}
             onChange={handleInputChange}
             onKeyPress={handleKeyPress}
-            placeholder={replyTo ? 'Reply to message...' : 'Type a message...'}
+            placeholder={replyTo ? "Reply to message..." : "Type a message..."}
             disabled={disabled}
             rows={1}
             className="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ minHeight: '40px', maxHeight: '120px' }}
+            style={{ minHeight: "40px", maxHeight: "120px" }}
           />
         </div>
 
@@ -423,4 +421,3 @@ const MessageInput = ({
 };
 
 export default MessageInput;
-

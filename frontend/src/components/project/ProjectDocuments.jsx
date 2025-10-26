@@ -18,11 +18,6 @@ const ProjectDocuments = ({ project, canManageCollaborators = true }) => {
 
   const documents = project?.documents || [];
 
-  // Debug: Log project and documents
-  React.useEffect(() => {
-    console.log('Project documents:', { project, documents });
-  }, [project, documents]);
-
   const addDocumentMutation = useMutation({
     mutationFn: async (data) => {
       const updatedDocuments = [...documents, data];

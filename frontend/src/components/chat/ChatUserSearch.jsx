@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { searchUsers } from '../../api/userApi';
-import { Search, User, Mail, Phone, MessageCircle } from 'lucide-react';
-import Button from '../ui/Button';
+import { User, Mail, Phone, MessageCircle } from 'lucide-react';
 
 const UserSearch = ({ onSelectUser, onStartChat, placeholder = "Search users..." }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,7 +18,6 @@ const UserSearch = ({ onSelectUser, onStartChat, placeholder = "Search users..."
 
   const users = data?.data?.users || [];
 
-  // Handle click outside to close results
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
@@ -31,7 +29,6 @@ const UserSearch = ({ onSelectUser, onStartChat, placeholder = "Search users..."
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Show results when search term changes
   useEffect(() => {
     if (searchTerm.length >= 2) {
       setShowResults(true);
@@ -54,56 +51,27 @@ const UserSearch = ({ onSelectUser, onStartChat, placeholder = "Search users..."
 
   const getDisplayInfo = (user) => {
     const info = [];
-    const searchLower = searchTerm.toLowerCase().trim();
-    
-    // Determine what type of search this is
-    const isEmailSearch = searchLower.includes('@');
-    const isPhoneSearch = /^\d+$/.test(searchLower) || searchLower.match(/[\d\s\-\(\)\+]/);
-    const isUsernameSearch = searchLower.startsWith('@') || searchLower.match(/^[a-zA-Z0-9_]+$/);
-    
-    // Priority-based display based on search type
-    if (isEmailSearch && user.email) {
-      // Email search - show email first
-      info.push({ icon: Mail, text: user.email });
-      if (user.phone) info.push({ icon: Phone, text: user.phone });
-    } else if (isPhoneSearch && user.phone) {
-      // Phone search - show phone first
-      info.push({ icon: Phone, text: user.phone });
-      if (user.email) info.push({ icon: Mail, text: user.email });
-    } else if (isUsernameSearch && user.username) {
-      // Username search - show username first
-      info.push({ icon: User, text: `@${user.username}` });
-      if (user.email) info.push({ icon: Mail, text: user.email });
-    } else {
-      // Name search or general search - show most relevant info
-      if (user.email) info.push({ icon: Mail, text: user.email });
-      if (user.phone) info.push({ icon: Phone, text: user.phone });
-      if (user.username && info.length < 2) info.push({ icon: User, text: `@${user.username}` });
-    }
-    
-    // Limit to 2 items to keep it clean
-    return info.slice(0, 2);
+    if (user.email) info.push({ icon: Mail, text: user.email });
+    if (user.username) info.push({ icon: User, text: user.username });
+    if (user.phone) info.push({ icon: Phone, text: user.phone });
+    return info.slice(0, 2); // limit to two items
   };
 
   return (
     <div className="relative" ref={searchRef}>
-      {/* Search Input */}
-      <div className="relative">
-        <input
-          type="text"
-          placeholder={placeholder || "Search by name, email, username, or phone..."}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-        {isLoading && (
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
-          </div>
-        )}
-      </div>
+      <input
+        type="text"
+        placeholder={placeholder || "Search by name, email, username, or phone..."}
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
+      {isLoading && (
+        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+        </div>
+      )}
 
-      {/* Search Results */}
       {showResults && (
         <div 
           ref={resultsRef}

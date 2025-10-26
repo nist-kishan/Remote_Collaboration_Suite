@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
-import { useCall } from './useCall';
-import { useSocket } from './useSocket';
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
+import { useCall } from "./useCallIntegration";
+import { useSocket } from "./useSocket";
 
 /**
  * Hook for managing seamless integration between chat and call components
@@ -11,7 +11,7 @@ import { useSocket } from './useSocket';
 export const useChatCallIntegration = (selectedChat) => {
   const navigate = useNavigate();
   const { socket } = useSocket();
-  
+
   // Call state from useCall hook
   const {
     incomingCall,
@@ -26,7 +26,7 @@ export const useChatCallIntegration = (selectedChat) => {
     cancelCall,
     endActiveCall,
     startCall,
-    callHistory
+    callHistory,
   } = useCall();
 
   // Enhanced call-chat integration state
@@ -36,8 +36,8 @@ export const useChatCallIntegration = (selectedChat) => {
     callStartTime: null,
     callDuration: 0,
     lastCallChat: null,
-    callTransitionState: 'idle', // 'idle', 'connecting', 'connected', 'ending'
-    pendingCallAction: null
+    callTransitionState: "idle", // 'idle', 'connecting', 'connected', 'ending'
+    pendingCallAction: null,
   });
 
   // Update call duration every second when call is active
@@ -45,9 +45,9 @@ export const useChatCallIntegration = (selectedChat) => {
     let interval;
     if (integrationState.isCallInProgress && integrationState.callStartTime) {
       interval = setInterval(() => {
-        setIntegrationState(prev => ({
+        setIntegrationState((prev) => ({
           ...prev,
-          callDuration: Date.now() - prev.callStartTime.getTime()
+          callDuration: Date.now() - prev.callStartTime.getTime(),
         }));
       }, 1000);
     }
@@ -57,91 +57,101 @@ export const useChatCallIntegration = (selectedChat) => {
   // Sync call state with integration state
   useEffect(() => {
     if (showActiveCall && activeCall) {
-      setIntegrationState(prev => ({
+      setIntegrationState((prev) => ({
         ...prev,
         isCallInProgress: true,
         currentCallChat: selectedChat,
         callStartTime: prev.callStartTime || new Date(),
-        callTransitionState: 'connected'
+        callTransitionState: "connected",
       }));
     } else if (!showActiveCall && integrationState.isCallInProgress) {
       // Call ended
-      const duration = integrationState.callStartTime ? 
-        Date.now() - integrationState.callStartTime.getTime() : 0;
-      
-      setIntegrationState(prev => ({
+      const duration = integrationState.callStartTime
+        ? Date.now() - integrationState.callStartTime.getTime()
+        : 0;
+
+      setIntegrationState((prev) => ({
         ...prev,
         isCallInProgress: false,
         lastCallChat: prev.currentCallChat,
         currentCallChat: null,
         callStartTime: null,
         callDuration: duration,
-        callTransitionState: 'idle'
+        callTransitionState: "idle",
       }));
     }
-  }, [showActiveCall, activeCall, selectedChat, integrationState.isCallInProgress]);
+  }, [
+    showActiveCall,
+    activeCall,
+    selectedChat,
+    integrationState.isCallInProgress,
+  ]);
 
   // Enhanced video call initiation with chat context
-  const initiateVideoCall = useCallback(async (chat) => {
-    if (!chat) {
-      return { success: false, error: 'No chat selected' };
-    }
+  const initiateVideoCall = useCallback(
+    async (chat) => {
+      if (!chat) {
+        return { success: false, error: "No chat selected" };
+      }
 
-    try {
-      setIntegrationState(prev => ({
-        ...prev,
-        callTransitionState: 'connecting',
-        pendingCallAction: 'initiate'
-      }));
-      await startCall(chat._id);
-      
-      // Update integration state
-      setIntegrationState(prev => ({
-        ...prev,
-        currentCallChat: chat,
-        callTransitionState: 'connecting',
-        pendingCallAction: null
-      }));
+      try {
+        setIntegrationState((prev) => ({
+          ...prev,
+          callTransitionState: "connecting",
+          pendingCallAction: "initiate",
+        }));
+        await startCall(chat._id);
 
-      const chatName = chat.name || chat.participants?.[0]?.user?.name || 'Unknown Chat';
-      toast.success(`Video call initiated with ${chatName}`);
-      return { success: true };
-    } catch (error) {
-      toast.error('Error starting video call');
-      setIntegrationState(prev => ({
-        ...prev,
-        callTransitionState: 'idle',
-        pendingCallAction: null
-      }));
-      return { success: false, error: error.message };
-    }
-  }, [startCall]);
+        // Update integration state
+        setIntegrationState((prev) => ({
+          ...prev,
+          currentCallChat: chat,
+          callTransitionState: "connecting",
+          pendingCallAction: null,
+        }));
+
+        const chatName =
+          chat.name || chat.participants?.[0]?.user?.name || "Unknown Chat";
+        toast.success(`Video call initiated with ${chatName}`);
+        return { success: true };
+      } catch (error) {
+        toast.error("Error starting video call");
+        setIntegrationState((prev) => ({
+          ...prev,
+          callTransitionState: "idle",
+          pendingCallAction: null,
+        }));
+        return { success: false, error: error.message };
+      }
+    },
+    [startCall]
+  );
 
   // Enhanced call acceptance with chat integration
   const handleCallAccept = useCallback(async () => {
     try {
-      setIntegrationState(prev => ({
+      setIntegrationState((prev) => ({
         ...prev,
-        callTransitionState: 'connecting'
+        callTransitionState: "connecting",
       }));
 
       await acceptCall();
-      
+
       // Update chat context if available
       if (selectedChat && incomingCall) {
         // Could add call status message to chat
-        toast.success('Call accepted');
+        toast.success("Call accepted");
       }
-      
-      setIntegrationState(prev => ({
+
+      setIntegrationState((prev) => ({
         ...prev,
-        callTransitionState: 'connected'
+        callTransitionState: "connected",
       }));
     } catch (error) {
-      toast.error('Error accepting call');
-      setIntegrationState(prev => ({
+      toast.error("Error accepting call");
+      setIntegrationState((prev) => ({
         ...prev,
-        callTransitionState: 'idle'
+        callTransitionState: "idle",
       }));
     }
   }, [acceptCall, selectedChat, incomingCall]);
@@ -149,27 +159,27 @@ export const useChatCallIntegration = (selectedChat) => {
   // Enhanced call rejection with chat integration
   const handleCallReject = useCallback(async () => {
     try {
-      setIntegrationState(prev => ({
+      setIntegrationState((prev) => ({
         ...prev,
-        callTransitionState: 'ending'
+        callTransitionState: "ending",
       }));
 
       await rejectCall();
-      
+
       // Could add missed call notification to chat
       if (selectedChat && incomingCall) {
-        toast.info('Call declined');
+        toast.info("Call declined");
       }
-      
-      setIntegrationState(prev => ({
+
+      setIntegrationState((prev) => ({
         ...prev,
-        callTransitionState: 'idle'
+        callTransitionState: "idle",
       }));
     } catch (error) {
-      toast.error('Error rejecting call');
-      setIntegrationState(prev => ({
+      toast.error("Error rejecting call");
+      setIntegrationState((prev) => ({
         ...prev,
-        callTransitionState: 'idle'
+        callTransitionState: "idle",
       }));
     }
   }, [rejectCall, selectedChat, incomingCall]);
@@ -177,64 +187,68 @@ export const useChatCallIntegration = (selectedChat) => {
   // Enhanced call ending with chat integration
   const handleCallEnd = useCallback(async () => {
     try {
-      setIntegrationState(prev => ({
+      setIntegrationState((prev) => ({
         ...prev,
-        callTransitionState: 'ending'
+        callTransitionState: "ending",
       }));
 
       await endActiveCall();
-      
+
       // Could add call ended notification to chat
       if (integrationState.currentCallChat) {
         const duration = Math.floor(integrationState.callDuration / 1000);
         toast.success(`Call ended (${duration}s)`);
       }
-      
-      setIntegrationState(prev => ({
+
+      setIntegrationState((prev) => ({
         ...prev,
-        callTransitionState: 'idle'
+        callTransitionState: "idle",
       }));
     } catch (error) {
-      toast.error('Error ending call');
-      setIntegrationState(prev => ({
+      toast.error("Error ending call");
+      setIntegrationState((prev) => ({
         ...prev,
-        callTransitionState: 'idle'
+        callTransitionState: "idle",
       }));
     }
-  }, [endActiveCall, integrationState.currentCallChat, integrationState.callDuration]);
+  }, [
+    endActiveCall,
+    integrationState.currentCallChat,
+    integrationState.callDuration,
+  ]);
 
   // Get call status for UI display
   const getCallStatus = useCallback(() => {
     if (integrationState.isCallInProgress) {
       return {
-        status: 'active',
-        chatName: integrationState.currentCallChat?.name || 'Unknown',
+        status: "active",
+        chatName: integrationState.currentCallChat?.name || "Unknown",
         duration: Math.floor(integrationState.callDuration / 1000),
-        transitionState: integrationState.callTransitionState
+        transitionState: integrationState.callTransitionState,
       };
-    } else if (integrationState.callTransitionState === 'connecting') {
+    } else if (integrationState.callTransitionState === "connecting") {
       return {
-        status: 'connecting',
-        chatName: selectedChat?.name || 'Unknown',
-        transitionState: 'connecting'
+        status: "connecting",
+        chatName: selectedChat?.name || "Unknown",
+        transitionState: "connecting",
       };
     } else if (showIncomingCall) {
       return {
-        status: 'incoming',
-        chatName: incomingCall?.chatName || 'Unknown',
-        transitionState: 'incoming'
+        status: "incoming",
+        chatName: incomingCall?.chatName || "Unknown",
+        transitionState: "incoming",
       };
     } else if (showOutgoingCall) {
       return {
-        status: 'outgoing',
-        chatName: outgoingCall?.chatName || 'Unknown',
-        transitionState: 'outgoing'
+        status: "outgoing",
+        chatName: outgoingCall?.chatName || "Unknown",
+        transitionState: "outgoing",
       };
     }
-    
+
     return {
-      status: 'idle',
-      transitionState: 'idle'
+      status: "idle",
+      transitionState: "idle",
     };
   }, [
     integrationState,
@@ -242,19 +256,22 @@ export const useChatCallIntegration = (selectedChat) => {
     showIncomingCall,
     showOutgoingCall,
     incomingCall,
-    outgoingCall
+    outgoingCall,
   ]);
 
   // Check if video call is available for current chat
-  const isVideoCallAvailable = useCallback((chat) => {
-    if (!chat) return false;
-    if (integrationState.isCallInProgress) return false;
-    if (integrationState.callTransitionState !== 'idle') return false;
-    
-    // Check if chat has participants for video call
-    const participants = chat.participants || [];
-    return participants.length > 0;
-  }, [integrationState]);
+  const isVideoCallAvailable = useCallback(
+    (chat) => {
+      if (!chat) return false;
+      if (integrationState.isCallInProgress) return false;
+      if (integrationState.callTransitionState !== "idle") return false;
+
+      // Check if chat has participants for video call
+      const participants = chat.participants || [];
+      return participants.length > 0;
+    },
+    [integrationState]
+  );
 
   return {
     // Call state
@@ -264,11 +281,11 @@ export const useChatCallIntegration = (selectedChat) => {
     showIncomingCall,
     showOutgoingCall,
     showActiveCall,
-    
+
     // Integration state
     integrationState,
     callStatus: getCallStatus(),
-    
+
     // Actions
     initiateVideoCall,
     handleCallAccept,
@@ -276,11 +293,11 @@ export const useChatCallIntegration = (selectedChat) => {
     handleCallEnd,
     cancelCall,
     declineCall,
-    
+
     // Utilities
     isVideoCallAvailable,
-    
+
     // Call history
-    callHistory
+    callHistory,
   };
 };

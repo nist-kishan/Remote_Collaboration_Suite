@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { io } from 'socket.io-client';
 import { useSelector } from 'react-redux';
 import { isExtensionError } from '../utils/errorHandler';
 import { SOCKET_CONFIG, LOGGING_CONFIG } from '../config/environment';
+import { getSocketInstance } from '../utils/socketInstance';
 
 export const useSocket = () => {
   const socketRef = useRef(null);
@@ -15,35 +15,25 @@ export const useSocket = () => {
       // Clear any existing connection error
       setConnectionError(null);
       
-      // Log connection attempt
-      if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-        console.log('Attempting to connect to socket...');
+      // Get the shared singleton socket instance
+      socketRef.current = getSocketInstance();
+      
+      if (!socketRef.current) {
+        console.error('❌ Failed to get socket instance');
+        return;
       }
       
-      socketRef.current = io(SOCKET_CONFIG.URL, {
-        withCredentials: true, // Use cookies for authentication
-        transports: SOCKET_CONFIG.TRANSPORTS,
-        timeout: SOCKET_CONFIG.TIMEOUT,
-        forceNew: true, // Force new connection
-        reconnection: true,
-        reconnectionAttempts: SOCKET_CONFIG.RECONNECTION_ATTEMPTS,
-        reconnectionDelay: SOCKET_CONFIG.RECONNECTION_DELAY,
-        reconnectionDelayMax: SOCKET_CONFIG.RECONNECTION_DELAY * 5,
-        autoConnect: true
-      });
+      // Update connection state if already connected
+      if (socketRef.current.connected) {
+        setIsConnected(true);
+      }
 
       socketRef.current.on('connect', () => {
         setIsConnected(true);
         setConnectionError(null);
-        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-          console.log('✅ Socket connected successfully');
-        }
       });
 
       socketRef.current.on('connection_confirmed', (data) => {
-        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-          console.log('Socket connection confirmed:', data);
-        }
       });
 
       socketRef.current.on('user_status_changed', (data) => {
@@ -65,9 +55,6 @@ export const useSocket = () => {
 
       socketRef.current.on('disconnect', (reason) => {
         setIsConnected(false);
-        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-          console.log('Socket disconnected:', reason);
-        }
         if (reason === 'io server disconnect') {
           // Server disconnected, try to reconnect
           socketRef.current.connect();
@@ -82,31 +69,19 @@ export const useSocket = () => {
 
         setConnectionError(error.message);
         setIsConnected(false);
-        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-          console.error('Socket connection error:', error.message);
-        }
       });
 
       socketRef.current.on('reconnect', (attemptNumber) => {
         setIsConnected(true);
         setConnectionError(null);
-        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-          console.log('✅ Socket reconnected after', attemptNumber, 'attempts');
-        }
       });
 
       socketRef.current.on('reconnect_error', (error) => {
         setConnectionError(error.message);
-        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-          console.error('Socket reconnection error:', error.message);
-        }
       });
 
       socketRef.current.on('reconnect_failed', () => {
         setConnectionError('Failed to reconnect to server');
-        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-          console.error('❌ Socket reconnection failed');
-        }
       });
 
       socketRef.current.on('error', (error) => {
@@ -114,15 +89,23 @@ export const useSocket = () => {
         if (isExtensionError(error)) {
           return;
         }
+        
+        // Filter out call-related errors when using meetings (different system)
+        // Meetings use 'join-call' event, not 'start_call', so these errors don't apply
+        if (typeof error === 'string') {
+          if (error.includes('call is already in progress') || 
+              error.includes('Failed to start call')) {
+            return; // Ignore call system errors when using meetings
+          }
+        }
+        
         console.error('Socket error:', error);
       });
     }
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      // Don't disconnect the shared socket on unmount
+      // Just clean up local listeners if needed
     };
   }, [user]);
 
@@ -132,9 +115,6 @@ export const useSocket = () => {
     connectionError,
     reconnect: () => {
       if (socketRef.current && !socketRef.current.connected) {
-        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-          console.log('Attempting to reconnect socket...');
-        }
         socketRef.current.connect();
       }
     }
