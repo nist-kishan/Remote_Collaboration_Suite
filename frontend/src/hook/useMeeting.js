@@ -419,7 +419,8 @@ export const useMeeting = (meetingId = null) => {
     const handleParticipantJoined = (data) => {
       if (currentMeeting?._id === data.meetingId) {
         dispatch(addParticipant(data.participant));
-        toast(`${data.participant.user.name} joined the meeting`, { icon: '👋' });
+        const participantName = data.participant?.user?.name || data.participant?.name || 'A participant';
+        toast(`${participantName} joined the meeting`, { icon: '👋' });
       }
     };
 

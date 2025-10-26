@@ -1387,8 +1387,8 @@ class SocketServer {
           socket.to(`call:${callId}`).emit("participant_joined", {
             callId,
             userId: socket.userId,
-            userName: socket.user.name,
-            avatar: socket.user.avatar
+            userName: socket.user?.name || 'Unknown User',
+            avatar: socket.user?.avatar || null
           });
 
           // Emit call_joined to all participants (including the person who joined)
@@ -1788,7 +1788,7 @@ class SocketServer {
           socket.to(`meeting:${meetingId}`).emit("participant_joined", {
             meetingId,
             participant: {
-              user: socket.user,
+              user: socket.user || { _id: socket.userId, name: 'Unknown User' },
               userId: socket.userId,
               joinedAt: new Date()
             }

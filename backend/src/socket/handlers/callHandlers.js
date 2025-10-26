@@ -197,8 +197,8 @@ export const registerCallHandlers = (socket, io, state) => {
       socket.to(`call:${callId}`).emit("participant_joined", {
         callId,
         userId: socket.userId,
-        userName: socket.user.name,
-        avatar: socket.user.avatar
+        userName: socket.user?.name || 'Unknown User',
+        avatar: socket.user?.avatar || null
       });
 
       io.to(`call:${callId}`).emit("call_joined", { call, ringing: false });
@@ -208,7 +208,7 @@ export const registerCallHandlers = (socket, io, state) => {
         io.to(`user:${call.startedBy}`).emit("call_accepted", { 
           call,
           acceptedBy: socket.userId,
-          acceptedByName: socket.user.name,
+          acceptedByName: socket.user?.name || 'Unknown User',
           ringing: false
         });
       }
