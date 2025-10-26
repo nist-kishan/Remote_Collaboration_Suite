@@ -44,10 +44,43 @@ export default function VideoCall() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
+  // 🔍 CONSOLE LOGGING - Redux State & User Data
+  useEffect(() => {
+    console.group('📞 VIDEO CALL - Redux State');
+    console.log('🔴 Active Call:', activeCall);
+    console.log('📥 Incoming Call:', incomingCall);
+    console.log('📤 Outgoing Call:', outgoingCall);
+    console.log('📊 Call Status:', callStatus);
+    console.log('🎥 Local Stream:', localStream);
+    console.log('🎥 Remote Stream:', remoteStream);
+    console.log('🔇 Is Muted:', isMuted);
+    console.log('📹 Is Video Enabled:', isVideoEnabled);
+    console.log('🖥️ Is Screen Sharing:', isScreenSharing);
+    console.log('👥 Participants:', participants);
+    console.log('✅ Show Active Call:', showActiveCall);
+    console.log('📥 Show Incoming Call:', showIncomingCall);
+    console.log('📤 Show Outgoing Call:', showOutgoingCall);
+    console.groupEnd();
+  }, [activeCall, incomingCall, outgoingCall, callStatus, localStream, remoteStream, 
+      isMuted, isVideoEnabled, isScreenSharing, participants, showActiveCall, 
+      showIncomingCall, showOutgoingCall]);
+
   // Restore call state on page refresh
   useEffect(() => {
     const restoreCall = async () => {
-      if (!callId || isRestoring) return;
+      // If no callId in URL, check if we have an active call
+      if (!callId) {
+        if (activeCall || incomingCall || outgoingCall) {
+          console.log('📞 No callId in URL but have call state, initializing...');
+          setIsInitialized(true);
+          return;
+        }
+        // No callId and no call state - set initialized to show fallback
+        setIsInitialized(true);
+        return;
+      }
+      
+      if (isRestoring) return;
       
       // Check if we have an active call in Redux (restored from localStorage)
       if (reduxActiveCall && reduxCallStatus === 'connected') {

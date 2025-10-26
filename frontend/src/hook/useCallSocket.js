@@ -197,8 +197,20 @@ export const useCallSocket = () => {
   const handleIncomingCall = useCallback(
     (data) => {
       const callId = data.callId || data._id || `incoming_${Date.now()}`;
-      if (isDuplicateEvent("incoming_call", callId)) return;
-
+      
+      // 🔍 CONSOLE LOG - Incoming Call Event
+      console.group('📥 INCOMING CALL EVENT');
+      console.log('📞 Call ID:', callId);
+      console.log('👤 From User:', data.fromUserName);
+      console.log('🆔 From User ID:', data.fromUserId);
+      console.log('📊 Call Data:', data);
+      console.groupEnd();
+      
+      // Prevent duplicate events
+      if (isDuplicateEvent('incoming_call', callId)) {
+        return;
+      }
+      
       console.log('📞 Incoming call received:', data);
       
       // Check if user is on chat page
@@ -254,6 +266,15 @@ export const useCallSocket = () => {
   const handleCallJoined = useCallback(
     (data) => {
       const callId = data.call?._id || data.callId;
+      
+      // 🔍 CONSOLE LOG - Call Joined Event
+      console.group('✅ CALL JOINED EVENT');
+      console.log('📞 Call ID:', callId);
+      console.log('📊 Call Data:', data.call);
+      console.log('👥 Participants:', data.call?.participants);
+      console.log('🔄 Status: Connected');
+      console.groupEnd();
+      
       if (isDuplicateEvent("call_joined", callId)) return;
 
       dispatch(setActiveCall(data.call));

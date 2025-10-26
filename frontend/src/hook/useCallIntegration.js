@@ -342,6 +342,21 @@ export const useCallIntegration = () => {
     }
   };
 
+  // =============== 🔍 CONSOLE LOGGING - Redux State Changes ==================
+  useEffect(() => {
+    console.group('🔄 CALL INTEGRATION - State Update');
+    console.log('👤 User:', user);
+    console.log('🔴 Active Call:', activeCall);
+    console.log('📥 Incoming Call:', incomingCall);
+    console.log('📤 Outgoing Call:', outgoingCall);
+    console.log('📊 Call Status:', callStatus);
+    console.log('🎥 Local Stream:', localStream ? 'Available' : 'None');
+    console.log('🎥 Remote Streams:', Object.keys(remoteStreams).length);
+    console.log('🔇 Is Muted:', isMuted);
+    console.log('📹 Is Video Enabled:', isVideoEnabled);
+    console.groupEnd();
+  }, [user, activeCall, incomingCall, outgoingCall, callStatus, localStream, remoteStreams, isMuted, isVideoEnabled]);
+
   // =============== 🧹 CLEANUP ON UNMOUNT OR CALL END ==================
   useEffect(() => {
     return () => {
@@ -365,6 +380,19 @@ export const useCallIntegration = () => {
     activeCall,
     incomingCall,
     outgoingCall,
+    
+    // UI State
+    showIncomingCall: !!incomingCall && callStatus === 'incoming',
+    showOutgoingCall: !!outgoingCall && (callStatus === 'outgoing' || callStatus === 'connecting'),
+    showActiveCall: !!activeCall && callStatus === 'connected',
+    callStatus,
+    localStream,
+    remoteStream: Object.values(remoteStreams)[0] || null, // Get first remote stream
+    remoteStreams,
+    isMuted,
+    isVideoEnabled,
+    isScreenSharing: false,
+    participants: [],
 
     // Queries
     callHistory: callHistoryQuery.data || [],
@@ -385,6 +413,12 @@ export const useCallIntegration = () => {
     cleanupMissed: cleanupMissedCallsMutation.mutateAsync,
     updateCallSettings: updateSettingsMutation.mutateAsync,
     fetchCallById,
+    
+    // WebRTC actions
+    toggleMute: toggleAudioTrack,
+    toggleVideo: toggleVideoTrack,
+    toggleScreenShare: startScreenShare,
+    endActiveCall: endCallMutation.mutateAsync,
 
     isStarting: startCallMutation.isLoading,
     isJoining: joinCallMutation.isLoading,
