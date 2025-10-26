@@ -178,9 +178,16 @@ export default function VideoCall() {
 
   const handleEndCall = async () => {
     try {
-      await endActiveCall();
+      const currentCallId = activeCall?._id || activeCall?.callId || callId;
+      if (!currentCallId) {
+        console.warn('⚠️ No callId found, navigating to chat');
+        navigate("/chat");
+        return;
+      }
+      console.log('🛑 Ending call:', currentCallId);
+      await endActiveCall(currentCallId);
     } catch (error) {
-      console.error('Error ending call:', error);
+      console.error('❌ Error ending call:', error);
     } finally {
       // Always navigate away after ending call
       navigate("/chat");
