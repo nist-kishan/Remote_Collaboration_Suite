@@ -38,6 +38,8 @@ import {
   selectCallMinimizedFromRoute,
   setLocalStream,
   setRemoteStream,
+  selectIsMuted,
+  selectIsVideoEnabled,
 } from "../store/slice/callSlice";
 import { useCallSocket } from "./useCallSocket";
 import { useWebRTC } from "./useWebRTC"; // For regular 1-on-1 or group calls (NOT meetings)
@@ -53,6 +55,8 @@ export const useCallIntegration = () => {
   const ringingType = useSelector(selectRingingType);
   const isCallMinimized = useSelector(selectIsCallMinimized);
   const minimizedFromRoute = useSelector(selectCallMinimizedFromRoute);
+  const isMuted = useSelector(selectIsMuted);
+  const isVideoEnabled = useSelector(selectIsVideoEnabled);
   const { user } = useSelector((state) => state.auth);
 
   const {
@@ -67,6 +71,7 @@ export const useCallIntegration = () => {
 
   const {
     localStream,
+    remoteStreams,
     initializeLocalStream,
     toggleAudio: toggleAudioTrack,
     toggleVideo: toggleVideoTrack,
