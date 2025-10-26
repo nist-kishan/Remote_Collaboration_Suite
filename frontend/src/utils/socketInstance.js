@@ -31,6 +31,11 @@ export const getSocketInstance = () => {
       autoConnect: true,
     });
 
+    // Expose to window for global access (used by useMessages hook)
+    if (typeof window !== 'undefined') {
+      window.socket = socketInstance;
+    }
+
   } catch (error) {
     console.error('❌ Failed to create socket instance:', error);
   } finally {

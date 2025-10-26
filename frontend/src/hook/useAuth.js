@@ -136,10 +136,13 @@ export const useCurrentUser = () => {
   const query = useQuery({
     queryKey: ["currentUser"],
     queryFn: getCurrentUser,
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: Infinity, // Never consider data stale - only refetch manually
+    gcTime: 1000 * 60 * 30, // 30 minutes cache time
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false,
+    refetchInterval: false,
+    refetchIntervalInBackground: false,
     retry: (failureCount, error) => {
       // Don't retry on rate limit errors (429) or auth errors (401/403)
       if (error?.response?.status === 429 || 
@@ -147,10 +150,9 @@ export const useCurrentUser = () => {
           error?.response?.status === 403) {
         return false;
       }
-      // Retry up to 1 time for other errors
-      return failureCount < 1;
+      // Don't retry at all to prevent excessive requests
+      return false;
     },
-    retryDelay: 1000,
     enabled: !isAuthPage, // Don't run on auth pages to prevent interference
   });
 

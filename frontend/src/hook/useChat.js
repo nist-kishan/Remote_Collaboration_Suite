@@ -878,9 +878,7 @@ export const useChatPage = () => {
         // Start the call using just the chatId as expected by useCall
         await startCall(chat._id);
 
-        const chatName =
-          chat.name || chat.participants?.[0]?.user?.name || "Unknown Chat";
-        toast.success(`Video call initiated with ${chatName}`);
+        // Don't show toast - call UI handles feedback
         return { success: true };
       } catch (error) {
         toast.error("Error starting video call: " + error.message);

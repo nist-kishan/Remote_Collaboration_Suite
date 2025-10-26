@@ -272,22 +272,35 @@ export const useCallSocket = () => {
 
   const handleCallEnded = useCallback(
     (data) => {
+      const callId = data.callId || data.call?._id;
       const reason = data.reason || "ended";
+      
+      // Prevent duplicate call ended events
+      if (isDuplicateEvent('call_ended', callId)) {
+        return;
+      }
       
       console.log('📞 Call ended event received:', reason);
       
       // Clear state immediately to prevent UI flicker
       stopAllRingtones();
+      clearAllTimers();
+      
+      // Reset all call-related state
       dispatch(resetCallState());
       dispatch(setCallStatusAction("idle"));
       dispatch(setRingingState({ type: null, isRinging: false }));
       dispatch(setLocalStream(null));
       dispatch(setRemoteStream(null));
+      dispatch(setShowIncomingCallModal(false));
+      dispatch(setShowOutgoingCallModal(false));
+      dispatch(setShowCallWindow(false));
+      
       saveCallData(null);
       setProcessedCallIds(new Set());
       setLastEventTime({});
       
-      // Show toast notification
+      // Show toast notification only once
       if (reason === "rejected") toast.error("Call rejected");
       else if (reason === "missed") toast("Call missed", { icon: "⏰" });
       else if (reason === "timeout") toast.error("Call timed out");
@@ -298,7 +311,7 @@ export const useCallSocket = () => {
         navigate("/chat");
       }
     },
-    [dispatch, stopAllRingtones, saveCallData, location.pathname, navigate]
+    [dispatch, stopAllRingtones, clearAllTimers, saveCallData, location.pathname, navigate, isDuplicateEvent]
   );
 
   const handleCallAccepted = useCallback(
@@ -385,7 +398,7 @@ export const useCallSocket = () => {
       try {
         await ensureSocketConnection();
         socket.emit("start_call", { chatId, type });
-        toast.success("Starting call...");
+        // Don't show toast - call UI handles feedback
         startConnectingTimeout();
         dispatch(setCallStatusAction("connecting"));
         playOutgoingRingtone();

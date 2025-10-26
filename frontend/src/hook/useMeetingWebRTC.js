@@ -32,9 +32,17 @@ export const useMeetingWebRTC = (meetingId, userId) => {
   // ICE servers configuration (STUN/TURN servers)
   const iceServers = {
     iceServers: [
+      // STUN servers for NAT traversal
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
+      { urls: 'stun:stun2.l.google.com:19302' },
+      // TURN server for relay (configure with your credentials)
+      // Uncomment and configure when you have a TURN server
+      // {
+      //   urls: 'turn:your-turn-server.com:3478',
+      //   username: process.env.REACT_APP_TURN_USERNAME || 'user',
+      //   credential: process.env.REACT_APP_TURN_PASSWORD || 'pass'
+      // }
     ]
   };
 
@@ -73,7 +81,11 @@ export const useMeetingWebRTC = (meetingId, userId) => {
       
       // Add local stream tracks to peer connection
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => {
+        const tracks = localStreamRef.current.getTracks();
+        console.log(`📹 [Meeting] Adding ${tracks.length} tracks to peer connection for ${remoteUserId}:`, tracks.map(t => `${t.kind} (${t.enabled})`));
+
+        tracks.forEach(track => {
+          console.log(`➕ [Meeting] Adding ${track.kind} track:`, track.label, track.enabled);
           peerConnection.addTrack(track, localStreamRef.current);
         });
       }
@@ -81,7 +93,8 @@ export const useMeetingWebRTC = (meetingId, userId) => {
       // Handle ICE candidates
       peerConnection.onicecandidate = (event) => {
         if (event.candidate && socketRef.current && isConnectedRef.current) {
-          socketRef.current.emit('ice-candidate', {
+          console.log(`🧊 [Meeting] Sending ICE candidate to ${remoteUserId}`);
+          socketRef.current.emit('ice_candidate', {
             callId: meetingId,
             candidate: event.candidate,
             to: remoteUserId
@@ -91,10 +104,13 @@ export const useMeetingWebRTC = (meetingId, userId) => {
 
       // Handle connection state changes
       peerConnection.onconnectionstatechange = () => {
+        console.log(`🔗 [Meeting] Connection state with ${remoteUserId}:`, peerConnection.connectionState);
         if (peerConnection.connectionState === 'connected') {
           setConnectionStatus('connected');
+          // Don't show toast - video feed appearing is enough feedback
         } else if (peerConnection.connectionState === 'disconnected' || 
                    peerConnection.connectionState === 'failed') {
+          console.warn(`⚠️ [Meeting] Connection ${peerConnection.connectionState} with ${remoteUserId}`);
           handleRemovePeer(remoteUserId);
         }
       };
@@ -104,6 +120,15 @@ export const useMeetingWebRTC = (meetingId, userId) => {
         const [remoteStream] = event.streams;
         
         if (remoteStream) {
+          console.log('📹 [Meeting] Received remote stream from:', remoteUserId);
+          console.log('📊 [Meeting] Remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind} (${t.enabled})`));
+
+          const audioTracks = remoteStream.getAudioTracks();
+          const videoTracks = remoteStream.getVideoTracks();
+
+          console.log(`🎵 [Meeting] Audio tracks: ${audioTracks.length}`, audioTracks.map(t => `${t.label} (${t.enabled})`));
+          console.log(`📹 [Meeting] Video tracks: ${videoTracks.length}`, videoTracks.map(t => `${t.label} (${t.enabled})`));
+
           remoteStreamsRef.current[remoteUserId] = remoteStream;
           setRemoteStreams(prev => ({
             ...prev,
@@ -127,18 +152,52 @@ export const useMeetingWebRTC = (meetingId, userId) => {
    */
   const initializeLocalStream = useCallback(async (constraints = { video: true, audio: true }) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('🎤 [Meeting] Requesting media access with constraints:', constraints);
+
+      // Enhanced constraints for better audio/video quality
+      const enhancedConstraints = {
+        video: constraints.video ? {
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 60 }
+        } : false,
+        audio: constraints.audio ? {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100
+        } : false
+      };
+
+      console.log('🎬 [Meeting] Enhanced constraints:', enhancedConstraints);
+      const stream = await navigator.mediaDevices.getUserMedia(enhancedConstraints);
+
+      // Log what we actually got
+      const tracks = stream.getTracks();
+      console.log(`✅ [Meeting] Media access granted. Tracks: ${tracks.length}`);
+      tracks.forEach(track => {
+        console.log(`  ${track.kind}: ${track.label} (${track.enabled})`);
+      });
+
       localStreamRef.current = stream;
       setIsInitialized(true);
+      console.log('🎉 [Meeting] Local stream initialized successfully');
       return stream;
       
     } catch (error) {
-      console.error('❌ Error accessing media devices:', error);
+      console.error('❌ [Meeting] Error accessing media devices:', error);
       
       if (error.name === 'NotAllowedError') {
         toast.error('Camera/microphone access denied. Please grant permissions.');
       } else if (error.name === 'NotFoundError') {
         toast.error('No camera or microphone found.');
+      } else if (error.name === 'NotReadableError') {
+        toast.error('Camera/microphone is already in use by another application.');
+      } else if (error.name === 'OverconstrainedError') {
+        toast.error('Camera/microphone does not support the requested quality settings.');
+        // Try with basic constraints as fallback
+        console.log('🔄 [Meeting] Retrying with basic constraints...');
+        return initializeLocalStream({ video: true, audio: true });
       } else {
         toast.error('Failed to access media devices.');
       }
@@ -164,12 +223,16 @@ export const useMeetingWebRTC = (meetingId, userId) => {
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
 
+      console.log(`📤 [Meeting] Sending offer to ${remoteUserId}`);
       if (socketRef.current && isConnectedRef.current) {
-        socketRef.current.emit('offer', {
+        socketRef.current.emit('sdp_offer', {
           callId: meetingId,
           offer,
           to: remoteUserId
         });
+        console.log(`✅ [Meeting] Offer sent successfully`);
+      } else {
+        console.error('❌ [Meeting] Socket not connected, cannot send offer');
       }
       
     } catch (error) {
@@ -181,11 +244,12 @@ export const useMeetingWebRTC = (meetingId, userId) => {
   /**
    * Handle incoming offer from remote peer
    */
-  const handleOffer = useCallback(async ({ from, offer }) => {
+  const handleOffer = useCallback(async ({ fromUserId, offer }) => {
     try {
-      let peerConnection = peerConnectionsRef.current[from];
+      console.log(`📥 [Meeting] Received offer from ${fromUserId}`);
+      let peerConnection = peerConnectionsRef.current[fromUserId];
       if (!peerConnection) {
-        peerConnection = createPeerConnection(from);
+        peerConnection = createPeerConnection(fromUserId);
       }
 
       if (!peerConnection) {
@@ -193,20 +257,25 @@ export const useMeetingWebRTC = (meetingId, userId) => {
       }
 
       await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log(`✅ [Meeting] Remote description set for ${fromUserId}`);
       
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
 
+      console.log(`📤 [Meeting] Sending answer to ${fromUserId}`);
       if (socketRef.current && isConnectedRef.current) {
-        socketRef.current.emit('answer', {
+        socketRef.current.emit('sdp_answer', {
           callId: meetingId,
           answer,
-          to: from
+          to: fromUserId
         });
+        console.log(`✅ [Meeting] Answer sent successfully`);
+      } else {
+        console.error('❌ [Meeting] Socket not connected, cannot send answer');
       }
       
     } catch (error) {
-      console.error('❌ Error handling offer:', error);
+      console.error('❌ [Meeting] Error handling offer:', error);
       toast.error('Failed to handle connection offer');
     }
   }, [meetingId, createPeerConnection]);
@@ -214,15 +283,19 @@ export const useMeetingWebRTC = (meetingId, userId) => {
   /**
    * Handle incoming answer from remote peer
    */
-  const handleAnswer = useCallback(async ({ from, answer }) => {
+  const handleAnswer = useCallback(async ({ fromUserId, answer }) => {
     try {
-      const peerConnection = peerConnectionsRef.current[from];
+      console.log(`📥 [Meeting] Received answer from ${fromUserId}`);
+      const peerConnection = peerConnectionsRef.current[fromUserId];
       if (peerConnection) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        console.log(`✅ [Meeting] Answer set successfully for peer: ${fromUserId}`);
+      } else {
+        console.warn(`⚠️ [Meeting] No peer connection found for ${fromUserId}`);
       }
       
     } catch (error) {
-      console.error('❌ Error handling answer:', error);
+      console.error('❌ [Meeting] Error handling answer:', error);
       toast.error('Failed to handle connection answer');
     }
   }, []);
@@ -230,15 +303,19 @@ export const useMeetingWebRTC = (meetingId, userId) => {
   /**
    * Handle incoming ICE candidate
    */
-  const handleIceCandidate = useCallback(async ({ from, candidate }) => {
+  const handleIceCandidate = useCallback(async ({ fromUserId, candidate }) => {
     try {
-      const peerConnection = peerConnectionsRef.current[from];
+      console.log(`🧊 [Meeting] Received ICE candidate from ${fromUserId}`);
+      const peerConnection = peerConnectionsRef.current[fromUserId];
       if (peerConnection) {
         await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log(`✅ [Meeting] ICE candidate added successfully for peer: ${fromUserId}`);
+      } else {
+        console.warn(`⚠️ [Meeting] No peer connection found for ${fromUserId}`);
       }
       
     } catch (error) {
-      console.error('❌ Error handling ICE candidate:', error);
+      console.error('❌ [Meeting] Error handling ICE candidate:', error);
     }
   }, []);
 
@@ -247,6 +324,7 @@ export const useMeetingWebRTC = (meetingId, userId) => {
    */
   const handleUserJoined = useCallback(async ({ userId: newUserId, user }) => {
     if (newUserId !== userId) {
+      console.log(`👥 [Meeting] New user joined: ${newUserId}`);
       // Create offer for the new user
       await createOffer(newUserId);
     }
@@ -256,6 +334,7 @@ export const useMeetingWebRTC = (meetingId, userId) => {
    * Handle user leaving the meeting
    */
   const handleUserLeft = useCallback(({ userId: leftUserId }) => {
+    console.log(`👋 [Meeting] User left: ${leftUserId}`);
     handleRemovePeer(leftUserId);
   }, [handleRemovePeer]);
 
@@ -358,16 +437,19 @@ export const useMeetingWebRTC = (meetingId, userId) => {
   useEffect(() => {
     if (!socket || !isConnected || !meetingId) return;
 
-    socket.on('offer', handleOffer);
-    socket.on('answer', handleAnswer);
-    socket.on('ice-candidate', handleIceCandidate);
+    console.log('🔌 [Meeting] Setting up WebRTC signaling listeners for meeting:', meetingId);
+
+    socket.on('sdp_offer', handleOffer);
+    socket.on('sdp_answer', handleAnswer);
+    socket.on('ice_candidate', handleIceCandidate);
     socket.on('user-joined', handleUserJoined);
     socket.on('user-left', handleUserLeft);
 
     return () => {
-      socket.off('offer', handleOffer);
-      socket.off('answer', handleAnswer);
-      socket.off('ice-candidate', handleIceCandidate);
+      console.log('🔌 [Meeting] Cleaning up WebRTC signaling listeners');
+      socket.off('sdp_offer', handleOffer);
+      socket.off('sdp_answer', handleAnswer);
+      socket.off('ice_candidate', handleIceCandidate);
       socket.off('user-joined', handleUserJoined);
       socket.off('user-left', handleUserLeft);
     };
@@ -377,7 +459,9 @@ export const useMeetingWebRTC = (meetingId, userId) => {
    * Join meeting call room via socket
    */
   const joinCallRoom = useCallback(() => {
-    if (socketRef.current && isConnectedRef.current && meetingId && !hasJoinedCallRef.current) {
+    if (socketRef.current && isConnectedRef.current && meetingId) {
+      // Allow rejoining even if hasJoinedCallRef is true (for page refresh scenarios)
+      console.log('🔌 [Meeting] Joining call room:', meetingId);
       socketRef.current.emit('join-call', { callId: meetingId, userId });
       hasJoinedCallRef.current = true;
     }
@@ -388,6 +472,7 @@ export const useMeetingWebRTC = (meetingId, userId) => {
    */
   const leaveCallRoom = useCallback(() => {
     if (socketRef.current && isConnectedRef.current && meetingId && hasJoinedCallRef.current) {
+      console.log('🔌 [Meeting] Leaving call room:', meetingId);
       socketRef.current.emit('leave-call', { callId: meetingId, userId });
       hasJoinedCallRef.current = false;
       cleanup();

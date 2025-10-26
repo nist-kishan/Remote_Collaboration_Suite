@@ -212,7 +212,7 @@ export const useMeeting = (meetingId = null) => {
       
       dispatch(setCurrentMeeting(meeting));
       dispatch(setInMeeting(true));
-      toast.success('Joined meeting successfully!');
+      // Don't show toast - meeting UI shows you've joined
       
       // Initialize WebRTC
       try {

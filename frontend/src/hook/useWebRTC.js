@@ -34,9 +34,17 @@ export const useWebRTC = (callId, userId) => {
   // ICE servers configuration (STUN/TURN servers)
   const iceServers = {
     iceServers: [
+      // STUN servers for NAT traversal
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
+      { urls: 'stun:stun2.l.google.com:19302' },
+      // TURN server for relay (configure with your credentials)
+      // Uncomment and configure when you have a TURN server
+      // {
+      //   urls: 'turn:your-turn-server.com:3478',
+      //   username: process.env.REACT_APP_TURN_USERNAME || 'user',
+      //   credential: process.env.REACT_APP_TURN_PASSWORD || 'pass'
+      // }
     ]
   };
 
@@ -75,7 +83,11 @@ export const useWebRTC = (callId, userId) => {
       
       // Add local stream tracks to peer connection
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => {
+        const tracks = localStreamRef.current.getTracks();
+        console.log(`📹 Adding ${tracks.length} tracks to peer connection:`, tracks.map(t => `${t.kind} (${t.enabled})`));
+
+        tracks.forEach(track => {
+          console.log(`➕ Adding ${track.kind} track:`, track.label, track.enabled);
           peerConnection.addTrack(track, localStreamRef.current);
         });
       }
@@ -83,7 +95,7 @@ export const useWebRTC = (callId, userId) => {
       // Handle ICE candidates
       peerConnection.onicecandidate = (event) => {
         if (event.candidate && socketRef.current && isConnectedRef.current) {
-          socketRef.current.emit('ice-candidate', {
+          socketRef.current.emit('ice_candidate', {
             callId,
             candidate: event.candidate,
             to: remoteUserId
@@ -95,7 +107,7 @@ export const useWebRTC = (callId, userId) => {
       peerConnection.onconnectionstatechange = () => {
         if (peerConnection.connectionState === 'connected') {
           setConnectionStatus('connected');
-          toast.success(`Connected to peer`);
+          // Don't show toast - video feed appearing is enough feedback
         } else if (peerConnection.connectionState === 'disconnected' || 
                    peerConnection.connectionState === 'failed') {
           setConnectionStatus('disconnected');
@@ -106,9 +118,17 @@ export const useWebRTC = (callId, userId) => {
       // Handle incoming remote tracks
       peerConnection.ontrack = (event) => {
         const [remoteStream] = event.streams;
-        
+
         if (remoteStream) {
           console.log('📹 Received remote stream from:', remoteUserId);
+          console.log('📊 Remote stream tracks:', remoteStream.getTracks().map(t => `${t.kind} (${t.enabled})`));
+
+          const audioTracks = remoteStream.getAudioTracks();
+          const videoTracks = remoteStream.getVideoTracks();
+
+          console.log(`🎵 Audio tracks: ${audioTracks.length}`, audioTracks.map(t => `${t.label} (${t.enabled})`));
+          console.log(`📹 Video tracks: ${videoTracks.length}`, videoTracks.map(t => `${t.label} (${t.enabled})`));
+
           remoteStreamsRef.current[remoteUserId] = remoteStream;
           setRemoteStreams(prev => ({
             ...prev,
@@ -132,22 +152,56 @@ export const useWebRTC = (callId, userId) => {
    */
   const initializeLocalStream = useCallback(async (constraints = { video: true, audio: true }) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('🎤 Requesting media access with constraints:', constraints);
+
+      // Enhanced constraints for better audio/video quality
+      const enhancedConstraints = {
+        video: constraints.video ? {
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 60 }
+        } : false,
+        audio: constraints.audio ? {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100
+        } : false
+      };
+
+      console.log('🎬 Enhanced constraints:', enhancedConstraints);
+      const stream = await navigator.mediaDevices.getUserMedia(enhancedConstraints);
+
+      // Log what we actually got
+      const tracks = stream.getTracks();
+      console.log(`✅ Media access granted. Tracks: ${tracks.length}`);
+      tracks.forEach(track => {
+        console.log(`  ${track.kind}: ${track.label} (${track.enabled})`);
+      });
+
       localStreamRef.current = stream;
       setIsInitialized(true);
+      console.log('🎉 Local stream initialized successfully');
       return stream;
-      
+
     } catch (error) {
       console.error('❌ Error accessing media devices:', error);
-      
+
       if (error.name === 'NotAllowedError') {
-        toast.error('Camera/microphone access denied. Please grant permissions.');
+        toast.error('Camera/microphone access denied. Please grant permissions and try again.');
       } else if (error.name === 'NotFoundError') {
-        toast.error('No camera or microphone found.');
+        toast.error('No camera or microphone found. Please connect media devices.');
+      } else if (error.name === 'NotReadableError') {
+        toast.error('Camera/microphone is already in use by another application.');
+      } else if (error.name === 'OverconstrainedError') {
+        toast.error('Camera/microphone does not support the requested quality settings.');
+        // Try with basic constraints as fallback
+        console.log('🔄 Retrying with basic constraints...');
+        return initializeLocalStream({ video: true, audio: true });
       } else {
-        toast.error('Failed to access media devices.');
+        toast.error(`Failed to access media devices: ${error.message}`);
       }
-      
+
       throw error;
     }
   }, []);
@@ -170,7 +224,7 @@ export const useWebRTC = (callId, userId) => {
       await peerConnection.setLocalDescription(offer);
 
       if (socketRef.current && isConnectedRef.current) {
-        socketRef.current.emit('offer', {
+        socketRef.current.emit('sdp_offer', {
           callId,
           offer,
           to: remoteUserId
@@ -186,11 +240,11 @@ export const useWebRTC = (callId, userId) => {
   /**
    * Handle incoming offer from remote peer
    */
-  const handleOffer = useCallback(async ({ from, offer }) => {
+  const handleOffer = useCallback(async ({ fromUserId, offer }) => {
     try {
-      let peerConnection = peerConnectionsRef.current[from];
+      let peerConnection = peerConnectionsRef.current[fromUserId];
       if (!peerConnection) {
-        peerConnection = createPeerConnection(from);
+        peerConnection = createPeerConnection(fromUserId);
       }
 
       if (!peerConnection) {
@@ -198,18 +252,18 @@ export const useWebRTC = (callId, userId) => {
       }
 
       await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-      
+
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
 
       if (socketRef.current && isConnectedRef.current) {
-        socketRef.current.emit('answer', {
+        socketRef.current.emit('sdp_answer', {
           callId,
           answer,
-          to: from
+          to: fromUserId
         });
       }
-      
+
     } catch (error) {
       console.error('❌ Error handling offer:', error);
       toast.error('Failed to handle connection offer');
@@ -219,13 +273,14 @@ export const useWebRTC = (callId, userId) => {
   /**
    * Handle incoming answer from remote peer
    */
-  const handleAnswer = useCallback(async ({ from, answer }) => {
+  const handleAnswer = useCallback(async ({ fromUserId, answer }) => {
     try {
-      const peerConnection = peerConnectionsRef.current[from];
+      const peerConnection = peerConnectionsRef.current[fromUserId];
       if (peerConnection) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        console.log('✅ Answer set successfully for peer:', fromUserId);
       }
-      
+
     } catch (error) {
       console.error('❌ Error handling answer:', error);
       toast.error('Failed to handle connection answer');
@@ -235,24 +290,25 @@ export const useWebRTC = (callId, userId) => {
   /**
    * Handle incoming ICE candidate
    */
-  const handleIceCandidate = useCallback(async ({ from, candidate }) => {
+  const handleIceCandidate = useCallback(async ({ fromUserId, candidate }) => {
     try {
-      const peerConnection = peerConnectionsRef.current[from];
+      const peerConnection = peerConnectionsRef.current[fromUserId];
       if (peerConnection) {
         await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log('🧊 ICE candidate added successfully for peer:', fromUserId);
       }
-      
+
     } catch (error) {
       console.error('❌ Error handling ICE candidate:', error);
     }
   }, []);
-
 
   /**
    * Handle new user joining the call
    */
   const handleUserJoined = useCallback(async ({ userId: newUserId, user }) => {
     if (newUserId !== userId) {
+      console.log(`👥 New user joined call: ${newUserId}`);
       // Create offer for the new user
       await createOffer(newUserId);
     }
@@ -262,6 +318,7 @@ export const useWebRTC = (callId, userId) => {
    * Handle user leaving the call
    */
   const handleUserLeft = useCallback(({ userId: leftUserId }) => {
+    console.log(`👋 User left call: ${leftUserId}`);
     handleRemovePeer(leftUserId);
   }, [handleRemovePeer]);
 
@@ -364,16 +421,16 @@ export const useWebRTC = (callId, userId) => {
   useEffect(() => {
     if (!socket || !isConnected || !callId) return;
 
-    socket.on('offer', handleOffer);
-    socket.on('answer', handleAnswer);
-    socket.on('ice-candidate', handleIceCandidate);
+    socket.on('sdp_offer', handleOffer);
+    socket.on('sdp_answer', handleAnswer);
+    socket.on('ice_candidate', handleIceCandidate);
     socket.on('user-joined', handleUserJoined);
     socket.on('user-left', handleUserLeft);
 
     return () => {
-      socket.off('offer', handleOffer);
-      socket.off('answer', handleAnswer);
-      socket.off('ice-candidate', handleIceCandidate);
+      socket.off('sdp_offer', handleOffer);
+      socket.off('sdp_answer', handleAnswer);
+      socket.off('ice_candidate', handleIceCandidate);
       socket.off('user-joined', handleUserJoined);
       socket.off('user-left', handleUserLeft);
     };

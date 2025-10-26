@@ -36,6 +36,8 @@ import {
   selectRingingType,
   selectIsCallMinimized,
   selectCallMinimizedFromRoute,
+  setLocalStream,
+  setRemoteStream,
 } from "../store/slice/callSlice";
 import { useCallSocket } from "./useCallSocket";
 import { useWebRTC } from "./useWebRTC"; // For regular 1-on-1 or group calls (NOT meetings)
@@ -78,9 +80,11 @@ export const useCallIntegration = () => {
   // =============== 📞 START CALL ==================
   const startCallMutation = useMutation({
     mutationFn: startCall,
-    onMutate: () => toast.loading("Starting call...", { id: "start-call" }),
+    onMutate: () => {
+      // Don't show loading toast - let the call UI handle feedback
+    },
     onSuccess: async (data) => {
-      toast.success("Call started successfully!", { id: "start-call" });
+      // Don't show success toast - call UI shows the state
       const callData = data?.call || data;
       dispatch(setOutgoingCall(callData));
       dispatch(setActiveCall(callData));
@@ -88,7 +92,7 @@ export const useCallIntegration = () => {
       dispatch(setShowOutgoingCallModal(true));
       dispatch(setCallStatus("connecting"));
       dispatch(setRingingState({ type: "outgoing", isRinging: true }));
-      
+
       // Initialize WebRTC immediately when call starts
       try {
         await initializeLocalStream();
@@ -96,7 +100,7 @@ export const useCallIntegration = () => {
       } catch (error) {
         console.error('Failed to initialize media:', error);
       }
-      
+
       startCallSocket(callData?.chat || callData?.chatId || callData?._id);
       queryClient.invalidateQueries(["callHistory"]);
     },
@@ -167,15 +171,17 @@ export const useCallIntegration = () => {
   // =============== 👥 JOIN CALL ==================
   const joinCallMutation = useMutation({
     mutationFn: joinCall,
-    onMutate: () => toast.loading("Joining call...", { id: "join-call" }),
+    onMutate: () => {
+      // Don't show loading toast - call UI handles feedback
+    },
     onSuccess: async (data) => {
-      toast.success("Joined call!", { id: "join-call" });
+      // Don't show success toast - call window opening is enough feedback
       dispatch(setActiveCall(data));
       dispatch(setShowCallWindow(true));
       dispatch(setShowIncomingCallModal(false));
       dispatch(setCallStatus("connected"));
       dispatch(setRingingState({ type: null, isRinging: false }));
-      
+
       // Initialize WebRTC when joining call
       try {
         await initializeLocalStream();
@@ -183,7 +189,7 @@ export const useCallIntegration = () => {
       } catch (error) {
         console.error('Failed to initialize media:', error);
       }
-      
+
       joinCallSocket(data?.call?._id || data?.callId || data?._id);
     },
     onError: (error) => {
@@ -313,13 +319,11 @@ export const useCallIntegration = () => {
       dispatch(addError(error.message));
     },
   });
-
-  // =============== 📥 FETCH CALL BY ID ==================
   const fetchCallById = async (callId) => {
     try {
       const data = await getCallById(callId);
       dispatch(setActiveCall(data));
-      
+
       // Re-initialize media streams if call is active
       if (data && data.status === 'active') {
         try {
@@ -329,7 +333,7 @@ export const useCallIntegration = () => {
           console.error('Failed to re-initialize media after fetch:', error);
         }
       }
-      
+
       return data;
     } catch (error) {
       toast.error(error.message);
@@ -337,25 +341,6 @@ export const useCallIntegration = () => {
       return null;
     }
   };
-
-  // =============== 🔄 RE-INITIALIZE MEDIA ON ACTIVE CALL RESTORE ==================
-  useEffect(() => {
-    const reinitializeMedia = async () => {
-      // If we have an active call but no local stream, re-initialize
-      if (activeCall && callStatus === 'connected' && !localStream) {
-        console.log('🔄 Re-initializing media streams for restored call');
-        try {
-          await initializeLocalStream();
-          joinCallRoom();
-        } catch (error) {
-          console.error('❌ Failed to re-initialize media:', error);
-          toast.error('Failed to access camera/microphone. Please check permissions.');
-        }
-      }
-    };
-
-    reinitializeMedia();
-  }, [activeCall, callStatus, localStream, initializeLocalStream, joinCallRoom]);
 
   // =============== 🧹 CLEANUP ON UNMOUNT OR CALL END ==================
   useEffect(() => {

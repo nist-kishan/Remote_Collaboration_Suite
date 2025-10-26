@@ -6,6 +6,7 @@ import ChatGroupMembersModal from './ChatGroupMembersModal';
 import { useSocket } from '../../hook/useSocket';
 import { useTyping } from '../../hook/useTyping';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
 
 const debounce = (func, wait) => {
   let timeout;
@@ -72,10 +73,16 @@ const ChatWindow = forwardRef(({
       }
 
       if (data.chatId === chat._id) {
+        // Invalidate queries to trigger refetch
         queryClient.invalidateQueries(['messages', chat._id]);
         queryClient.invalidateQueries(['chats']);
         queryClient.invalidateQueries(['recentChats']);
         queryClient.invalidateQueries(['groupChats']);
+
+        // Force immediate refetch to ensure UI updates
+        queryClient.refetchQueries(['messages', chat._id]).catch(err => {
+          console.error('❌ Failed to refetch messages:', err);
+        });
       }
     };
 
@@ -86,8 +93,11 @@ const ChatWindow = forwardRef(({
     const handleError = (error) => {
       if (typeof error === 'string') {
         if (error === 'Failed to send message' || error.includes('Failed to send message')) {
-          socket.connect();
+          // Silently handle - the message confirmation timeout will handle retry logic
+          return;
         }
+        // Log other errors
+        console.error('Chat error:', error);
       }
     };
 
@@ -117,63 +127,109 @@ const ChatWindow = forwardRef(({
 
   const handleSendMessage = (data) => {
     if (!chat?._id || isSendingMessage) {
-
       return;
     }
 
     setIsSendingMessage(true);
-    const messageId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const messageData = {
       chatId: chat._id,
       content: data.content,
       type: data.type || 'text',
-      tempId: messageId 
+      tempId: tempId
     };
 
     if (data.media) {
       messageData.media = data.media;
     }
 
-
     if (data.replyTo) {
       messageData.replyTo = data.replyTo;
     }
 
-    if (socket && socket.connected) {
-      setIsSendingMessage(false);
-
-      const confirmationHandler = (data) => {
-
-        queryClient.invalidateQueries(['messages', chat._id]);
-        queryClient.invalidateQueries(['chats']);
-        queryClient.invalidateQueries(['recentChats']);
-        queryClient.invalidateQueries(['groupChats']);
-        
-        socket.off('message_confirmed', confirmationHandler);
+    // Optimistically update UI immediately
+    queryClient.setQueryData(['messages', chat._id, 1, 50], (old) => {
+      if (!old) return old;
+      
+      const optimisticMessage = {
+        _id: tempId,
+        chat: chat._id,
+        sender: {
+          _id: 'current_user',
+          name: 'You',
+          avatar: null
+        },
+        content: data.content,
+        type: data.type || 'text',
+        media: data.media,
+        replyTo: data.replyTo,
+        createdAt: new Date().toISOString(),
+        readBy: [],
+        deliveredTo: [],
+        isOptimistic: true
       };
       
-      socket.on('message_confirmed', confirmationHandler);
+      return {
+        ...old,
+        data: {
+          ...old.data,
+          data: {
+            ...old.data.data,
+            messages: [...(old.data.data.messages || []), optimisticMessage]
+          }
+        }
+      };
+    });
 
+    // Reset sending state immediately for better UX
+    setIsSendingMessage(false);
+
+    if (!socket) {
+      console.error('❌ Socket instance is null');
+      toast.error('Connection error. Please refresh the page.');
+      return;
+    }
+
+    if (!socket.connected) {
+      socket.connect();
+      
+      const connectTimeout = setTimeout(() => {
+        console.error('❌ Socket reconnection timeout');
+        toast.error('Failed to connect. Please check your internet connection.');
+      }, 5000);
+
+      socket.once('connect', () => {
+        clearTimeout(connectTimeout);
+        socket.emit('join_chat', { chatId: chat._id });
+        socket.emit('send_message', messageData);
+        setupMessageConfirmation();
+      });
+      
+      return;
+    }
+
+    // Socket is connected, send immediately
+    socket.emit('send_message', messageData);
+    setupMessageConfirmation();
+
+    function setupMessageConfirmation() {
+      // Set up one-time listener for confirmation
+      const confirmationHandler = (confirmData) => {
+        if (confirmData.chatId === chat._id) {
+          // Only invalidate messages for this chat - socket will handle chat list updates
+          queryClient.invalidateQueries(['messages', chat._id]);
+          
+          // Clean up listener
+          socket.off('message_confirmed', confirmationHandler);
+        }
+      };
+
+      socket.once('message_confirmed', confirmationHandler);
+
+      // Reduced timeout for faster cleanup
       setTimeout(() => {
         socket.off('message_confirmed', confirmationHandler);
-      }, 5000);
-      
-      // Emit the message
-      socket.emit('send_message', messageData);
-
-      // Immediately invalidate queries to update chat list
-      queryClient.invalidateQueries(['recentChats']);
-      queryClient.invalidateQueries(['chats']);
-      queryClient.invalidateQueries(['groupChats']);
-    } else {
-      // Socket.IO not available, use API directly
-
-      // eslint-disable-next-line no-undef
-      sendMessageMutation.mutate({
-        chatId: chat._id,
-        data: { ...messageData, wasSentViaSocket: false } 
-      });
-      setTimeout(() => setIsSendingMessage(false), 1000);
+      }, 2000);
     }
   };
 

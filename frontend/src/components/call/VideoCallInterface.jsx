@@ -133,7 +133,8 @@ const VideoCallInterface = ({
     if (localStream && localVideoRef.current) {
       try {
         localVideoRef.current.srcObject = localStream;
-        } catch (error) {
+        console.log('✅ Local stream attached successfully');
+      } catch (error) {
         console.error('❌ Error setting local video stream:', error);
       }
     }
@@ -141,15 +142,28 @@ const VideoCallInterface = ({
     if (remoteStream && remoteVideoRef.current) {
       try {
         // Clear previous stream first
-        remoteVideoRef.current.srcObject = null;
+        if (remoteVideoRef.current.srcObject) {
+          remoteVideoRef.current.srcObject = null;
+        }
+
         remoteVideoRef.current.srcObject = remoteStream;
-        remoteVideoRef.current.load();
-        
+
+        // Enable audio playback
+        remoteVideoRef.current.muted = false;
+        remoteVideoRef.current.volume = 1.0;
+
         // Try to play the video
         const playPromise = remoteVideoRef.current.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
-            }).catch(error => {
+            console.log('✅ Remote video playing successfully');
+            // Check if audio tracks are available
+            const audioTracks = remoteStream.getAudioTracks();
+            console.log(`🎵 Remote stream audio tracks: ${audioTracks.length}`, audioTracks);
+            if (audioTracks.length > 0) {
+              console.log('✅ Audio track detected:', audioTracks[0].enabled, audioTracks[0].readyState);
+            }
+          }).catch(error => {
             console.warn('⚠️ Remote video play failed:', error);
             // Retry after a short delay
             setTimeout(() => {
@@ -500,6 +514,7 @@ const VideoCallInterface = ({
           <video
             ref={remoteVideoRef}
             autoPlay
+            playsInline
             className="w-full h-full object-cover"
           />
           

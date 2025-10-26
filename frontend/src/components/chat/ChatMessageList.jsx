@@ -38,22 +38,30 @@ const MessageList = ({
   const messages = messagesData?.data?.data?.messages || [];
   const pagination = messagesData?.data?.data?.pagination;
 
+  // Track when data changes for debugging (disabled in production)
+  // Removed console logs to reduce clutter
+
+  // Force component update when data changes
+  const [, forceUpdate] = useState(0);
+
   useEffect(() => {
     if (messages.length > 0) {
       if (page === 1) {
         setAllMessages(messages);
+        forceUpdate(prev => prev + 1); // Force re-render
       } else {
         setAllMessages((prev) => {
           const existingIds = new Set(prev.map((msg) => msg._id));
           const newMessages = messages.filter(
             (msg) => !existingIds.has(msg._id)
           );
-          return [...newMessages, ...prev];
+          const updated = [...newMessages, ...prev];
+          return updated;
         });
       }
       setHasMore(pagination ? page < pagination.pages : false);
     }
-  }, [messages, page, pagination]);
+  }, [messages, page, pagination, chatId, messagesData]); // Added messagesData and chatId to dependencies
 
   useEffect(() => {
     if (page === 1) {

@@ -37,7 +37,9 @@ const IncomingCallModal = ({
 
   if (!isVisible || !incomingCall) return null;
 
-  const { call, fromUserName, fromUserAvatar } = incomingCall;
+  // Extract caller info from incomingCall
+  const fromUserName = incomingCall?.fromUserName || incomingCall?.caller?.name || 'Unknown User';
+  const fromUserAvatar = incomingCall?.fromUserAvatar || incomingCall?.caller?.avatar || null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
@@ -56,14 +58,21 @@ const IncomingCallModal = ({
         {/* Caller Avatar */}
         <div className="mb-8">
           <div className="relative inline-block">
-            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl">
+            <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl bg-gradient-to-br from-blue-500 to-purple-600">
               {fromUserAvatar ? (
-                <UserProfileAvatar user={{ avatar: fromUserAvatar }} size="xl" />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <User className="w-16 h-16 text-white" />
-                </div>
-              )}
+                <img 
+                  src={fromUserAvatar} 
+                  alt={fromUserName}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              <div className="w-full h-full flex items-center justify-center" style={{ display: fromUserAvatar ? 'none' : 'flex' }}>
+                <User className="w-16 h-16 text-white" />
+              </div>
             </div>
             
             {/* Ringing Animation */}

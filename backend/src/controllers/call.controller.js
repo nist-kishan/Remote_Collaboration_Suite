@@ -121,6 +121,17 @@ export const joinCall = async (req, res) => {
         existingParticipant.status = "joined";
         existingParticipant.joinedAt = new Date();
         await call.save();
+
+        // Emit socket event to notify other participants
+        const io = global.io;
+        if (io) {
+          io.to(`call:${callId}`).emit("user_joined_call", {
+            callId,
+            userId,
+            user: req.user,
+            call: call
+          });
+        }
       }
     } else {
       call.participants.push({
@@ -129,6 +140,17 @@ export const joinCall = async (req, res) => {
         joinedAt: new Date(),
       });
       await call.save();
+
+      // Emit socket event to notify other participants
+      const io = global.io;
+      if (io) {
+        io.to(`call:${callId}`).emit("user_joined_call", {
+          callId,
+          userId,
+          user: req.user,
+          call: call
+        });
+      }
     }
 
     await call.populate("participants.user", "name avatar");

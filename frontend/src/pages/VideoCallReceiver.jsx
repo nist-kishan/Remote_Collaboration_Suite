@@ -67,7 +67,7 @@ const VideoCallReceiver = () => {
       localStorage.setItem("activeCallData", JSON.stringify(updatedCallData));
 
       // Call status is managed by useCall hook
-      toast.success("Call accepted");
+      // Don't show toast - UI clearly shows call is connected
     } catch (error) {
       toast.error("Failed to accept call");
     }

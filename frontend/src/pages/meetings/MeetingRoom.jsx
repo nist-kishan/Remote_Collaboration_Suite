@@ -148,7 +148,7 @@ const MeetingRoom = () => {
       if (response.data) {
         setPasswordValidated(true);
         setShowPasswordModal(false);
-        toast.success('Password verified successfully!');
+        // Don't show toast - modal closing is enough feedback
       }
     } catch (error) {
       console.error('Password validation error:', error);

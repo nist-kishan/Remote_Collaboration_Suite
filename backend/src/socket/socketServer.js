@@ -385,6 +385,21 @@ class SocketServer {
       // Handle canvas state sync
       socket.on("canvas_state", (data) => {
         if (socket.currentWhiteboardId) {
+          // Check canvas data size to prevent performance issues
+          const dataSize = JSON.stringify(data).length;
+          const MAX_CANVAS_SIZE = 1000000; // 1MB limit
+          
+          if (dataSize > MAX_CANVAS_SIZE) {
+            socket.emit("error", { 
+              message: "Canvas data too large. Please simplify your drawing or clear some elements.",
+              code: "CANVAS_SIZE_EXCEEDED",
+              maxSize: MAX_CANVAS_SIZE,
+              currentSize: dataSize
+            });
+            console.warn(`⚠️ Canvas size exceeded: ${dataSize} bytes (max: ${MAX_CANVAS_SIZE})`);
+            return;
+          }
+          
           socket.to(`whiteboard:${socket.currentWhiteboardId}`).emit("canvas_state", {
             ...data,
             userId: socket.userId,
@@ -960,11 +975,15 @@ class SocketServer {
           socket.emit("message_confirmed", {
             messageId: message._id,
             content: message.content,
-            chatId: cleanChatId
+            chatId: cleanChatId,
+            message: message // Include full message object
           });
 
           // Broadcast to all users in the chat
-          
+          // Get the number of clients in the room
+          const room = this.io.sockets.adapter.rooms.get(`chat:${cleanChatId}`);
+          const clientCount = room ? room.size : 0;
+
           const broadcastData = {
             message,
             chatId: cleanChatId,
@@ -975,15 +994,15 @@ class SocketServer {
             }
           };
 
-          // Get the number of clients in the room
-          const room = this.io.sockets.adapter.rooms.get(`chat:${cleanChatId}`);
-          const clientCount = room ? room.size : 0;
-          
+          console.log(`📢 Broadcasting new message to chat:${cleanChatId} (${clientCount} clients)`);
+
+          // Broadcast to chat room (excluding sender if needed)
           this.io.to(`chat:${cleanChatId}`).emit("new_message", broadcastData);
-          
-          // Also emit to individual users as backup
+
+          // Also emit to individual users as backup (excluding sender)
           chat.participants.forEach(participant => {
             if (participant.user._id.toString() !== cleanSenderId.toString()) {
+              console.log(`📬 Sending new_message to user:${participant.user._id}`);
               this.io.to(`user:${participant.user._id}`).emit("new_message", broadcastData);
             }
           });
@@ -999,13 +1018,22 @@ class SocketServer {
           });
 
         } catch (error) {
+          console.error('❌ Error in send_message handler:', error);
+          console.error('❌ Error details:', {
+            name: error.name,
+            message: error.message,
+            code: error.code,
+            stack: error.stack?.split('\n').slice(0, 3).join('\n')
+          });
           
           // Send more specific error message
           let errorMessage = "Failed to send message";
           if (error.name === 'ValidationError') {
             errorMessage = "Invalid message data";
+            console.error('❌ Validation errors:', error.errors);
           } else if (error.name === 'CastError') {
             errorMessage = "Invalid chat or user ID";
+            console.error('❌ Cast error path:', error.path, 'value:', error.value);
           } else if (error.code === 11000) {
             errorMessage = "Duplicate message";
           }
@@ -1256,55 +1284,13 @@ class SocketServer {
             }
           });
 
-          // Set auto-termination timer (45 seconds = 45000ms)
-          const timeoutId = setTimeout(async () => {
-            try {
-              const activeCall = this.activeCalls.get(call._id.toString());
-              if (activeCall && activeCall.status === 'ringing') {
-                
-                // Update call status in database
-                await Call.findByIdAndUpdate(call._id, {
-                  status: 'missed',
-                  endedAt: new Date()
-                });
-                
-                // Remove from active calls
-                this.activeCalls.delete(call._id.toString());
-                
-                // Clear the timeout reference
-                this.callTimeouts.delete(call._id.toString());
-                
-                // Notify all participants
-                this.io.to(`call:${call._id}`).emit("call_ended", {
-                  callId: call._id,
-                  reason: 'missed',
-                  message: 'Call not answered within 45 seconds'
-                });
-                
-                // Also notify individual participants
-                call.participants.forEach(participant => {
-                  this.io.to(`user:${participant.user._id}`).emit("call_ended", {
-                    callId: call._id,
-                    reason: 'missed',
-                    message: 'Call not answered within 45 seconds'
-                  });
-                });
-                
-              }
-            } catch (error) {
-              }
-          }, parseInt(process.env.CALL_TIMEOUT_MS) || 45000); // Use environment variable
-          
-          // Store timeout reference for cleanup
-          this.callTimeouts.set(call._id.toString(), timeoutId);
-
           socket.emit("call_started", { 
             call,
             ringing: true
           });
 
-          // Set timeout to mark call as missed if not answered
-          const timeoutDuration = parseInt(process.env.CALL_TIMEOUT_MS) || 30000; // 30 seconds
+          // Set single timeout to mark call as missed if not answered (30 seconds)
+          const timeoutDuration = parseInt(process.env.CALL_TIMEOUT_MS) || 30000;
           const missedTimeoutId = setTimeout(async () => {
             try {
               const currentCall = await Call.findById(call._id);
@@ -1327,22 +1313,29 @@ class SocketServer {
                 // Clear timeout from tracking
                 this.callTimeouts.delete(call._id.toString());
                 
-                // Notify all participants
-                this.io.to(`call:${call._id}`).emit("call_missed", {
+                // Notify all participants with call_ended event (consistent event name)
+                this.io.to(`call:${call._id}`).emit("call_ended", {
                   callId: call._id,
-                  call: currentCall
+                  reason: 'missed',
+                  message: 'Call not answered'
+                });
+                
+                // Also notify individual participants
+                call.participants.forEach(participant => {
+                  this.io.to(`user:${participant.user._id}`).emit("call_ended", {
+                    callId: call._id,
+                    reason: 'missed',
+                    message: 'Call not answered'
+                  });
                 });
               }
             } catch (error) {
-              // Error handling call timeout
+              console.error('Error in call timeout:', error);
             }
           }, timeoutDuration);
           
-          // Store missed timeout reference
-          this.callTimeouts.set(`missed_${call._id}`, missedTimeoutId);
-          
-          // Store timeout ID for potential cancellation
-          this.callTimeouts.set(call._id.toString(), timeoutId);
+          // Store timeout reference for cleanup
+          this.callTimeouts.set(call._id.toString(), missedTimeoutId);
 
         } catch (error) {
           console.error('❌ Error in start_call handler:', error.message);
@@ -1719,33 +1712,8 @@ class SocketServer {
         }
       });
 
-      // WebRTC Signaling Events
-      socket.on("ice_candidate", (data) => {
-        const { callId, candidate } = data;
-        socket.to(`call:${callId}`).emit("ice_candidate", {
-          callId,
-          candidate,
-          fromUserId: socket.userId
-        });
-      });
-
-      socket.on("sdp_offer", (data) => {
-        const { callId, offer } = data;
-        socket.to(`call:${callId}`).emit("sdp_offer", {
-          callId,
-          offer,
-          fromUserId: socket.userId
-        });
-      });
-
-      socket.on("sdp_answer", (data) => {
-        const { callId, answer } = data;
-        socket.to(`call:${callId}`).emit("sdp_answer", {
-          callId,
-          answer,
-          fromUserId: socket.userId
-        });
-      });
+      // WebRTC Signaling Events - Removed duplicate handlers
+      // Proper peer-to-peer signaling is handled below at lines 1944-2001
 
       // Task management events
       socket.on("join_project", (data) => {
@@ -1887,30 +1855,27 @@ class SocketServer {
 
       // ========== WEBRTC SIGNALING EVENTS FOR MEETINGS ==========
       
-      // Join call - WebRTC room for signaling
-      socket.on("join-call", (data) => {
-        const { callId, userId } = data;
-        if (callId) {
-          const userIdToUse = userId || socket.userId;
-          console.log(`📞 User ${userIdToUse} joining WebRTC call: ${callId}`);
-          
-          socket.join(`call:${callId}`);
-          socket.currentCallId = callId;
-          
-          // Track user in call room
-          if (!this.callRooms.has(callId)) {
-            this.callRooms.set(callId, new Map());
-          }
-          this.callRooms.get(callId).set(userIdToUse, socket.id);
-          
-          // Notify others that a new user joined (for WebRTC peer connection setup)
-          socket.to(`call:${callId}`).emit("user-joined", {
-            userId: userIdToUse,
-            user: socket.user
-          });
-          
-          console.log(`✅ User ${userIdToUse} joined call room: ${callId}`);
+      // Handle user joined call (trigger WebRTC signaling)
+      socket.on("user_joined_call", async (data) => {
+        const { callId, userId, user, call } = data;
+
+        // Add user to call room if not already there
+        socket.join(`call:${callId}`);
+        socket.currentCallId = callId;
+
+        // Track user in call room
+        if (!this.callRooms.has(callId)) {
+          this.callRooms.set(callId, new Map());
         }
+        this.callRooms.get(callId).set(userId, socket.id);
+
+        // Notify others that a new user joined (for WebRTC peer connection setup)
+        socket.to(`call:${callId}`).emit("user-joined", {
+          userId: userId,
+          user: user
+        });
+
+        console.log(`✅ User ${userId} joined call room: ${callId} via API`);
       });
 
       // Leave call - WebRTC room cleanup
@@ -1941,45 +1906,47 @@ class SocketServer {
       });
 
       // WebRTC Offer - Send offer to specific peer
-      socket.on("offer", (data) => {
+      socket.on("sdp_offer", (data) => {
         const { callId, offer, to } = data;
-        console.log(`📤 Relaying offer from ${socket.userId} to ${to} in call ${callId}`);
-        
+        console.log(`📤 Relaying SDP offer from ${socket.userId} to ${to} in call ${callId}`);
+
         // Get target socket ID
         const targetSocketId = this.callRooms.get(callId)?.get(to);
-        
+
         if (targetSocketId) {
           // Send offer to the specific peer
-          this.io.to(targetSocketId).emit("offer", {
-            from: socket.userId,
+          this.io.to(targetSocketId).emit("sdp_offer", {
+            fromUserId: socket.userId,
             offer: offer
           });
+          console.log(`✅ SDP offer relayed successfully`);
         } else {
           console.warn(`⚠️ Target user ${to} not found in call ${callId}`);
         }
       });
 
       // WebRTC Answer - Send answer to specific peer
-      socket.on("answer", (data) => {
+      socket.on("sdp_answer", (data) => {
         const { callId, answer, to } = data;
-        console.log(`📤 Relaying answer from ${socket.userId} to ${to} in call ${callId}`);
-        
+        console.log(`📤 Relaying SDP answer from ${socket.userId} to ${to} in call ${callId}`);
+
         // Get target socket ID
         const targetSocketId = this.callRooms.get(callId)?.get(to);
-        
+
         if (targetSocketId) {
           // Send answer to the specific peer
-          this.io.to(targetSocketId).emit("answer", {
-            from: socket.userId,
+          this.io.to(targetSocketId).emit("sdp_answer", {
+            fromUserId: socket.userId,
             answer: answer
           });
+          console.log(`✅ SDP answer relayed successfully`);
         } else {
           console.warn(`⚠️ Target user ${to} not found in call ${callId}`);
         }
       });
 
       // WebRTC ICE Candidate - Exchange ICE candidates
-      socket.on("ice-candidate", (data) => {
+      socket.on("ice_candidate", (data) => {
         const { callId, candidate, to } = data;
         console.log(`🧊 Relaying ICE candidate from ${socket.userId} to ${to} in call ${callId}`);
         
@@ -1988,8 +1955,8 @@ class SocketServer {
         
         if (targetSocketId) {
           // Send ICE candidate to the specific peer
-          this.io.to(targetSocketId).emit("ice-candidate", {
-            from: socket.userId,
+          this.io.to(targetSocketId).emit("ice_candidate", {
+            fromUserId: socket.userId,
             candidate: candidate
           });
         } else {

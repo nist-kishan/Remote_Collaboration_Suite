@@ -154,7 +154,7 @@ const VideoCallCaller = () => {
 
     const handleCallAccepted = (data) => {
       setCallData(data.call);
-      toast.success(`Call accepted by ${data.acceptedByName}`);
+      // Don't show toast - call UI shows connection status
     };
 
     const handleCallRejected = (data) => {

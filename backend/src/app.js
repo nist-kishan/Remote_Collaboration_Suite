@@ -53,8 +53,9 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
 app.use("/api/", apiLimiter);
-app.use("/api/v1/auth/", authLimiter);
-app.use("/api/v1/auth/me", authCheckLimiter);
+// Apply more specific rate limiters first (Express matches in order)
+app.use("/api/v1/auth/me", authCheckLimiter); // More lenient for auth checks
+app.use("/api/v1/auth/", authLimiter); // Stricter for other auth endpoints
 app.use("/api/v1/documents/upload", uploadLimiter);
 app.use("/api/v1/whiteboards/upload", uploadLimiter);
 
