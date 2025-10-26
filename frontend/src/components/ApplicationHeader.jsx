@@ -1,12 +1,12 @@
 import { useState, useCallback, useMemo, memo } from "react";
 import {
   MessageSquare,
-  Video,
   FileText,
   PenTool,
-  FolderOpen,
+  Building2,
   Menu,
   X,
+  Users,
 } from "lucide-react";
 import ApplicationBrandName from "./Header/ApplicationBrandName";
 import MainNavigationBar from "./Header/MainNavigationBar";
@@ -24,10 +24,10 @@ const Header = memo(() => {
   const navLinks = useMemo(
     () => [
       { name: "Chat", path: "/chat", icon: <MessageSquare size={18} /> },
-      { name: "Video Call", path: "/video-call", icon: <Video size={18} /> },
+      { name: "Meeting", path: "/meetings", icon: <Users size={18} /> },
       { name: "Documents", path: "/documents", icon: <FileText size={18} /> },
       { name: "Whiteboards", path: "/boards", icon: <PenTool size={18} /> },
-      { name: "Projects", path: "/projects", icon: <FolderOpen size={18} /> },
+      { name: "Workspace", path: "/workspaces", icon: <Building2 size={18} /> },
     ],
     []
   );
@@ -36,7 +36,7 @@ const Header = memo(() => {
   const toggleMenu = useCallback(() => setMenuOpen((prev) => !prev), []);
 
   return (
-    <header className="fixed top-0 left-0 w-full bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 z-50">
+    <header className="fixed top-0 left-0 w-full bg-white/90 dark:bg-gray-900/90 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
         <ApplicationBrandName />
         <MainNavigationBar navLinks={navLinks} />

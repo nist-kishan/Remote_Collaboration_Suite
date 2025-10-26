@@ -4,13 +4,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandle } from '../utils/asyncHandler.js';
 import { uploadOnCloudinary } from '../utils/uploadOnCloudinary.js';
-
-// Test endpoint to verify API is working
-export const testMessage = asyncHandle(async (req, res) => {
-  return res.status(200).json(
-    new ApiResponse(200, 'Test endpoint working', { test: true })
-  );
-});
+import { upload, optimizeMedia, handleUploadError } from '../middleware/compression.middleware.js';
 
 // Send message - Simplified version matching Socket.IO handler
 export const sendMessage = asyncHandle(async (req, res) => {
@@ -19,11 +13,9 @@ export const sendMessage = asyncHandle(async (req, res) => {
     const { chatId } = req.params;
     const { content, type, media, replyTo } = req.body;
 
-
     // Clean up undefined values exactly like Socket.IO handler
     const cleanReplyTo = (replyTo && replyTo !== 'undefined' && replyTo !== 'null') ? replyTo : null;
     const cleanMedia = (media && media !== 'undefined' && media !== 'null') ? media : null;
-
 
     // Validate exactly like Socket.IO handler
     if (!content && !cleanMedia && !cleanReplyTo) {
@@ -84,7 +76,6 @@ export const sendMessage = asyncHandle(async (req, res) => {
         }
       });
     } catch (error) {
-      console.error('Error updating unreadCount:', error);
       // Fallback: create new Map and set counts
       chat.unreadCount = new Map();
       chat.participants.forEach(participant => {
@@ -102,7 +93,6 @@ export const sendMessage = asyncHandle(async (req, res) => {
     const wasSentViaSocket = req.body.wasSentViaSocket;
     
     if (global.io && !wasSentViaSocket) {
-      // console.log(`API: Broadcasting message to chat room: chat:${chatId}`);
       global.io.to(`chat:${chatId}`).emit("new_message", {
         message,
         chatId,
@@ -112,19 +102,16 @@ export const sendMessage = asyncHandle(async (req, res) => {
           avatar: message.sender.avatar
         }
       });
-      // console.log('API: Message broadcasted to chat:', chatId);
     } else if (wasSentViaSocket) {
-      // console.log('API: Message was sent via Socket.IO, skipping broadcast to prevent duplicates');
+      // Message was sent via Socket.IO, skipping broadcast to prevent duplicates
     } else {
-      // console.log('API: Socket.IO not available for broadcasting');
+      // Socket.IO not available for broadcasting
     }
 
     return res.status(201).json(
       new ApiResponse(201, 'Message sent successfully', { message })
     );
   } catch (error) {
-    console.error('Unexpected error in sendMessage:', error);
-    console.error('Error stack:', error.stack);
     throw new ApiError(500, 'Internal server error: ' + error.message);
   }
 });
@@ -159,7 +146,6 @@ export const getChatMessages = asyncHandle(async (req, res) => {
     .skip((page - 1) * limit);
 
   const total = await Message.countDocuments({ chat: chatId });
-
 
   return res.status(200).json(
     new ApiResponse(200, 'Messages fetched successfully', {
@@ -380,7 +366,6 @@ export const markAsRead = asyncHandle(async (req, res) => {
       chat.unreadCount.set(userId.toString(), 0);
     }
   } catch (error) {
-    console.error('Error setting unreadCount:', error);
     // Fallback: create new Map
     chat.unreadCount = new Map();
     chat.unreadCount.set(userId.toString(), 0);
@@ -516,7 +501,6 @@ export const getUnreadCount = asyncHandle(async (req, res) => {
       unreadCount = chat.unreadCount[userId.toString()] || 0;
     }
   } catch (error) {
-    console.error('Error accessing unreadCount:', error);
     unreadCount = 0;
   }
 
@@ -554,7 +538,6 @@ export const getTotalUnreadCount = asyncHandle(async (req, res) => {
         userUnreadCount = chat.unreadCount[userId.toString()] || 0;
       }
     } catch (error) {
-      console.error('Error accessing unreadCount for chat:', chat._id, error);
       userUnreadCount = 0;
     }
     totalUnreadCount += userUnreadCount;
@@ -568,7 +551,11 @@ export const getTotalUnreadCount = asyncHandle(async (req, res) => {
 });
 
 // Upload file for chat
-export const uploadFile = asyncHandle(async (req, res) => {
+export const uploadFile = [
+  upload.single('file'),
+  optimizeMedia,
+  handleUploadError,
+  asyncHandle(async (req, res) => {
   const userId = req.user._id;
   const { chatId } = req.params;
   const { type } = req.body;
@@ -605,12 +592,6 @@ export const uploadFile = asyncHandle(async (req, res) => {
   try {
     // Upload file to Cloudinary
     const fileLocalPath = req.file.path;
-    // console.log('Uploading file:', {
-    //   originalName: req.file.originalname,
-    //   localPath: fileLocalPath,
-    //   size: req.file.size,
-    //   mimetype: req.file.mimetype
-    // });
     
     const cloudinaryResponse = await uploadOnCloudinary(fileLocalPath);
 
@@ -674,8 +655,8 @@ export const uploadFile = asyncHandle(async (req, res) => {
     );
 
   } catch (error) {
-    console.error('Upload error details:', error);
     throw new ApiError(500, 'Failed to upload file: ' + error.message);
   }
-});
+  })
+];
 

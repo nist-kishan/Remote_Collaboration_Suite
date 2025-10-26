@@ -89,7 +89,6 @@ const UserSearch = ({ onSelectUser, onStartChat, placeholder = "Search users..."
     <div className="relative" ref={searchRef}>
       {/* Search Input */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
           placeholder={placeholder || "Search by name, email, username, or phone..."}
@@ -112,7 +111,6 @@ const UserSearch = ({ onSelectUser, onStartChat, placeholder = "Search users..."
         >
           {searchTerm.length < 2 ? (
             <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-              <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p>Type at least 2 characters to search</p>
             </div>
           ) : error ? (
@@ -126,9 +124,9 @@ const UserSearch = ({ onSelectUser, onStartChat, placeholder = "Search users..."
             </div>
           ) : (
             <div className="py-2">
-              {users.map((user) => (
+              {users.map((user, index) => (
                 <div
-                  key={user._id}
+                  key={user._id || `user-search-${index}`}
                   onClick={() => handleUserSelect(user)}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                 >

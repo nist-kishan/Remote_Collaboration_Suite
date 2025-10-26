@@ -8,7 +8,6 @@ import {
   rejectCall,
   markCallAsMissed,
   cleanupMissedCalls,
-  debugCallStatus,
   getCallById,
   deleteCall,
   clearCallHistory
@@ -30,9 +29,6 @@ router.delete('/:callId', verifyToken, deleteCall);
 // Missed call management routes
 router.post('/:callId/missed', verifyToken, markCallAsMissed);
 router.post('/cleanup-missed', verifyToken, cleanupMissedCalls);
-
-// Debug routes
-router.get('/debug/:callId', verifyToken, debugCallStatus);
 
 export { router as callRouter };
 

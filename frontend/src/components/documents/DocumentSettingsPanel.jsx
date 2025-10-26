@@ -1,7 +1,7 @@
 import React from "react";
 import { X, Users } from "lucide-react";
 import Button from "../ui/Button";
-import Input from "../ui/Input";
+import Input from "../ui/CustomInput";
 
 const DocumentSettingsModal = ({
   isOpen,

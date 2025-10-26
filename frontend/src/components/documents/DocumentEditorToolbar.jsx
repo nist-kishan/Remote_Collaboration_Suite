@@ -196,7 +196,7 @@ const DocumentToolbar = ({
             >
               <Share className="w-4 h-4" />
               <span className="hidden lg:inline">Share</span>
-            </Button>
+            </CustomButton>
           )}
           <CustomButton
             variant="ghost"
@@ -207,7 +207,7 @@ const DocumentToolbar = ({
           >
             <Download className="w-4 h-4" />
             <span className="hidden lg:inline">Download</span>
-          </Button>
+          </CustomButton>
           {canChangeSettings && (
             <CustomButton
               variant="ghost"
@@ -218,7 +218,7 @@ const DocumentToolbar = ({
             >
               <Settings className="w-4 h-4" />
               <span className="hidden lg:inline">Settings</span>
-            </Button>
+            </CustomButton>
           )}
         </div>
       </div>
@@ -241,7 +241,7 @@ const DocumentToolbar = ({
               className="p-3"
             >
               <Settings className="w-4 h-4" />
-            </Button>
+            </CustomButton>
           )}
         </div>
       </div>

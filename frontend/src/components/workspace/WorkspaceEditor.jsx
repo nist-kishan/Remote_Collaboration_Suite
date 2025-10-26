@@ -226,4 +226,3 @@ const EditWorkspaceModal = ({ isOpen, onClose, workspace }) => {
 
 export default EditWorkspaceModal;
 
-

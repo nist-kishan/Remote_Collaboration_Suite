@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import MessageBubble from '../ui/MessageBubble';
-import TypingIndicator from '../ui/TypingIndicator';
+import MessageBubble from '../ui/ChatMessageBubble';
+import TypingIndicator from '../ui/ChatTypingIndicator';
 import { SkeletonMessageList } from '../ui/Skeleton';
 import { useChat } from '../../hook/useChat';
+import { useMessages, useEditMessage, useDeleteMessage, useAddReaction } from '../../hook/useMessages';
 
 const MessageList = ({ 
   chatId, 

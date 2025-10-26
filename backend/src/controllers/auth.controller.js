@@ -12,7 +12,7 @@ import {
 import { generateAccessAndRefreshToken } from "../utils/generateAccessTokenAndRefreshToken.js";
 import { options } from "../constraint/options.contraint.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { sendEmail } from "../utils/sendMail.js";
+import { sendMail } from "../utils/sendMail.js";
 import { otpTemplate, resetPasswordTemplate } from "../utils/mailTemplates.js";
 import crypto from "crypto";
 import { generateOTP } from "../utils/generateOtp.js";
@@ -270,14 +270,14 @@ export const resetPasswordHandler = asyncHandle(async (req, res) => {
 
   await user.save({ validateBeforeSave: false });
 
-  const frontUrl = process.env.FRONTEND_URI
+  const frontUrl = process.env.FRONTEND_URI;
   const resetUrl = `${frontUrl}/reset-password/${resetToken}`;
 
   try {
-    await sendEmail({
-      email: user.email,
+    await sendMail({
+      to: user.email,
       subject: "Reset Your Password",
-      message: `Click this link to reset: ${resetUrl}`,
+      text: `Click this link to reset: ${resetUrl}`,
       html: resetPasswordTemplate(user.name, resetUrl),
     });
     return res
@@ -353,10 +353,10 @@ export const otpSendHandler = asyncHandle(async (req, res) => {
   }
 
   try {
-    await sendEmail({
-      email: user.email,
+    await sendMail({
+      to: user.email,
       subject: "Your OTP Code",
-      message: `Your OTP is: ${otp}`,
+      text: `Your OTP is: ${otp}`,
       html: otpTemplate(user.name, otp),
     });
 

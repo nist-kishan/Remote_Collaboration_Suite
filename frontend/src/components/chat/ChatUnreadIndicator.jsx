@@ -20,7 +20,6 @@ const UnreadBadge = ({ chatId, className = '' }) => {
   }
 
   if (error) {
-    console.error('Error fetching unread count:', error);
     return null;
   }
 

@@ -1,141 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import {
-  createDocument,
-  getUserDocuments,
-  getDocument,
-  updateDocument,
-  deleteDocument,
-  shareDocument,
-  updateCollaboratorRole,
-  removeCollaborator,
-  shareDocumentViaEmail,
-  searchDocuments
-} from '../../api/documentApi';
-
-// Async thunks for API calls
-export const fetchDocuments = createAsyncThunk(
-  'documents/fetchDocuments',
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await getUserDocuments(params);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch documents');
-    }
-  }
-);
-
-export const fetchDocument = createAsyncThunk(
-  'documents/fetchDocument',
-  async (documentId, { rejectWithValue }) => {
-    try {
-      if (!documentId) {
-        throw new Error('Document ID is required');
-      }
-      const response = await getDocument(documentId);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || error.message || 'Failed to fetch document');
-    }
-  }
-);
-
-export const createNewDocument = createAsyncThunk(
-  'documents/createDocument',
-  async (documentData, { rejectWithValue }) => {
-    try {
-      const response = await createDocument(documentData);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create document');
-    }
-  }
-);
-
-export const updateDocumentThunk = createAsyncThunk(
-  'documents/updateDocument',
-  async ({ documentId, data }, { rejectWithValue }) => {
-    try {
-      const response = await updateDocument(documentId, data);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update document');
-    }
-  }
-);
-
-export const deleteDocumentThunk = createAsyncThunk(
-  'documents/deleteDocument',
-  async (documentId, { rejectWithValue }) => {
-    try {
-      await deleteDocument(documentId);
-      return documentId;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to delete document');
-    }
-  }
-);
-
-export const shareDocumentThunk = createAsyncThunk(
-  'documents/shareDocument',
-  async ({ documentId, data }, { rejectWithValue }) => {
-    try {
-      const response = await shareDocument(documentId, data);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to share document');
-    }
-  }
-);
-
-export const updateCollaboratorRoleThunk = createAsyncThunk(
-  'documents/updateCollaboratorRole',
-  async ({ documentId, userId, role }, { rejectWithValue }) => {
-    try {
-      const response = await updateCollaboratorRole(documentId, userId, role);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update collaborator role');
-    }
-  }
-);
-
-export const removeCollaboratorThunk = createAsyncThunk(
-  'documents/removeCollaborator',
-  async ({ documentId, userId }, { rejectWithValue }) => {
-    try {
-      await removeCollaborator(documentId, userId);
-      return { documentId, userId };
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to remove collaborator');
-    }
-  }
-);
-
-export const shareDocumentViaEmailThunk = createAsyncThunk(
-  'documents/shareDocumentViaEmail',
-  async ({ documentId, data }, { rejectWithValue }) => {
-    try {
-      const response = await shareDocumentViaEmail(documentId, data);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to send email invitations');
-    }
-  }
-);
-
-
-export const searchDocumentsThunk = createAsyncThunk(
-  'documents/searchDocuments',
-  async (searchParams, { rejectWithValue }) => {
-    try {
-      const response = await searchDocuments(searchParams);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to search documents');
-    }
-  }
-);
+import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
   // Documents list
@@ -147,8 +10,7 @@ const initialState = {
   currentDocument: null,
   documentLoading: false,
   documentError: null,
-  
-  
+
   // Search
   searchResults: [],
   searchLoading: false,
@@ -307,149 +169,6 @@ const documentSlice = createSlice({
       state.documents.unshift(action.payload);
     }
   },
-  extraReducers: (builder) => {
-    builder
-      // Fetch Documents
-      .addCase(fetchDocuments.pending, (state) => {
-        state.documentsLoading = true;
-        state.documentsError = null;
-      })
-      .addCase(fetchDocuments.fulfilled, (state, action) => {
-        state.documentsLoading = false;
-        state.documents = action.payload.documents || [];
-      })
-      .addCase(fetchDocuments.rejected, (state, action) => {
-        state.documentsLoading = false;
-        state.documentsError = action.payload;
-      })
-      
-      // Fetch Single Document
-      .addCase(fetchDocument.pending, (state) => {
-        state.documentLoading = true;
-        state.documentError = null;
-      })
-      .addCase(fetchDocument.fulfilled, (state, action) => {
-        state.documentLoading = false;
-        state.currentDocument = action.payload.document;
-      })
-      .addCase(fetchDocument.rejected, (state, action) => {
-        state.documentLoading = false;
-        state.documentError = action.payload;
-      })
-      
-      // Create Document
-      .addCase(createNewDocument.pending, (state) => {
-        state.operations.creating = true;
-      })
-      .addCase(createNewDocument.fulfilled, (state, action) => {
-        state.operations.creating = false;
-        state.documents.unshift(action.payload.document);
-        state.currentDocument = action.payload.document;
-        state.editorState.hasChanges = false;
-      })
-      .addCase(createNewDocument.rejected, (state, action) => {
-        state.operations.creating = false;
-        state.documentError = action.payload;
-      })
-      
-      // Update Document
-      .addCase(updateDocumentThunk.pending, (state) => {
-        state.operations.updating = true;
-      })
-      .addCase(updateDocumentThunk.fulfilled, (state, action) => {
-        state.operations.updating = false;
-        const updatedDocument = action.payload.document;
-        
-        // Update in documents list
-        const index = state.documents.findIndex(doc => doc._id === updatedDocument._id);
-        if (index !== -1) {
-          state.documents[index] = updatedDocument;
-        }
-        
-        // Update current document
-        if (state.currentDocument?._id === updatedDocument._id) {
-          state.currentDocument = updatedDocument;
-        }
-        
-        state.editorState.hasChanges = false;
-      })
-      .addCase(updateDocumentThunk.rejected, (state, action) => {
-        state.operations.updating = false;
-        state.documentError = action.payload;
-      })
-      
-      // Delete Document
-      .addCase(deleteDocumentThunk.pending, (state) => {
-        state.operations.deleting = true;
-      })
-      .addCase(deleteDocumentThunk.fulfilled, (state, action) => {
-        state.operations.deleting = false;
-        const documentId = action.payload;
-        state.documents = state.documents.filter(doc => doc._id !== documentId);
-        
-        if (state.currentDocument?._id === documentId) {
-          state.currentDocument = null;
-        }
-      })
-      .addCase(deleteDocumentThunk.rejected, (state, action) => {
-        state.operations.deleting = false;
-        state.documentError = action.payload;
-      })
-      
-      // Share Document
-      .addCase(shareDocumentThunk.pending, (state) => {
-        state.operations.sharing = true;
-      })
-      .addCase(shareDocumentThunk.fulfilled, (state, action) => {
-        state.operations.sharing = false;
-        state.isShareModalOpen = false;
-        state.selectedDocumentForShare = null;
-        
-        // Update document in list
-        const updatedDocument = action.payload.document;
-        const index = state.documents.findIndex(doc => doc._id === updatedDocument._id);
-        if (index !== -1) {
-          state.documents[index] = updatedDocument;
-        }
-        
-        if (state.currentDocument?._id === updatedDocument._id) {
-          state.currentDocument = updatedDocument;
-        }
-      })
-      .addCase(shareDocumentThunk.rejected, (state, action) => {
-        state.operations.sharing = false;
-        state.documentError = action.payload;
-      })
-      
-      // Share via Email
-      .addCase(shareDocumentViaEmailThunk.pending, (state) => {
-        state.operations.emailSharing = true;
-      })
-      .addCase(shareDocumentViaEmailThunk.fulfilled, (state, action) => {
-        state.operations.emailSharing = false;
-        state.isShareModalOpen = false;
-        state.selectedDocumentForShare = null;
-      })
-      .addCase(shareDocumentViaEmailThunk.rejected, (state, action) => {
-        state.operations.emailSharing = false;
-        state.documentError = action.payload;
-      })
-      
-      
-      // Search Documents
-      .addCase(searchDocumentsThunk.pending, (state) => {
-        state.searchLoading = true;
-        state.searchError = null;
-      })
-      .addCase(searchDocumentsThunk.fulfilled, (state, action) => {
-        state.searchLoading = false;
-        state.searchResults = action.payload.documents || [];
-      })
-      .addCase(searchDocumentsThunk.rejected, (state, action) => {
-        state.searchLoading = false;
-        state.searchError = action.payload;
-      });
-  }
 });
 
 export const {
@@ -471,5 +190,43 @@ export const {
   removeDocumentFromList,
   addDocumentToList
 } = documentSlice.actions;
+
+// Selectors with safety checks
+export const selectDocuments = (state) => state.documents?.documents || [];
+export const selectCurrentDocument = (state) => state.documents?.currentDocument || null;
+export const selectDocumentsLoading = (state) => state.documents?.documentsLoading || false;
+export const selectDocumentLoading = (state) => state.documents?.documentLoading || false;
+export const selectOperations = (state) => state.documents?.operations || {
+  creating: false,
+  updating: false,
+  deleting: false,
+  sharing: false,
+  emailSharing: false
+};
+export const selectEditorState = (state) => state.documents?.editorState || {
+  title: '',
+  content: '',
+  tags: '',
+  status: 'draft',
+  visibility: 'private',
+  hasChanges: false,
+  showSettings: false
+};
+export const selectIsShareModalOpen = (state) => state.documents?.isShareModalOpen || false;
+export const selectSelectedDocumentForShare = (state) => state.documents?.selectedDocumentForShare || null;
+export const selectDocumentsError = (state) => state.documents?.documentsError || null;
+export const selectDocumentError = (state) => state.documents?.documentError || null;
+export const selectSearchResults = (state) => state.documents?.searchResults || [];
+export const selectSearchLoading = (state) => state.documents?.searchLoading || false;
+export const selectSearchError = (state) => state.documents?.searchError || null;
+export const selectSearchQuery = (state) => state.documents?.searchQuery || '';
+export const selectSearchFilters = (state) => state.documents?.searchFilters || {
+  type: '',
+  status: '',
+  tags: '',
+  dateRange: ''
+};
+export const selectActiveTab = (state) => state.documents?.activeTab || 'all';
+export const selectViewMode = (state) => state.documents?.viewMode || 'grid';
 
 export default documentSlice.reducer;

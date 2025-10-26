@@ -11,13 +11,37 @@ import {
   rejectMeeting,
   startMeeting,
   endMeeting,
-  getUserMeetings
+  getUserMeetings,
+  createInstantMeeting,
+  createScheduledMeeting,
+  joinMeeting,
+  getMeetingParticipants,
+  updateParticipantStatus
 } from "../controllers/meeting.controller.js";
 
 const router = Router();
 
 // All routes require authentication
 router.use(verifyToken);
+
+// Create instant or scheduled meetings
+router.route("/meetings/instant")
+  .post(createInstantMeeting);
+
+router.route("/meetings/scheduled")
+  .post(createScheduledMeeting);
+
+// Join meeting
+router.route("/meetings/:meetingId/join")
+  .post(joinMeeting);
+
+// Get meeting participants
+router.route("/meetings/:meetingId/participants")
+  .get(getMeetingParticipants);
+
+// Update participant status
+router.route("/meetings/:meetingId/participants/:userId")
+  .put(updateParticipantStatus);
 
 // Project meeting routes
 router.route("/projects/:projectId/meetings")

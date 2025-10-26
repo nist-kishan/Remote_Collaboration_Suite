@@ -403,8 +403,9 @@ export const updateWorkspace = asyncHandle(async (req, res) => {
     throw new ApiError(404, "Workspace not found");
   }
 
-  if (!workspace.canBeManagedBy(req.user)) {
-    throw new ApiError(403, "You don't have permission to update this workspace");
+  // Only owner can edit workspace
+  if (workspace.owner.toString() !== userId.toString()) {
+    throw new ApiError(403, "Only workspace owner can edit the workspace");
   }
 
   const updateData = {};

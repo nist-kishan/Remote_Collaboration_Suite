@@ -10,12 +10,11 @@ import {
   MoreVertical
 } from 'lucide-react';
 import Button from './Button';
-import EmojiPicker from './EmojiPicker';
+import EmojiPicker from './EmojiSelector';
 import MediaPreview from '../chat/MediaPreview';
 import WhatsAppLoader from './WhatsAppLoader';
-import { debugMediaUpload } from '../../utils/debugMediaUpload';
-import { useOptimizedMediaUpload } from '../../hook/useOptimizedMediaUpload';
 import { useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 
 const MessageInput = forwardRef(({ 
   onSendMessage, 
@@ -74,7 +73,6 @@ const MessageInput = forwardRef(({
         messageData.replyTo = replyTo._id;
       }
       
-      console.log('MessageInput sending:', messageData);
       onSendMessage?.(messageData);
       setMessage('');
       if (replyTo) {
@@ -91,9 +89,16 @@ const MessageInput = forwardRef(({
   };
 
   const handleFileSelect = (type) => {
-    fileInputRef.current.setAttribute('accept', getAcceptType(type));
+    if (!fileInputRef.current) {
+      console.error('fileInputRef.current is null');
+      return;
+    }
+    
+    const acceptType = getAcceptType(type);
+    // fileInputRef.current.setAttribute('accept', acceptType);
     fileInputRef.current.setAttribute('data-type', type);
-    fileInputRef.current.click();
+    
+    // fileInputRef.current.click();
   };
 
   const getAcceptType = (type) => {
@@ -128,13 +133,13 @@ const MessageInput = forwardRef(({
   }, [previewFiles]);
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    // // const file = e.target.files[0];
+    if (!file) {
+      // return;
+    }
 
     const type = e.target.getAttribute('data-type');
-    debugMediaUpload.logFileSelection(file, type);
-    
-    // Create file URL for preview
+    // // Create file URL for preview
     const fileUrl = URL.createObjectURL(file);
     
     // Add file to preview instead of sending immediately
@@ -147,8 +152,8 @@ const MessageInput = forwardRef(({
     };
     
     setPreviewFiles(prev => {
-      console.log('Adding file to preview:', newFile);
-      return [...prev, newFile];
+      const updated = [...prev, newFile];
+      return updated;
     });
 
     // Reset input
@@ -200,7 +205,6 @@ const MessageInput = forwardRef(({
   const handleSendMedia = async () => {
     if (previewFiles.length === 0) return;
 
-    debugMediaUpload.logUploadStart(chatId, previewFiles.length);
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -298,6 +302,20 @@ const MessageInput = forwardRef(({
     }
   }, [showMediaMenu]);
 
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showEmojiPicker && !event.target.closest('.emoji-picker-container')) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showEmojiPicker]);
+
   return (
     <div className={`bg-white dark:bg-gray-900 min-h-[60px] ${className}`}>
       {/* Media Preview */}
@@ -333,7 +351,7 @@ const MessageInput = forwardRef(({
         </div>
       )}
 
-      <div className="flex items-center gap-1 md:gap-2 p-2 md:p-4 min-h-[60px]">
+      <div className="flex items-center gap-1 md:gap-2 p-2 md:p-4 min-h-[60px] overflow-hidden">
         {/* Hidden File Input */}
         <input
           ref={fileInputRef}
@@ -343,25 +361,34 @@ const MessageInput = forwardRef(({
         />
 
         {/* Emoji Button (Outside Input) */}
-        <div className="flex-shrink-0">
+        <div className="relative flex-shrink-0 emoji-picker-container">
           <button
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             disabled={disabled}
-            className={`h-12 px-3 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 rounded-xl transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 hover:shadow-lg backdrop-blur-sm flex items-center justify-center ${
+            className={`h-10 md:h-12 px-2 md:px-3 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 rounded-xl transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 hover:shadow-lg backdrop-blur-sm flex items-center justify-center ${
               showEmojiPicker ? 'text-indigo-600 dark:text-indigo-400 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 shadow-md scale-105' : ''
             }`}
             title="Add emoji"
           >
             <Smile className="w-5 h-5" />
           </button>
+
+          {/* Emoji Picker positioned relative to emoji button */}
+          <EmojiPicker
+            isOpen={showEmojiPicker}
+            onClose={() => setShowEmojiPicker(false)}
+            onEmojiSelect={handleEmojiSelect}
+          />
         </div>
 
         {/* Media Menu Button (Outside Input) */}
         <div className="relative media-menu-container flex-shrink-0">
           <button
-            onClick={() => setShowMediaMenu(!showMediaMenu)}
+            onClick={() => {
+              // setShowMediaMenu(!showMediaMenu);
+            }}
             disabled={disabled}
-            className={`h-12 px-3 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 rounded-xl transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 hover:shadow-lg backdrop-blur-sm flex items-center justify-center ${
+            className={`h-10 md:h-12 px-2 md:px-3 text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 rounded-xl transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 hover:shadow-lg backdrop-blur-sm flex items-center justify-center ${
               showMediaMenu ? 'text-indigo-600 dark:text-indigo-400 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 shadow-md scale-105' : ''
             }`}
             title="Send media files"
@@ -375,7 +402,7 @@ const MessageInput = forwardRef(({
               <div className="py-2">
                 <button
                   onClick={() => {
-                    handleFileSelect('image');
+                    // handleFileSelect('image');
                     setShowMediaMenu(false);
                   }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gradient-to-r hover:from-indigo-50 hover:to-purple-50 dark:hover:from-indigo-900/30 dark:hover:to-purple-900/30 transition-all duration-200 ease-in-out hover:scale-[1.02] rounded-xl mx-2"
@@ -385,7 +412,7 @@ const MessageInput = forwardRef(({
                   </div>
                   <span className="font-medium">Send Image</span>
                 </button>
-                <button
+                {/* <button
                   onClick={() => {
                     handleFileSelect('video');
                     setShowMediaMenu(false);
@@ -396,7 +423,7 @@ const MessageInput = forwardRef(({
                     <Video className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   </div>
                   <span className="font-medium">Send Video</span>
-                </button>
+                </button> */}
                 <button
                   onClick={() => {
                     handleFileSelect('audio');
@@ -437,7 +464,7 @@ const MessageInput = forwardRef(({
               placeholder={replyTo ? 'Reply to message...' : placeholder}
               disabled={disabled}
               rows={1}
-              className="w-full px-4 pr-12 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-2xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 dark:focus:border-indigo-400 resize-none disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base transition-all duration-300 ease-in-out shadow-sm hover:shadow-md focus:shadow-lg backdrop-blur-sm"
+              className="w-full px-4 pr-12 md:pr-16 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-2xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 dark:focus:border-indigo-400 resize-none disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base transition-all duration-300 ease-in-out shadow-sm hover:shadow-md focus:shadow-lg backdrop-blur-sm"
               style={{ 
                 minHeight: '48px', 
                 maxHeight: '120px',
@@ -450,26 +477,18 @@ const MessageInput = forwardRef(({
           </div>
 
           {/* Right Side Send Button (Inside Input) */}
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+          <div className="absolute right-2 md:right-3 top-1/2 transform -translate-y-1/2">
             <button
               onClick={handleSend}
               disabled={disabled || (!message.trim() && !replyTo)}
-              className="p-2.5 text-gray-500 dark:text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-600 dark:hover:from-indigo-600 dark:hover:to-purple-700 rounded-xl transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed hover:scale-110 hover:shadow-lg backdrop-blur-sm disabled:hover:scale-100 disabled:hover:shadow-none"
+              className="p-1.5 md:p-2.5 text-gray-500 dark:text-gray-400 hover:text-white hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-600 dark:hover:from-indigo-600 dark:hover:to-purple-700 rounded-xl transition-all duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed hover:scale-110 hover:shadow-lg backdrop-blur-sm disabled:hover:scale-100 disabled:hover:shadow-none"
               title="Send message"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-3.5 h-3.5 md:w-4 md:h-4" />
             </button>
           </div>
         </div>
       </div>
-
-      {/* Emoji Picker */}
-      <EmojiPicker
-        isOpen={showEmojiPicker}
-        onClose={() => setShowEmojiPicker(false)}
-        onEmojiSelect={handleEmojiSelect}
-        className="left-0 animate-in slide-in-from-bottom-2 duration-300"
-      />
 
       {/* WhatsApp-style Upload Loader */}
       <WhatsAppLoader

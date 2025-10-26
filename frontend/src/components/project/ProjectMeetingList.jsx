@@ -2,21 +2,35 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Calendar, Clock, Users, Video, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useSelector } from 'react-redux';
 import { meetingApi } from '../../api/meetingApi';
 import CustomButton from '../ui/CustomButton';
 import CustomCard from '../ui/CustomCard';
 import CustomModal from '../ui/CustomModal';
 import ProjectMeetingCreator from './ProjectMeetingCreator';
+import { getProjectUserRole } from '../../utils/roleUtils';
 
 const ProjectMeetings = ({ project }) => {
   const queryClient = useQueryClient();
+  const currentUser = useSelector((state) => state.auth.user);
   const [showCreateMeeting, setShowCreateMeeting] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
+
+  // Get user role and check if they can create meetings
+  const userRole = getProjectUserRole(project, currentUser);
+  const canCreateMeeting = userRole !== 'employee';
+  const isOwner = project.owner && project.owner._id === currentUser?._id;
 
   // Fetch project meetings
   const { data: meetingsData, isLoading } = useQuery({
     queryKey: ['project-meetings', project._id],
-    queryFn: () => meetingApi.getProjectMeetings(project._id)
+    queryFn: () => meetingApi.getProjectMeetings(project._id),
+    onSuccess: (data) => {
+      },
+    onError: (error) => {
+      console.error('Error fetching meetings:', error);
+      console.error('Error Response:', error.response);
+    }
   });
 
   // Delete meeting mutation
@@ -31,8 +45,8 @@ const ProjectMeetings = ({ project }) => {
     }
   });
 
-  const meetings = meetingsData?.data?.meetings || [];
-
+  const meetings = meetingsData?.data?.data?.meetings || meetingsData?.data?.meetings || [];
+  
   const getStatusColor = (status) => {
     switch (status) {
       case 'scheduled':
@@ -81,11 +95,41 @@ const ProjectMeetings = ({ project }) => {
     return new Date(meeting.startTime) > new Date();
   };
 
+  const canJoinMeeting = (meeting) => {
+    // For instant meetings, always allow joining
+    if (meeting.meetingType === 'instant') {
+      return true;
+    }
+    
+    // For scheduled meetings, check if current time >= start time
+    if (!meeting.startTime) {
+      return false;
+    }
+    
+    const now = new Date();
+    const startTime = new Date(meeting.startTime);
+    return now >= startTime;
+  };
+
   const handleDeleteMeeting = (meeting) => {
     deleteMeetingMutation.mutate(meeting._id);
   };
 
   const handleJoinMeeting = (meeting) => {
+    // Check if meeting has started (only for scheduled meetings)
+    if (meeting.meetingType === 'scheduled' && !canJoinMeeting(meeting)) {
+      const startTime = new Date(meeting.startTime);
+      const timeUntilStart = Math.ceil((startTime - new Date()) / (1000 * 60)); // minutes
+      
+      if (timeUntilStart > 60) {
+        const hoursUntilStart = Math.floor(timeUntilStart / 60);
+        toast.error(`Meeting hasn't started yet. It will start in ${hoursUntilStart} hour${hoursUntilStart > 1 ? 's' : ''}.`);
+      } else {
+        toast.error(`Meeting hasn't started yet. It will start in ${timeUntilStart} minute${timeUntilStart > 1 ? 's' : ''}.`);
+      }
+      return;
+    }
+
     if (meeting.meetingUrl) {
       window.open(meeting.meetingUrl, '_blank');
     } else {
@@ -113,10 +157,12 @@ const ProjectMeetings = ({ project }) => {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
           Project Meetings ({meetings.length})
         </h3>
-        <CustomButton onClick={() => setShowCreateMeeting(true)} className="flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Schedule Meeting
-        </CustomButton>
+        {canCreateMeeting && (
+          <CustomButton onClick={() => setShowCreateMeeting(true)} className="flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Schedule Meeting
+          </CustomButton>
+        )}
       </div>
 
       {meetings.length === 0 ? (
@@ -130,9 +176,15 @@ const ProjectMeetings = ({ project }) => {
           <p className="text-gray-600 dark:text-gray-400 mb-6">
             Schedule your first meeting to get started
           </p>
-          <CustomButton onClick={() => setShowCreateMeeting(true)}>
-            Schedule Meeting
-          </CustomButton>
+          {canCreateMeeting ? (
+            <CustomButton onClick={() => setShowCreateMeeting(true)}>
+              Schedule Meeting
+            </CustomButton>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Only team members with appropriate permissions can schedule meetings
+            </p>
+          )}
         </CustomCard>
       ) : (
         <div className="space-y-4">
@@ -203,7 +255,7 @@ const ProjectMeetings = ({ project }) => {
                 </div>
 
                 <div className="flex items-center gap-2 ml-4">
-                  {isUpcoming(meeting) && meeting.meetingUrl && (
+                  {canJoinMeeting(meeting) && meeting.meetingUrl && (
                     <CustomButton
                       size="sm"
                       onClick={() => handleJoinMeeting(meeting)}
@@ -212,6 +264,17 @@ const ProjectMeetings = ({ project }) => {
                       <Video className="w-3 h-3" />
                       Join
                     </CustomButton>
+                  )}
+                  
+                  {!canJoinMeeting(meeting) && meeting.meetingUrl && (
+                    <button
+                      onClick={() => handleJoinMeeting(meeting)}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex items-center gap-1 opacity-50 cursor-not-allowed"
+                      disabled
+                    >
+                      <Video className="w-3 h-3" />
+                      Not Started
+                    </button>
                   )}
                   
                   <div className="relative">
@@ -234,16 +297,18 @@ const ProjectMeetings = ({ project }) => {
                           <Edit className="w-3 h-3" />
                           Edit
                         </button>
-                        <button
-                          onClick={() => {
-                            setSelectedMeeting(null);
-                            handleDeleteMeeting(meeting);
-                          }}
-                          className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Delete
-                        </button>
+                        {isOwner && (
+                          <button
+                            onClick={() => {
+                              setSelectedMeeting(null);
+                              handleDeleteMeeting(meeting);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

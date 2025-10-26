@@ -6,11 +6,12 @@ import Chat from "../models/chat.model.js";
 import Message from "../models/Message.model.js";
 import Call from "../models/call.model.js";
 import Document from "../models/document.model.js";
+import { retryableUserUpdate, retryableUserFind, retryableChatUpdate, retryableMessageCreate, retryableMessageFind, waitForConnection } from "../utils/databaseRetry.js";
 
 class SocketServer {
   constructor(server) {
     // Get frontend URL from environment or use fallbacks
-    const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL;
     
     // Production-ready CORS configuration
     const corsOrigins = [
@@ -19,8 +20,6 @@ class SocketServer {
 
     // Remove duplicates and filter out undefined values
     const uniqueOrigins = [...new Set(corsOrigins.filter(Boolean))];
-
-    // console.log('🔌 Socket.IO CORS Origins:', uniqueOrigins);
 
     this.io = new Server(server, {
       cors: {
@@ -31,7 +30,6 @@ class SocketServer {
           if (uniqueOrigins.includes(origin)) {
             callback(null, true);
           } else {
-            console.warn('🚫 Socket.IO CORS blocked origin:', origin);
             callback(new Error('Not allowed by CORS'));
           }
         },
@@ -48,11 +46,13 @@ class SocketServer {
     this.whiteboardRooms = new Map(); // whiteboardId -> Set of socketIds
     this.chatRooms = new Map(); // chatId -> Set of socketIds
     this.activeCalls = new Map(); // callId -> { participants, status }
+    this.callTimeouts = new Map(); // callId -> timeoutId for tracking call timeouts
     this.documentRooms = new Map(); // documentId -> Set of socketIds
     this.documentCollaborators = new Map(); // documentId -> Map of userId -> { cursor, selection, userInfo }
 
     this.setupMiddleware();
     this.setupEventHandlers();
+    this.startCallCleanup();
   }
 
   setupMiddleware() {
@@ -106,12 +106,20 @@ class SocketServer {
   setupEventHandlers() {
     this.io.on("connection", async (socket) => {
 
+      // Ensure database connection is ready before proceeding
+      try {
+        await waitForConnection();
+      } catch (error) {
+        socket.emit('error', { message: 'Database not ready' });
+        return;
+      }
+
       // Join user's personal room for notifications
       socket.join(`user:${socket.userId}`);
       
-      // Update user online status
+      // Update user online status with retry logic
       try {
-        await User.findByIdAndUpdate(socket.userId, {
+        await retryableUserUpdate(socket.userId, {
           isOnline: true,
           lastSeen: new Date()
         });
@@ -123,16 +131,138 @@ class SocketServer {
           lastSeen: new Date()
         });
         
-        // console.log(`User ${socket.userId} is now online - broadcasting status to all users`);
+        // Also emit user_online event for frontend compatibility (with throttling)
+        const lastBroadcast = this.lastUserStatusBroadcast?.get(socket.userId);
+        const now = Date.now();
+        
+        if (!lastBroadcast || (now - lastBroadcast) > 5000) { // 5 second throttle
+          this.io.emit('user_online', {
+            userId: socket.userId,
+            timestamp: new Date()
+          });
+          
+          // Track last broadcast time
+          if (!this.lastUserStatusBroadcast) {
+            this.lastUserStatusBroadcast = new Map();
+          }
+          this.lastUserStatusBroadcast.set(socket.userId, now);
+        }
+        
       } catch (error) {
-        console.error('Error updating user online status:', error);
-      }
+        }
       
       // Send connection confirmation
       socket.emit('connection_confirmed', {
         message: 'Socket connected successfully',
         userId: socket.userId,
         socketId: socket.id
+      });
+
+      // ========== USER STATUS EVENTS ==========
+      
+      // Handle user online status (with throttling)
+      socket.on('user_online', async (data) => {
+        try {
+          const { userId } = data;
+          if (userId && userId === socket.userId) {
+            // Check if we already processed this user recently (throttling)
+            const lastUpdate = this.lastUserStatusUpdate?.get(userId);
+            const now = Date.now();
+            
+            if (lastUpdate && (now - lastUpdate) < 5000) { // 5 second throttle
+              return; // Skip this update
+            }
+            
+            // Update user online status
+            await retryableUserUpdate(userId, {
+              isOnline: true,
+              lastSeen: new Date()
+            });
+            
+            // Track last update time
+            if (!this.lastUserStatusUpdate) {
+              this.lastUserStatusUpdate = new Map();
+            }
+            this.lastUserStatusUpdate.set(userId, now);
+            
+            // Notify all users about this user coming online
+            this.io.emit('user_online', {
+              userId: userId,
+              timestamp: new Date()
+            });
+          }
+        } catch (error) {
+          }
+      });
+
+      // Handle user offline status (with throttling)
+      socket.on('user_offline', async (data) => {
+        try {
+          const { userId } = data;
+          if (userId && userId === socket.userId) {
+            // Check if we already processed this user recently (throttling)
+            const lastUpdate = this.lastUserStatusUpdate?.get(userId);
+            const now = Date.now();
+            
+            if (lastUpdate && (now - lastUpdate) < 5000) { // 5 second throttle
+              return; // Skip this update
+            }
+            
+            // Update user offline status
+            await retryableUserUpdate(userId, {
+              isOnline: false,
+              lastSeen: new Date()
+            });
+            
+            // Track last update time
+            if (!this.lastUserStatusUpdate) {
+              this.lastUserStatusUpdate = new Map();
+            }
+            this.lastUserStatusUpdate.set(userId, now);
+            
+            // Notify all users about this user going offline
+            this.io.emit('user_offline', {
+              userId: userId,
+              timestamp: new Date()
+            });
+          }
+        } catch (error) {
+          }
+      });
+
+      // Handle get online users request (with throttling)
+      socket.on('get_online_users', async () => {
+        try {
+          // Throttle get_online_users requests to prevent spam
+          const socketId = socket.id;
+          const lastRequest = this.lastOnlineUsersRequest?.get(socketId);
+          const now = Date.now();
+          
+          if (lastRequest && (now - lastRequest) < 10000) { // 10 second throttle
+            return; // Skip this request
+          }
+          
+          // Track last request time
+          if (!this.lastOnlineUsersRequest) {
+            this.lastOnlineUsersRequest = new Map();
+          }
+          this.lastOnlineUsersRequest.set(socketId, now);
+          
+          // Get all online users from database
+          const onlineUsers = await User.find(
+            { isOnline: true },
+            { _id: 1 }
+          );
+          
+          const onlineUserIds = onlineUsers.map(user => user._id.toString());
+          
+          // Send bulk online users to the requesting socket
+          socket.emit('bulk_online_users', {
+            userIds: onlineUserIds,
+            timestamp: new Date()
+          });
+        } catch (error) {
+          }
       });
 
       // Join whiteboard room
@@ -291,6 +421,84 @@ class SocketServer {
         }
       });
 
+      // Handle whiteboard real-time updates for collaborative editing
+      socket.on("whiteboard-update", async (data) => {
+        try {
+          const { whiteboardId, canvasData, shapes, elements, userId } = data;
+          
+          if (!whiteboardId || !socket.currentWhiteboardId || whiteboardId !== socket.currentWhiteboardId) {
+            return;
+          }
+
+          // Broadcast the update to all other users in the room (excluding sender)
+          socket.to(`whiteboard:${whiteboardId}`).emit("whiteboard-update", {
+            ...data,
+            userId: socket.userId,
+            userInfo: this.activeUsers.get(socket.userId)?.userInfo,
+            timestamp: new Date()
+          });
+
+          // Update the whiteboard in database with merged data
+          if (shapes || elements || canvasData) {
+            try {
+              const whiteboard = await Whiteboard.findById(whiteboardId);
+              if (whiteboard && whiteboard.hasPermission(socket.userId, "editor")) {
+                // Merge the new data with existing canvas data
+                const existingCanvasData = whiteboard.canvasData || {};
+                
+                if (shapes || elements) {
+                  const existingShapes = existingCanvasData.shapes || existingCanvasData.elements || [];
+                  const newShapes = shapes || elements || [];
+                  
+                  // Create a map of existing shapes by ID to avoid duplicates
+                  const existingShapesMap = new Map();
+                  existingShapes.forEach(shape => {
+                    if (shape.id) {
+                      existingShapesMap.set(shape.id, shape);
+                    }
+                  });
+                  
+                  // Add new shapes that don't already exist
+                  const mergedShapes = [...existingShapes];
+                  newShapes.forEach(shape => {
+                    if (shape.id && !existingShapesMap.has(shape.id)) {
+                      mergedShapes.push(shape);
+                    } else if (!shape.id) {
+                      // Add shapes without IDs (they are new)
+                      mergedShapes.push(shape);
+                    }
+                  });
+                  
+                  // Update the canvas data with merged shapes
+                  whiteboard.canvasData = {
+                    ...existingCanvasData,
+                    shapes: mergedShapes,
+                    elements: mergedShapes,
+                    lastModifiedBy: socket.userId,
+                    lastModifiedAt: new Date()
+                  };
+                } else if (canvasData) {
+                  // For other canvas data types, merge the objects
+                  whiteboard.canvasData = {
+                    ...existingCanvasData,
+                    ...canvasData,
+                    lastModifiedBy: socket.userId,
+                    lastModifiedAt: new Date()
+                  };
+                }
+                
+                whiteboard.lastModifiedBy = socket.userId;
+                whiteboard.version += 1;
+                
+                await whiteboard.save();
+                }
+            } catch (error) {
+              }
+          }
+        } catch (error) {
+          }
+      });
+
       // ========== DOCUMENT COLLABORATION EVENTS ==========
       
       // Join document room
@@ -354,8 +562,6 @@ class SocketServer {
           socket.emit("active_collaborators", {
             activeCollaborators: this.getActiveCollaboratorsInDocument(documentId),
           });
-
-          // console.log(`User ${socket.userId} joined document room: document:${documentId}`);
 
         } catch (error) {
           socket.emit("error", { message: "Failed to join document" });
@@ -564,15 +770,12 @@ class SocketServer {
           
           // Also join user-specific room for individual messaging
           socket.join(`user:${socket.userId}`);
-          // console.log(`User ${socket.userId} joined user-specific room: user:${socket.userId}`);
 
           // Add to chat room
           if (!this.chatRooms.has(chatId)) {
             this.chatRooms.set(chatId, new Set());
           }
           this.chatRooms.get(chatId).add(socket.id);
-          
-          // console.log(`User ${socket.userId} joined chat room: chat:${chatId}`);
 
           // Emit confirmation to the user who joined
           socket.emit('chat_joined', { 
@@ -619,14 +822,6 @@ class SocketServer {
 
       // Send message
       socket.on("send_message", async (data) => {
-      // console.log('Socket.IO send_message received:', {
-      //   chatId: data.chatId,
-      //   content: data.content,
-      //   type: data.type,
-      //   media: data.media ? 'present' : 'not present',
-      //   replyTo: data.replyTo,
-      //   replyToType: typeof data.replyTo
-      // });
         
         try {
           const { chatId, content, type, media, replyTo } = data;
@@ -635,8 +830,13 @@ class SocketServer {
           const cleanReplyTo = (replyTo && replyTo !== 'undefined' && replyTo !== 'null') ? replyTo : null;
           const cleanMedia = (media && media !== 'undefined' && media !== 'null') ? media : null;
           
+          // Ensure ObjectId fields are strings
+          const cleanChatId = typeof chatId === 'object' ? chatId.toString() : chatId;
+          const cleanSenderId = typeof socket.userId === 'object' ? socket.userId.toString() : socket.userId;
+          const cleanReplyToId = cleanReplyTo && typeof cleanReplyTo === 'object' ? cleanReplyTo.toString() : cleanReplyTo;
+          
           // Validate required fields
-          if (!chatId) {
+          if (!cleanChatId) {
             socket.emit("error", "Chat ID is required");
             return;
           }
@@ -653,7 +853,7 @@ class SocketServer {
           }
           
           // Verify chat exists and user is participant
-          const chat = await Chat.findById(chatId).populate('participants.user', 'name email');
+          const chat = await Chat.findById(cleanChatId).populate('participants.user', 'name email');
           if (!chat) {
             socket.emit("error", "Chat not found");
             return;
@@ -661,7 +861,7 @@ class SocketServer {
 
           // Check if user is a participant
           const isParticipant = chat.participants.some(
-            p => p.user && p.user._id.toString() === socket.userId.toString()
+            p => p.user && p.user._id.toString() === cleanSenderId.toString()
           );
 
           if (!isParticipant) {
@@ -670,14 +870,16 @@ class SocketServer {
           }
 
           // Create message in database
-          const message = await Message.create({
-            chat: chatId,
-            sender: socket.userId,
+          const messageData = {
+            chat: cleanChatId,
+            sender: cleanSenderId,
             content,
             type: type || 'text',
             media: cleanMedia,
-            replyTo: cleanReplyTo
-          });
+            replyTo: cleanReplyToId
+          };
+
+          const message = await Message.create(messageData);
 
           await message.populate('sender', 'name avatar');
           await message.populate('replyTo');
@@ -702,13 +904,12 @@ class SocketServer {
               // Increment unread count for all participants except the sender
               chat.participants.forEach(participant => {
                 const participantUserId = participant.user._id ? participant.user._id.toString() : participant.user.toString();
-                if (participantUserId !== socket.userId.toString()) {
+                if (participantUserId !== cleanSenderId.toString()) {
                   const currentCount = chat.unreadCount.get(participantUserId) || 0;
                   chat.unreadCount.set(participantUserId, currentCount + 1);
                 }
               });
             } catch (unreadCountError) {
-              console.error('Error updating unreadCount in socket:', unreadCountError);
               // Reset unreadCount to empty Map if there's an issue
               chat.unreadCount = new Map();
               chat.participants.forEach(participant => {
@@ -728,48 +929,37 @@ class SocketServer {
           socket.emit("message_confirmed", {
             messageId: message._id,
             content: message.content,
-            chatId
+            chatId: cleanChatId
           });
 
           // Broadcast to all users in the chat
-          // console.log(`Broadcasting message to chat room: chat:${chatId}`);
-          // console.log(`Message details:`, {
-          //   messageId: message._id,
-          //   content: message.content,
-          //   senderId: socket.userId,
-          //   senderName: socket.user.name
-          // });
           
           const broadcastData = {
             message,
-            chatId,
+            chatId: cleanChatId,
             sender: {
-              _id: socket.userId,
+              _id: cleanSenderId,
               name: socket.user.name,
               avatar: socket.user.avatar
             }
           };
-          
-          // console.log(`Broadcasting to room chat:${chatId} with data:`, broadcastData);
-          
+
           // Get the number of clients in the room
-          const room = this.io.sockets.adapter.rooms.get(`chat:${chatId}`);
+          const room = this.io.sockets.adapter.rooms.get(`chat:${cleanChatId}`);
           const clientCount = room ? room.size : 0;
-          // console.log(`Number of clients in room chat:${chatId}:`, clientCount);
           
-          this.io.to(`chat:${chatId}`).emit("new_message", broadcastData);
+          this.io.to(`chat:${cleanChatId}`).emit("new_message", broadcastData);
           
           // Also emit to individual users as backup
           chat.participants.forEach(participant => {
-            if (participant.user._id.toString() !== socket.userId.toString()) {
-              // console.log(`Sending message to individual user: ${participant.user._id}`);
+            if (participant.user._id.toString() !== cleanSenderId.toString()) {
               this.io.to(`user:${participant.user._id}`).emit("new_message", broadcastData);
             }
           });
 
           // Broadcast updated chat data to all connected users for chat list updates
           this.io.emit("chat_updated", {
-            chatId,
+            chatId: cleanChatId,
             updatedFields: {
               lastMessage: message,
               unreadCount: chat.unreadCount,
@@ -837,7 +1027,6 @@ class SocketServer {
               
               chat.unreadCount.set(socket.userId.toString(), 0);
             } catch (error) {
-              console.error('Error setting unreadCount in socket:', error);
               chat.unreadCount = new Map();
               chat.unreadCount.set(socket.userId.toString(), 0);
             }
@@ -896,8 +1085,7 @@ class SocketServer {
             }
           });
         } catch (error) {
-          console.error('Error marking messages as read:', error);
-        }
+          }
       });
 
       // Mark message as delivered
@@ -928,8 +1116,7 @@ class SocketServer {
             });
           }
         } catch (error) {
-          console.error('Error marking message as delivered:', error);
-        }
+          }
       });
 
       // ========== CALL EVENTS ==========
@@ -955,6 +1142,22 @@ class SocketServer {
 
             if (!isParticipant) {
               socket.emit("error", "You are not a participant in this chat");
+              return;
+            }
+
+            // Check for existing ongoing calls between the same participants
+            const existingCall = await Call.findOne({
+              chat: chatId,
+              status: { $in: ['ringing', 'ongoing'] },
+              participants: {
+                $all: chat.participants.map(p => ({
+                  $elemMatch: { user: p.user }
+                }))
+              }
+            });
+
+            if (existingCall) {
+              socket.emit("error", "A call is already in progress with these participants");
               return;
             }
 
@@ -1012,12 +1215,11 @@ class SocketServer {
             }
           });
 
-          // Set auto-termination timer (1 minute = 60000ms)
-          setTimeout(async () => {
+          // Set auto-termination timer (45 seconds = 45000ms)
+          const timeoutId = setTimeout(async () => {
             try {
               const activeCall = this.activeCalls.get(call._id.toString());
               if (activeCall && activeCall.status === 'ringing') {
-                // console.log(`Auto-terminating unanswered call: ${call._id}`);
                 
                 // Update call status in database
                 await Call.findByIdAndUpdate(call._id, {
@@ -1028,11 +1230,14 @@ class SocketServer {
                 // Remove from active calls
                 this.activeCalls.delete(call._id.toString());
                 
+                // Clear the timeout reference
+                this.callTimeouts.delete(call._id.toString());
+                
                 // Notify all participants
                 this.io.to(`call:${call._id}`).emit("call_ended", {
                   callId: call._id,
                   reason: 'missed',
-                  message: 'Call not answered within 1 minute'
+                  message: 'Call not answered within 45 seconds'
                 });
                 
                 // Also notify individual participants
@@ -1040,24 +1245,25 @@ class SocketServer {
                   this.io.to(`user:${participant.user._id}`).emit("call_ended", {
                     callId: call._id,
                     reason: 'missed',
-                    message: 'Call not answered within 1 minute'
+                    message: 'Call not answered within 45 seconds'
                   });
                 });
                 
-                // console.log(`Call ${call._id} auto-terminated due to timeout`);
               }
             } catch (error) {
-              console.error('Error in auto-termination:', error);
-            }
-          }, 60000); // 1 minute timeout
+              }
+          }, parseInt(process.env.CALL_TIMEOUT_MS) || 45000); // Use environment variable
+          
+          // Store timeout reference for cleanup
+          this.callTimeouts.set(call._id.toString(), timeoutId);
 
           socket.emit("call_started", { 
             call
           });
 
           // Set timeout to mark call as missed if not answered
-          const timeoutDuration = 30000; // 30 seconds
-          setTimeout(async () => {
+          const timeoutDuration = parseInt(process.env.CALL_TIMEOUT_MS) || 30000; // 30 seconds
+          const missedTimeoutId = setTimeout(async () => {
             try {
               const currentCall = await Call.findById(call._id);
               if (currentCall && currentCall.status === 'ringing') {
@@ -1076,6 +1282,9 @@ class SocketServer {
                 // Remove from active calls
                 this.activeCalls.delete(call._id.toString());
                 
+                // Clear timeout from tracking
+                this.callTimeouts.delete(call._id.toString());
+                
                 // Notify all participants
                 this.io.to(`call:${call._id}`).emit("call_missed", {
                   callId: call._id,
@@ -1086,6 +1295,12 @@ class SocketServer {
               // Error handling call timeout
             }
           }, timeoutDuration);
+          
+          // Store missed timeout reference
+          this.callTimeouts.set(`missed_${call._id}`, missedTimeoutId);
+          
+          // Store timeout ID for potential cancellation
+          this.callTimeouts.set(call._id.toString(), timeoutId);
 
         } catch (error) {
           socket.emit("error", "Failed to start call");
@@ -1101,6 +1316,12 @@ class SocketServer {
           if (!call) {
             socket.emit("error", { message: "Call not found" });
             return;
+          }
+
+          // Clear any existing timeouts for this call since someone joined
+          if (this.callTimeouts && this.callTimeouts.has(callId)) {
+            clearTimeout(this.callTimeouts.get(callId));
+            this.callTimeouts.delete(callId);
           }
 
           const participant = call.participants.find(
@@ -1137,10 +1358,25 @@ class SocketServer {
           // Emit call_joined to all participants (including the person who joined)
           this.io.to(`call:${callId}`).emit("call_joined", { call });
           
+          // Emit call_accepted to the caller specifically
+          const caller = call.participants.find(p => p.user._id.toString() === call.startedBy.toString());
+          if (caller) {
+            this.io.to(`user:${call.startedBy}`).emit("call_accepted", { 
+              call,
+              acceptedBy: socket.userId,
+              acceptedByName: socket.user.name
+            });
+          }
+          
           // Also notify individual participants
           call.participants.forEach(participant => {
             this.io.to(`user:${participant.user._id}`).emit("call_joined", { call });
           });
+
+          // Start participant count monitoring for ongoing calls
+          if (call.status === 'ongoing') {
+            this.startParticipantMonitoring(callId);
+          }
         } catch (error) {
           socket.emit("error", "Failed to join call");
         }
@@ -1150,12 +1386,16 @@ class SocketServer {
       socket.on("end_call", async (data) => {
         try {
           const { callId } = data;
-          // console.log(`Call ended by ${socket.userId} for call ${callId}`);
           
           const call = await Call.findById(callId);
           if (!call) {
-            // console.log('Call not found:', callId);
             return;
+          }
+
+          // Clear any existing timeouts for this call
+          if (this.callTimeouts && this.callTimeouts.has(callId)) {
+            clearTimeout(this.callTimeouts.get(callId));
+            this.callTimeouts.delete(callId);
           }
 
           const participant = call.participants.find(
@@ -1175,7 +1415,13 @@ class SocketServer {
 
           const allLeft = call.participants.every(p => p.status === 'left');
 
-          if (allLeft) {
+          // If call is still ringing and caller ends it, mark as ended
+          if (call.status === 'ringing') {
+            call.status = 'ended';
+            call.endedAt = new Date();
+            call.duration = Math.floor((call.endedAt - call.startedAt) / 1000);
+            this.activeCalls.delete(callId);
+          } else if (allLeft) {
             call.status = 'ended';
             call.endedAt = new Date();
             call.duration = Math.floor((call.endedAt - call.startedAt) / 1000);
@@ -1194,6 +1440,16 @@ class SocketServer {
             });
           });
 
+          // Also notify the caller if they're not in participants (for ringing calls)
+          if (call.startedBy && call.status === 'ringing') {
+            this.io.to(`user:${call.startedBy}`).emit("call_ended", {
+              callId,
+              call,
+              endedBy: socket.userId,
+              reason: 'ended'
+            });
+          }
+
           // Also notify the call room
           this.io.to(`call:${callId}`).emit("call_ended", {
             callId,
@@ -1206,10 +1462,67 @@ class SocketServer {
           socket.leave(`call:${callId}`);
           socket.currentCallId = null;
           
-          // console.log(`Call ${callId} ended and all participants notified`);
         } catch (error) {
-          console.error('Error ending call:', error);
           socket.emit("error", "Failed to end call");
+        }
+      });
+
+      // Leave call (explicit leave, not disconnect)
+      socket.on("leave_call", async (data) => {
+        try {
+          const { callId } = data;
+          
+          const call = await Call.findById(callId);
+          if (!call) {
+            socket.emit("error", "Call not found");
+            return;
+          }
+
+          const participant = call.participants.find(
+            p => p.user.toString() === socket.userId
+          );
+
+          if (!participant) {
+            socket.emit("error", "You are not a participant in this call");
+            return;
+          }
+
+          if (participant.status === 'joined') {
+            participant.status = 'left';
+            participant.leftAt = new Date();
+
+            if (participant.joinedAt) {
+              participant.duration = Math.floor(
+                (new Date() - participant.joinedAt) / 1000
+              );
+            }
+
+            // Check if all participants have left
+            const allLeft = call.participants.every(p => 
+              p.status === 'left' || p.status === 'rejected' || p.status === 'missed'
+            );
+
+            if (allLeft) {
+              call.status = 'ended';
+              call.endedAt = new Date();
+            }
+
+            await call.save();
+
+            // Leave socket room
+            socket.leave(`call:${callId}`);
+            socket.currentCallId = null;
+
+            // Notify others
+            socket.to(`call:${callId}`).emit("participant_left", {
+              callId,
+              userId: socket.userId,
+              userName: socket.user.name
+            });
+
+            }
+        } catch (error) {
+          socket.emit("error", "Failed to leave call");
         }
       });
 
@@ -1217,13 +1530,16 @@ class SocketServer {
       socket.on("reject_call", async (data) => {
         try {
           const { callId } = data;
-          // console.log(`Call rejected by ${socket.userId} for call ${callId}`);
-          
           const call = await Call.findById(callId);
           if (!call) {
-            // console.log('Call not found:', callId);
             return;
           }
+
+          // Clear any existing timeouts for this call
+          if (this.callTimeouts && this.callTimeouts.has(callId)) {
+            clearTimeout(this.callTimeouts.get(callId));
+            this.callTimeouts.delete(callId);
+            }
 
           const participant = call.participants.find(
             p => p.user.toString() === socket.userId
@@ -1242,12 +1558,11 @@ class SocketServer {
           await call.save();
 
           // Notify caller
-          // console.log(`Notifying caller ${call.startedBy} about rejection`);
-          this.io.to(`user:${call.startedBy}`).emit("call_rejected", {
-            callId,
-            rejectedBy: socket.userId,
-            rejectedByName: socket.user.name
-          });
+          // this.io.to(`user:${call.startedBy}`).emit("call_rejected", {
+          //   callId,
+          //   rejectedBy: socket.userId,
+          //   rejectedByName: socket.user.name
+          // });
 
           // Also notify all participants that the call has ended
           call.participants.forEach(participant => {
@@ -1259,9 +1574,7 @@ class SocketServer {
             });
           });
 
-          // console.log(`Call ${callId} rejected and all participants notified`);
         } catch (error) {
-          console.error('Error rejecting call:', error);
           socket.emit("error", "Failed to reject call");
         }
       });
@@ -1386,6 +1699,55 @@ class SocketServer {
         socket.to(`project:${projectId}`).emit("meeting_ended", { meeting });
       });
 
+      // Meeting room events
+      socket.on("join_meeting_room", (data) => {
+        const { meetingId } = data;
+        if (meetingId) {
+          console.log(`🔌 User ${socket.userId} joining meeting room: ${meetingId}`);
+          socket.join(`meeting:${meetingId}`);
+          socket.currentMeetingId = meetingId;
+          
+          // Notify others in the meeting room
+          socket.to(`meeting:${meetingId}`).emit("participant_joined", {
+            meetingId,
+            participant: {
+              user: socket.user,
+              userId: socket.userId,
+              joinedAt: new Date()
+            }
+          });
+          
+          // Confirm join to the user
+          socket.emit("meeting_room_joined", {
+            meetingId,
+            message: "Joined meeting room successfully"
+          });
+        }
+      });
+
+      socket.on("leave_meeting_room", (data) => {
+        const { meetingId } = data;
+        if (meetingId && socket.currentMeetingId === meetingId) {
+          console.log(`👋 User ${socket.userId} leaving meeting room: ${meetingId}`);
+          
+          // Notify others in the meeting room
+          socket.to(`meeting:${meetingId}`).emit("participant_left", {
+            meetingId,
+            userId: socket.userId,
+            user: socket.user
+          });
+          
+          socket.leave(`meeting:${meetingId}`);
+          socket.currentMeetingId = null;
+          
+          // Confirm leave to the user
+          socket.emit("meeting_room_left", {
+            meetingId,
+            message: "Left meeting room successfully"
+          });
+        }
+      });
+
       // Notification events
       socket.on("join_notifications", () => {
         socket.join(`notifications:${socket.userId}`);
@@ -1419,9 +1781,9 @@ class SocketServer {
       // Handle disconnect
       socket.on("disconnect", async () => {
         
-        // Update user offline status
+        // Update user offline status with retry logic
         try {
-          await User.findByIdAndUpdate(socket.userId, {
+          await retryableUserUpdate(socket.userId, {
             isOnline: false,
             lastSeen: new Date()
           });
@@ -1433,9 +1795,25 @@ class SocketServer {
             lastSeen: new Date()
           });
           
-          // console.log(`User ${socket.userId} is now offline - broadcasting status to all users`);
+          // Also emit user_offline event for frontend compatibility (with throttling)
+          const lastBroadcast = this.lastUserStatusBroadcast?.get(socket.userId);
+          const now = Date.now();
+          
+          if (!lastBroadcast || (now - lastBroadcast) > 5000) { // 5 second throttle
+            this.io.emit('user_offline', {
+              userId: socket.userId,
+              timestamp: new Date()
+            });
+            
+            // Track last broadcast time
+            if (!this.lastUserStatusBroadcast) {
+              this.lastUserStatusBroadcast = new Map();
+            }
+            this.lastUserStatusBroadcast.set(socket.userId, now);
+          }
+          
         } catch (error) {
-          console.error('Error updating user offline status:', error);
+          // Error handling for disconnect
         }
         
         if (socket.currentWhiteboardId) {
@@ -1460,9 +1838,56 @@ class SocketServer {
           });
         }
 
+        // Handle meeting room disconnect
+        if (socket.currentMeetingId) {
+          console.log(`👋 User ${socket.userId} disconnected from meeting: ${socket.currentMeetingId}`);
+          socket.to(`meeting:${socket.currentMeetingId}`).emit("participant_left", {
+            meetingId: socket.currentMeetingId,
+            userId: socket.userId,
+            user: socket.user
+          });
+          socket.leave(`meeting:${socket.currentMeetingId}`);
+          socket.currentMeetingId = null;
+        }
+
         // Handle call disconnect
         if (socket.currentCallId) {
           socket.leave(`call:${socket.currentCallId}`);
+          
+          try {
+            // Update call participant status in database
+            const call = await Call.findById(socket.currentCallId);
+            if (call) {
+              const participant = call.participants.find(
+                p => p.user.toString() === socket.userId
+              );
+
+              if (participant && participant.status === 'joined') {
+                participant.status = 'left';
+                participant.leftAt = new Date();
+
+                if (participant.joinedAt) {
+                  participant.duration = Math.floor(
+                    (new Date() - participant.joinedAt) / 1000
+                  );
+                }
+
+                // Check if all participants have left
+                const allLeft = call.participants.every(p => 
+                  p.status === 'left' || p.status === 'rejected' || p.status === 'missed'
+                );
+
+                if (allLeft) {
+                  call.status = 'ended';
+                  call.endedAt = new Date();
+                }
+
+                await call.save();
+                }
+            }
+          } catch (error) {
+            }
+
           const callData = this.activeCalls.get(socket.currentCallId);
           if (callData) {
             socket.to(`call:${socket.currentCallId}`).emit("participant_left", {
@@ -1599,6 +2024,118 @@ class SocketServer {
         }
       }
     }
+  }
+
+  // Start participant count monitoring for a call
+  startParticipantMonitoring(callId) {
+    // Clear any existing monitoring for this call
+    if (this.participantMonitoringIntervals) {
+      const existingInterval = this.participantMonitoringIntervals.get(callId);
+      if (existingInterval) {
+        clearInterval(existingInterval);
+      }
+    } else {
+      this.participantMonitoringIntervals = new Map();
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const call = await Call.findById(callId);
+        if (!call || call.status !== 'ongoing') {
+          // Call ended or not found, stop monitoring
+          clearInterval(interval);
+          this.participantMonitoringIntervals.delete(callId);
+          return;
+        }
+
+        // Count active participants (joined and not left)
+        const activeParticipants = call.participants.filter(p => 
+          p.status === 'joined' && !p.leftAt
+        );
+
+        // If less than 2 participants, end the call
+        if (activeParticipants.length < 2) {
+          // Update call status
+          call.status = 'ended';
+          call.endedAt = new Date();
+          call.duration = Math.floor((call.endedAt - call.startedAt) / 1000);
+          await call.save();
+
+          // Remove from active calls
+          this.activeCalls.delete(callId);
+
+          // Notify all participants
+          this.io.to(`call:${callId}`).emit("call_ended", {
+            callId,
+            reason: 'insufficient_participants',
+            message: 'Call ended - insufficient participants'
+          });
+
+          // Also notify individual participants
+          call.participants.forEach(participant => {
+            this.io.to(`user:${participant.user._id}`).emit("call_ended", {
+              callId,
+              reason: 'insufficient_participants',
+              message: 'Call ended - insufficient participants'
+            });
+          });
+
+          // Stop monitoring
+          clearInterval(interval);
+          this.participantMonitoringIntervals.delete(callId);
+        }
+      } catch (error) {
+        clearInterval(interval);
+        this.participantMonitoringIntervals.delete(callId);
+      }
+    }, parseInt(process.env.SOCKET_CLEANUP_INTERVAL) || 5000); // Check every 5 seconds
+
+    this.participantMonitoringIntervals.set(callId, interval);
+  }
+
+  // Start periodic cleanup of stale calls
+  startCallCleanup() {
+    // Run cleanup every 30 seconds
+    setInterval(async () => {
+      try {
+        // Find calls that are still marked as 'ongoing' but have no active participants
+        const staleCalls = await Call.find({
+          status: 'ongoing',
+          'participants.status': 'joined'
+        });
+
+        for (const call of staleCalls) {
+          // Check if any participants are actually still active (not left)
+          const activeParticipants = call.participants.filter(p => 
+            p.status === 'joined' && !p.leftAt
+          );
+
+          if (activeParticipants.length < 2) {
+            // Mark all participants as left
+            call.participants.forEach(participant => {
+              if (participant.status === 'joined') {
+                participant.status = 'left';
+                participant.leftAt = new Date();
+                
+                if (participant.joinedAt) {
+                  participant.duration = Math.floor(
+                    (new Date() - participant.joinedAt) / 1000
+                  );
+                }
+              }
+            });
+
+            // End the call
+            call.status = 'ended';
+            call.endedAt = new Date();
+            await call.save();
+
+            }
+        }
+
+        } catch (error) {
+        }
+    }, 30000); // Run every 30 seconds
   }
 }
 

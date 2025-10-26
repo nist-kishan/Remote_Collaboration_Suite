@@ -18,11 +18,11 @@ import {
   getArchivedChatsForUser,
   getDeletedChatsForUser,
   getChattedUsers,
+  getRecentChats,
   getGroupMembers,
   updateMemberRole
 } from '../controllers/chat.controller.js';
 import {
-  testMessage,
   sendMessage,
   getChatMessages,
   editMessage,
@@ -43,6 +43,7 @@ const router = express.Router();
 
 // Chat routes
 router.get('/', verifyToken, getUserChats);
+router.get('/recent', verifyToken, getRecentChats);
 router.get('/chatted-users', verifyToken, getChattedUsers);
 router.get('/one-to-one/:otherUserId', verifyToken, getOrCreateOneToOneChat);
 router.post('/group', verifyToken, createGroupChat);
@@ -67,7 +68,6 @@ router.get('/archived', verifyToken, getArchivedChatsForUser);
 router.get('/deleted', verifyToken, getDeletedChatsForUser);
 
 // Message routes
-router.get('/test', verifyToken, testMessage);
 router.post('/:chatId/msg', verifyToken, sendMessage);
 router.post('/:chatId/upload', verifyToken, upload.single('file'), uploadFile);
 router.get('/:chatId/msg', verifyToken, getChatMessages);

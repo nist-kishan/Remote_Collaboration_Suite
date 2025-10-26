@@ -211,6 +211,21 @@ projectSchema.methods.canBeManagedBy = function(user) {
   return false;
 };
 
+// Method to check if user can remove members
+projectSchema.methods.canRemoveMembers = function(user) {
+  // Check if user is in project team
+  const teamMember = this.team.find(member => 
+    member.user.toString() === user._id.toString() && member.status === "active"
+  );
+  
+  if (!teamMember) {
+    return false;
+  }
+  
+  // Only Owner and HR can remove members
+  return teamMember.role === "owner" || teamMember.role === "hr";
+};
+
 // Method to check if user can delete project
 projectSchema.methods.canBeDeletedBy = function(user) {
   const teamMember = this.team.find(member => 

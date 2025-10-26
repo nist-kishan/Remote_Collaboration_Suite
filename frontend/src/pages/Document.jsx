@@ -7,7 +7,7 @@ import DocumentList from '../components/documents/DocumentList';
 import DocumentEditorOptimized from '../components/documents/DocumentEditorOptimized';
 import DocumentLoading from '../components/documents/DocumentLoading';
 import DocumentError from '../components/documents/DocumentError';
-import ShareModal from '../components/documents/ShareModal';
+import ShareModal from '../components/documents/DocumentShareModal';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import { 
   createDocument, 
@@ -63,12 +63,13 @@ export default function Document() {
   // Fetch single document when editing
   const { data: documentData, isLoading: documentLoading, error: documentError } = useQuery({
     queryKey: ['document', documentId || selectedDocument?._id],
-    queryFn: () => {
+    queryFn: async () => {
       const id = documentId || selectedDocument?._id;
       if (!id) {
         throw new Error('Document ID is required');
       }
-      return getDocument(id);
+      const data = await getDocument(id);
+      return data;
     },
     enabled: !!(documentId || selectedDocument?._id) && currentView === 'editor' && !isCreating,
   });
@@ -77,14 +78,21 @@ export default function Document() {
   const createDocumentMutation = useMutation({
     mutationFn: createDocument,
     onSuccess: (data) => {
+      const newDocument = data.data.document;
       toast.success('Document created successfully!');
       queryClient.invalidateQueries(['documents']);
-      queryClient.invalidateQueries(['documents', 'all']); // Invalidate the specific query key used by DocumentsList
-      setSelectedDocument(data.data.document);
+      queryClient.invalidateQueries(['documents', 'all']);
+      // Set the selected document with the newly created document
+      setSelectedDocument(newDocument);
+      // Navigate to the new document's URL
+      navigate(`/documents/${newDocument._id}`);
       setCurrentView('editor');
       setIsCreating(false);
-    },
+      // Refetch the document to ensure it's loaded
+      queryClient.refetchQueries(['document', newDocument._id]);
+      },
     onError: (error) => {
+      console.error('❌ [CREATE DOCUMENT] Failed to create document:', error);
       toast.error(error?.data?.message || 'Failed to create document');
       setIsCreating(false);
     },
@@ -93,11 +101,9 @@ export default function Document() {
   // Update document mutation
   const updateDocumentMutation = useMutation({
     mutationFn: ({ documentId, data }) => {
-      console.log('updateDocumentMutation called with:', { documentId, data });
       return updateDocument(documentId, data);
     },
     onSuccess: (data) => {
-      console.log('Document updated successfully:', data);
       toast.success('Document updated successfully!');
       queryClient.invalidateQueries(['documents']);
       queryClient.invalidateQueries(['documents', 'all']); // Invalidate the specific query key used by DocumentsList
@@ -190,7 +196,7 @@ export default function Document() {
   const handleEditDocument = (document) => {
     setSelectedDocument(document);
     setCurrentView('editor');
-    navigate(`/documents/edit/${document._id}`);
+    navigate(`/documents/${document._id}`);
   };
 
   const handleViewDocument = (document) => {
@@ -203,6 +209,11 @@ export default function Document() {
     setSelectedDocument(document);
     setIsShareModalOpen(true);
   };
+
+  const handleCollaborateDocument = (document) => {
+    setSelectedDocument(document);
+    setIsShareModalOpen(true);
+    };
 
   const handleDeleteDocument = (document) => {
     setConfirmModal({
@@ -218,21 +229,15 @@ export default function Document() {
   };
 
   const handleSaveDocument = (documentData) => {
-    console.log('handleSaveDocument called with:', documentData);
-    console.log('selectedDocument:', selectedDocument);
-    console.log('documentId:', documentId);
-    
     if (selectedDocument || documentId) {
       // Update existing document
       const docId = documentId || selectedDocument._id;
-      console.log('Updating existing document:', docId);
       updateDocumentMutation.mutate({
         documentId: docId,
         data: documentData
       });
     } else {
       // Create new document
-      console.log('Creating new document');
       createDocumentMutation.mutate(documentData);
     }
   };
@@ -313,9 +318,11 @@ export default function Document() {
       );
     }
 
+    const currentDocument = isCreating ? null : (documentData?.data?.document || selectedDocument);
+    
     return (
       <DocumentEditorOptimized
-        document={isCreating ? null : (documentData?.data?.document || selectedDocument)}
+        document={currentDocument}
         onSave={handleSaveDocument}
         onShare={isCreating ? null : handleShareDocument}
         onBack={handleBackToList}
@@ -362,14 +369,18 @@ export default function Document() {
             onShareDocument={handleShareDocument}
             onDeleteDocument={handleDeleteDocument}
             onViewDocument={handleViewDocument}
+            onCollaborateDocument={handleCollaborateDocument}
           />
         </div>
       </div>
 
       <ShareModal
-        document={documentData?.data?.document || selectedDocument}
-        isOpen={isShareModalOpen && !isCreating && (documentData?.data?.document || selectedDocument)}
-        onClose={() => setIsShareModalOpen(false)}
+        document={selectedDocument}
+        isOpen={isShareModalOpen && !!selectedDocument}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          setSelectedDocument(null);
+        }}
         onShare={handleShare}
         onUpdateRole={handleUpdateRole}
         onRemoveCollaborator={handleRemoveCollaborator}

@@ -530,7 +530,6 @@ const RichTextEditor = forwardRef((props, ref) => {
     }
   };
 
-
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
   };
@@ -582,7 +581,6 @@ const RichTextEditor = forwardRef((props, ref) => {
     <div className={`rich-text-editor ${isDarkMode ? 'dark' : ''} ${isFullscreen ? 'fullscreen' : ''} ${className}`}>
       
       {/* Google Docs-like Toolbar */}
-     
 
       {/* Editor Content */}
       <div className="editor-content-wrapper">

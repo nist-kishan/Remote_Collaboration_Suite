@@ -17,13 +17,13 @@ export const useSocket = () => {
       
       // Log connection attempt
       if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
-        // console.log('🔌 Connecting to Socket.IO server:', SOCKET_CONFIG.URL);
+        console.log('Attempting to connect to socket...');
       }
       
       socketRef.current = io(SOCKET_CONFIG.URL, {
         withCredentials: true, // Use cookies for authentication
-        transports: ['websocket', 'polling'],
-        timeout: 20000, // 20 second timeout
+        transports: SOCKET_CONFIG.TRANSPORTS,
+        timeout: SOCKET_CONFIG.TIMEOUT,
         forceNew: true, // Force new connection
         reconnection: true,
         reconnectionAttempts: SOCKET_CONFIG.RECONNECTION_ATTEMPTS,
@@ -33,13 +33,17 @@ export const useSocket = () => {
       });
 
       socketRef.current.on('connect', () => {
-        // console.log('Socket.IO connected successfully');
         setIsConnected(true);
         setConnectionError(null);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('✅ Socket connected successfully');
+        }
       });
 
       socketRef.current.on('connection_confirmed', (data) => {
-        // Connection confirmed
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('Socket connection confirmed:', data);
+        }
       });
 
       socketRef.current.on('user_status_changed', (data) => {
@@ -49,22 +53,21 @@ export const useSocket = () => {
 
       socketRef.current.on('messages_read', (data) => {
         // Handle messages read status updates
-        // console.log('Messages read event received:', data);
       });
 
       socketRef.current.on('message_delivered', (data) => {
         // Handle message delivery status updates
-        // console.log('Message delivered event received:', data);
       });
 
       socketRef.current.on('chat_updated', (data) => {
         // Handle chat updates (unread count, last message, etc.)
-        // console.log('Chat updated event received:', data);
       });
 
       socketRef.current.on('disconnect', (reason) => {
-        // console.log('Socket.IO disconnected:', reason);
         setIsConnected(false);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('Socket disconnected:', reason);
+        }
         if (reason === 'io server disconnect') {
           // Server disconnected, try to reconnect
           socketRef.current.connect();
@@ -76,23 +79,34 @@ export const useSocket = () => {
         if (error.message.includes('WebSocket is closed before the connection is established')) {
           return;
         }
-        
-        console.log('Socket.IO connection error:', error.message);
+
         setConnectionError(error.message);
         setIsConnected(false);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.error('Socket connection error:', error.message);
+        }
       });
 
       socketRef.current.on('reconnect', (attemptNumber) => {
         setIsConnected(true);
         setConnectionError(null);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('✅ Socket reconnected after', attemptNumber, 'attempts');
+        }
       });
 
       socketRef.current.on('reconnect_error', (error) => {
         setConnectionError(error.message);
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.error('Socket reconnection error:', error.message);
+        }
       });
 
       socketRef.current.on('reconnect_failed', () => {
         setConnectionError('Failed to reconnect to server');
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.error('❌ Socket reconnection failed');
+        }
       });
 
       socketRef.current.on('error', (error) => {
@@ -100,13 +114,14 @@ export const useSocket = () => {
         if (isExtensionError(error)) {
           return;
         }
-        
+        console.error('Socket error:', error);
       });
     }
 
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
   }, [user]);
@@ -117,6 +132,9 @@ export const useSocket = () => {
     connectionError,
     reconnect: () => {
       if (socketRef.current && !socketRef.current.connected) {
+        if (LOGGING_CONFIG.ENABLE_CONSOLE_LOGS) {
+          console.log('Attempting to reconnect socket...');
+        }
         socketRef.current.connect();
       }
     }

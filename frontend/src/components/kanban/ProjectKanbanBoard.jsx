@@ -1,38 +1,33 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSelector, useDispatch } from "react-redux";
 import {
   Plus,
-  MoreVertical,
   Clock,
   User,
-  Tag,
   MessageSquare,
-  Search,
-  Filter,
+  CheckCircle2,
+  ListTodo,
+  PlayCircle,
+  Eye,
+  CheckCircle,
+  XCircle,
+  Send,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { taskApi } from "../../api/taskApi";
+import taskApi from "../../api/taskApi";
+import { projectApi } from "../../api/projectApi";
 import CustomButton from "../ui/CustomButton";
 import CustomCard from "../ui/CustomCard";
+import TaskCreateModal from "../task/TaskCreateModal";
+import TaskDetailsModal from "../task/TaskDetailsModal";
+import { getProjectUserRole } from "../../utils/roleUtils";
+import { setSelectedTask, clearSelectedTask } from "../../store/slice/taskSlice";
 
-const SortableTaskItem = ({ task, onTaskClick }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task._id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
+// Task Card Component
+const TaskCard = ({ task, onTaskClick, onRequestReview, currentUserRole }) => {
   const getPriorityColor = (priority) => {
     switch (priority) {
       case "urgent":
@@ -43,6 +38,21 @@ const SortableTaskItem = ({ task, onTaskClick }) => {
         return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
       case "low":
         return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      default:
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      case "in_progress":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+      case "review":
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
+      case "todo":
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
     }
@@ -60,291 +70,366 @@ const SortableTaskItem = ({ task, onTaskClick }) => {
     return `${diffInDays}d left`;
   };
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      onClick={() => onTaskClick(task)}
-      className="cursor-pointer"
-    >
-      <CustomCard className="p-4 mb-3 hover:shadow-md transition-shadow">
-        <div className="space-y-3">
-          <div className="flex items-start justify-between">
-            <h4 className="font-medium text-gray-900 dark:text-white text-sm">
-              {task.title}
-            </h4>
-            <span
-              className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(
-                task.priority
-              )}`}
-            >
-              {task.priority}
-            </span>
-          </div>
+  // Determine if task is completed
+  const isCompleted = task.status === 'completed';
 
-          {task.description && (
-            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-              {task.description}
-            </p>
+  return (
+    <CustomCard 
+      className={`p-4 transition-all duration-200 border ${
+        isCompleted 
+          ? 'bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800' 
+          : 'hover:shadow-lg hover:border-indigo-300 dark:hover:border-indigo-600 cursor-pointer group border-gray-200 dark:border-gray-700'
+      }`}
+      onClick={() => !isCompleted && onTaskClick(task)}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <h4 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight">
+          {task.title}
+        </h4>
+        <div className="flex items-center gap-2">
+          {!task.assignedTo && (
+            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+              Unassigned
+            </span>
+          )}
+          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(task.status)}`}>
+            {task.status === 'completed' ? 'Completed' : 
+             task.status === 'in_progress' ? 'In Progress' : 
+             task.status === 'review' ? 'Review' : 'Todo'}
+          </span>
+          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getPriorityColor(task.priority)}`}>
+            {task.priority || "medium"}
+          </span>
+        </div>
+      </div>
+
+      {task.description && (
+        <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed mb-3">
+          {task.description}
+        </p>
+      )}
+
+      {/* Tags */}
+      {task.tags && task.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-3">
+          {task.tags.slice(0, 3).map((tag, index) => (
+            <span
+              key={index}
+              className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+            >
+              {tag}
+            </span>
+          ))}
+          {task.tags.length > 3 && (
+            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+              +{task.tags.length - 3}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-3">
+          {task.assignedTo ? (
+            <div className="flex items-center gap-1">
+              {task.assignedTo.avatar ? (
+                <img 
+                  src={task.assignedTo.avatar} 
+                  alt={task.assignedTo.name} 
+                  className="w-5 h-5 rounded-full"
+                />
+              ) : (
+                <User className="w-3 h-3" />
+              )}
+              <span className="font-medium">{task.assignedTo.name}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
+              <User className="w-3 h-3" />
+              <span className="font-medium">Unassigned</span>
+            </div>
           )}
 
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-            <div className="flex items-center gap-3">
-              {task.assignedTo && (
-                <div className="flex items-center gap-1">
-                  <User className="w-3 h-3" />
-                  <span>{task.assignedTo.name}</span>
-                </div>
-              )}
-
-              {task.dueDate && (
-                <div className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  <span>{formatDate(task.dueDate)}</span>
-                </div>
-              )}
+          {task.dueDate && (
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              <span className="font-medium">{formatDate(task.dueDate)}</span>
             </div>
-
-            <div className="flex items-center gap-2">
-              {task.comments && task.comments.length > 0 && (
-                <div className="flex items-center gap-1">
-                  <MessageSquare className="w-3 h-3" />
-                  <span>{task.comments.length}</span>
-                </div>
-              )}
-
-              {task.tags && task.tags.length > 0 && (
-                <div className="flex items-center gap-1">
-                  <Tag className="w-3 h-3" />
-                  <span>{task.tags.length}</span>
-                </div>
-              )}
-            </div>
-          </div>
+          )}
         </div>
-      </CustomCard>
-    </div>
+
+        <div className="flex items-center gap-2">
+          {task.comments && task.comments.length > 0 && (
+            <div className="flex items-center gap-1">
+              <MessageSquare className="w-3 h-3" />
+              <span>{task.comments.length}</span>
+            </div>
+          )}
+
+          {task.estimatedHours && (
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              <span>{task.estimatedHours}h</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Request Review Button for In Progress tasks */}
+      {task.status === 'in_progress' && onRequestReview && (
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <CustomButton
+            size="sm"
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestReview(task);
+            }}
+            className="w-full text-xs"
+          >
+            <Send className="w-3 h-3 inline mr-1" />
+            Request Review
+          </CustomButton>
+        </div>
+      )}
+    </CustomCard>
   );
 };
 
-// Column Component
-const KanbanColumn = ({ title, tasks, status, onTaskClick, onCreateTask }) => {
+// Status Column Component
+const StatusColumn = ({ 
+  title, 
+  icon, 
+  tasks, 
+  onTaskClick, 
+  onCreateTask, 
+  onRequestReview,
+  currentUserRole,
+  canCreate,
+  canReview,
+  onAcceptReview,
+  onRejectReview
+}) => {
   return (
-    <div className="flex-1 min-w-0">
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 h-full">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-gray-900 dark:text-white">
-            {title}
-          </h3>
-          <span className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs px-2 py-1 rounded-full">
+    <div className="flex-1 bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+          <span className="bg-indigo-500 text-white text-xs px-2 py-1 rounded-full font-semibold">
             {tasks.length}
           </span>
         </div>
+        {canCreate && title === "In Progress" && (
+          <CustomButton
+            size="sm"
+            onClick={() => onCreateTask('todo')}
+            className="h-8 w-8 p-0"
+          >
+            <Plus className="w-4 h-4" />
+          </CustomButton>
+        )}
+      </div>
 
-        <div className="space-y-2 min-h-[200px]">
-          {tasks.map((task) => (
-            <div
-              key={task._id}
-              onClick={() => onTaskClick(task)}
-              className="cursor-pointer"
-            >
-              <CustomCard className="p-4 mb-3 hover:shadow-md transition-shadow">
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <h4 className="font-medium text-gray-900 dark:text-white text-sm">
-                      {task.title}
-                    </h4>
-                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                      {task.priority || "medium"}
-                    </span>
-                  </div>
-
-                  {task.description && (
-                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                      {task.description}
-                    </p>
-                  )}
-
-                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center gap-3">
-                      {task.assignedTo && (
-                        <div className="flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          <span>{task.assignedTo.name}</span>
-                        </div>
-                      )}
-
-                      {task.dueDate && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          <span>
-                            {new Date(task.dueDate).toLocaleDateString()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+      <div className="space-y-3">
+        {tasks.length > 0 ? (
+          tasks.map((task) => (
+            <div key={task._id}>
+              <TaskCard
+                task={task}
+                onTaskClick={onTaskClick}
+                onRequestReview={onRequestReview}
+                currentUserRole={currentUserRole}
+              />
+              {/* Review Actions for Review Column */}
+              {title === "Review" && canReview && task.status === 'review' && (
+                <div className="mt-2 flex gap-2">
+                  <CustomButton
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAcceptReview(task);
+                    }}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-xs"
+                  >
+                    <CheckCircle className="w-3 h-3 inline mr-1" />
+                    Accept
+                  </CustomButton>
+                  <CustomButton
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRejectReview(task);
+                    }}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-xs"
+                  >
+                    <XCircle className="w-3 h-3 inline mr-1" />
+                    Reject
+                  </CustomButton>
                 </div>
-              </CustomCard>
+              )}
             </div>
-          ))}
-        </div>
-
-        <CustomButton
-          onClick={() => onCreateTask(status)}
-          variant="outline"
-          size="sm"
-          className="w-full mt-4 flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Add Task
-        </CustomButton>
+          ))
+        ) : (
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <p className="text-sm">No tasks</p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 const KanbanBoard = ({ projectId, selectedBoardId }) => {
-
   const queryClient = useQueryClient();
+  const dispatch = useDispatch();
+  const currentUser = useSelector((state) => state.auth.user);
+  const selectedTask = useSelector((state) => state.task.selectedTask);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTaskDetails, setShowTaskDetails] = useState(false);
-  const [setSelectedTask] = useState(null);
-  const [setSelectedColumn] = useState("todo");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedBoard, setSelectedBoard] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [activeTab, setActiveTab] = useState('all');
+  const limit = 50;
 
+  // Fetch project members
+  const { data: projectData } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: async () => {
+      if (!projectId) return null;
+      return projectApi.getProject(projectId);
+    },
+    enabled: !!projectId,
+  });
 
-  // Fetch all Kanban boards
+  // Extract project members from projectData
+  const projectMembers = projectData?.data?.data?.project?.team || [];
+  const project = projectData?.data?.data?.project;
+
+  // Get current user's role in the project
+  const currentUserRole = projectData?.data?.data?.project?.team?.find(
+    member => member.user?._id === currentUser?._id
+  )?.role || 'employee';
+
+  // Role-based permissions
+  const canCreateTask = ['owner', 'hr', 'mr', 'tr'].includes(currentUserRole);
+  const canReview = ['owner', 'hr', 'mr'].includes(currentUserRole);
+
+  // Fetch tasks with pagination
   const {
-    data: kanbanData,
+    data: tasksData,
     isLoading,
     error,
     refetch,
   } = useQuery({
-    queryKey: ["allKanbanBoards", searchQuery, statusFilter, priorityFilter],
+    queryKey: ["project-tasks", projectId, currentPage, activeTab],
     queryFn: async () => {
-
-      try {
-        const response = await taskApi.getAllKanbanBoards({
-          search: searchQuery,
-          status: statusFilter,
-          priority: priorityFilter,
-        });
-
-        return response;
-      } catch (err) {
-        throw err;
+      if (!projectId) return null;
+      const params = { page: currentPage, limit };
+      // Add status filter based on active tab
+      if (activeTab !== 'all') {
+        params.status = activeTab;
       }
+      return taskApi.getProjectTasks(projectId, params);
     },
-    retry: 1,
-    staleTime: 0,
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    enabled: !!projectId,
   });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const kanbanBoards = kanbanData?.data?.kanbanBoards || [];
+  const allTasks = tasksData?.data?.data?.tasks || [];
+  const pagination = tasksData?.data?.data?.pagination || {};
 
-  // Debug logging
-
-  // Set the selected board when data is loaded
-  useEffect(() => {
-
-    if (kanbanBoards.length > 0) {
-      if (selectedBoardId) {
-        const board = kanbanBoards.find(
-          (board) => board._id === selectedBoardId
-        );
-        setSelectedBoard(board || kanbanBoards[0]);
-      } else {
-        setSelectedBoard(kanbanBoards[0]);
-      }
+  // Filter tasks based on role
+  const getFilteredTasks = (tasks, status) => {
+    if (currentUserRole === 'employee') {
+      // Employees can only see their own tasks
+      return tasks.filter(task => 
+        task.status === status && 
+        task.assignedTo && 
+        task.assignedTo._id === currentUser._id
+      );
     }
-  }, [kanbanBoards, selectedBoardId]);
-
-  // Move task mutation
-  const moveTaskMutation = useMutation({
-    mutationFn: ({ taskId, status }) => taskApi.moveTask(taskId, { status }),
-    onSuccess: () => {
-      queryClient.invalidateQueries(["allKanbanBoards"]);
-    },
-    onError: (error) => {
-      toast.error(error.response?.data?.message || "Failed to move task");
-    },
-  });
-
-  // Get tasks from the selected board
-  const tasks = selectedBoard
-    ? [
-        ...(selectedBoard.columns?.todo || []),
-        ...(selectedBoard.columns?.in_progress || []),
-        ...(selectedBoard.columns?.review || []),
-        ...(selectedBoard.columns?.completed || []),
-      ]
-    : [];
-
-  // Group tasks by status
-  const tasksByStatus = {
-    todo: selectedBoard?.columns?.todo || [],
-    in_progress: selectedBoard?.columns?.in_progress || [],
-    review: selectedBoard?.columns?.review || [],
-    completed: selectedBoard?.columns?.completed || [],
+    // Others can see all tasks
+    return tasks.filter(task => task.status === status);
   };
 
-  // Debug selected board and tasks
+  const tasksByStatus = {
+    todo: getFilteredTasks(allTasks, 'todo'),
+    in_progress: getFilteredTasks(allTasks, 'in_progress'),
+    review: getFilteredTasks(allTasks, 'review'),
+    completed: getFilteredTasks(allTasks, 'completed'),
+  };
 
-  const columns = [
-    { id: "todo", title: "To Do", status: "todo" },
-    { id: "in_progress", title: "In Progress", status: "in_progress" },
-    { id: "review", title: "Review", status: "review" },
-    { id: "completed", title: "Done", status: "completed" },
-  ];
+  // Request review mutation
+  const requestReviewMutation = useMutation({
+    mutationFn: (taskId) => taskApi.updateTask(taskId, { status: 'review' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['project-tasks', projectId]);
+      toast.success('Review requested successfully');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to request review');
+    }
+  });
 
+  // Accept review mutation
+  const acceptReviewMutation = useMutation({
+    mutationFn: (taskId) => taskApi.updateTask(taskId, { status: 'completed' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['project-tasks', projectId]);
+      toast.success('Task approved and marked as completed');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to accept review');
+    }
+  });
+
+  // Reject review mutation
+  const rejectReviewMutation = useMutation({
+    mutationFn: (taskId) => taskApi.updateTask(taskId, { status: 'in_progress' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['project-tasks', projectId]);
+      toast.success('Review rejected, task moved back to in progress');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to reject review');
+    }
+  });
 
   const handleTaskClick = (task) => {
-    setSelectedTask(task);
+    // Don't open modal if task is completed
+    if (task.status === 'completed') {
+      return;
+    }
+    dispatch(setSelectedTask(task));
     setShowTaskDetails(true);
   };
 
+  const handleRequestReview = (task) => {
+    requestReviewMutation.mutate(task._id);
+  };
+
+  const handleAcceptReview = (task) => {
+    acceptReviewMutation.mutate(task._id);
+  };
+
+  const handleRejectReview = (task) => {
+    rejectReviewMutation.mutate(task._id);
+  };
+
   const handleCreateTask = (status) => {
-    setSelectedColumn(status);
     setShowCreateModal(true);
   };
 
-  const handleBoardSelect = (boardId) => {
-    const board = kanbanBoards.find((board) => board._id === boardId);
-    setSelectedBoard(board);
-  };
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      // Reset search when query changes
-      if (searchQuery || statusFilter || priorityFilter) {
-        // Search/filter changed, could trigger refetch here if needed
-      }
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, statusFilter, priorityFilter]);
-
   if (isLoading) {
     return (
-      <div className="flex gap-6 p-6">
-        {columns.map((column) => (
-          <div key={column.id} className="flex-1">
+      <div className="flex gap-4 p-6">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="flex-1">
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 h-96 animate-pulse">
               <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded mb-4"></div>
               <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-20 bg-gray-200 dark:bg-gray-700 rounded"
-                  ></div>
+                {[...Array(3)].map((_, j) => (
+                  <div key={j} className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
                 ))}
               </div>
             </div>
@@ -357,9 +442,7 @@ const KanbanBoard = ({ projectId, selectedBoardId }) => {
   if (error) {
     return (
       <div className="p-6 text-center">
-        <p className="text-red-600 dark:text-red-400">
-          Error loading Kanban boards: {error.message}
-        </p>
+        <p className="text-red-600 dark:text-red-400">Error loading tasks: {error.message}</p>
         <CustomButton onClick={() => refetch()} className="mt-4">
           Retry
         </CustomButton>
@@ -367,204 +450,190 @@ const KanbanBoard = ({ projectId, selectedBoardId }) => {
     );
   }
 
-  if (kanbanBoards.length === 0) {
-    return (
-      <div className="p-6">
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800 mb-6">
-          <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-            📋 No Kanban Boards Found
-          </h4>
-          <p className="text-sm text-blue-700 dark:text-blue-300">
-            You don't have any projects with tasks yet. Create a project and add
-            some tasks to see them here.
-          </p>
-        </div>
-
-        {/* Debug Info Panel */}
-        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 mb-6">
-          <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            Debug Info:
-          </h4>
-          <p className="text-sm text-gray-700 dark:text-gray-300">
-            Loading: {isLoading ? "Yes" : "No"} | Error: {error ? "Yes" : "No"}{" "}
-            | Kanban Boards Count: {kanbanBoards.length}
-          </p>
-        </div>
-
-        <div className="text-center py-12">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            No tasks to display
-          </h3>
-          <p className="text-gray-500 dark:text-gray-400 mb-4">
-            Start by creating a project and adding some tasks.
-          </p>
-          <CustomButton onClick={() => refetch()} className="mt-4">
-            Refresh Data
-          </CustomButton>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-6">
-      {/* Debug Info Panel */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800 mb-6">
-        <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
-          KanbanBoard Debug Info:
-        </h4>
-        <p className="text-sm text-blue-700 dark:text-blue-300">
-          Loading: {isLoading ? "Yes" : "No"} | Error: {error ? "Yes" : "No"} |
-          Kanban Boards Count: {kanbanBoards.length} | Selected Board:{" "}
-          {selectedBoard?.name || "None"} | Total Tasks: {tasks.length}
-        </p>
-        <div className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs">
-          <strong>Raw kanbanData:</strong>
-          <pre className="whitespace-pre-wrap overflow-auto max-h-32">
-            {JSON.stringify(kanbanData, null, 2)}
-          </pre>
-        </div>
-        <div className="mt-2 space-y-2">
-          <CustomButton
-            onClick={() => {
-              refetch();
-            }}
-            variant="outline"
-            size="sm"
-          >
-            Force Refetch
-          </CustomButton>
-        </div>
-      </div>
-
-      {/* Header with Board Selection and Search */}
-      <div className="mb-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+    <>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
               Kanban Board
             </h2>
-            {selectedBoard && (
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {selectedBoard.name} - {selectedBoard.description}
-              </p>
+            {canCreateTask && (
+              <CustomButton onClick={() => setShowCreateModal(true)}>
+                <Plus className="w-4 h-4 inline mr-2" />
+                Create Task
+              </CustomButton>
             )}
           </div>
-          <CustomButton
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Create Task
-          </CustomButton>
         </div>
 
-        {/* Board Selector */}
-        {kanbanBoards.length > 1 && (
-          <div className="flex gap-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Select Board:
-            </label>
-            <select
-              value={selectedBoard?._id || ""}
-              onChange={(e) => handleBoardSelect(e.target.value)}
-              className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
-            >
-              {kanbanBoards.map((board) => (
-                <option key={board._id} value={board._id}>
-                  {board.name}
-                </option>
+        {/* Tabs */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="border-b border-gray-200 dark:border-gray-700">
+            <nav className="flex -mb-px">
+              {[
+                { id: 'all', label: 'All Tasks', icon: CheckCircle2 },
+                { id: 'todo', label: 'Task', icon: ListTodo },
+                { id: 'in_progress', label: 'In Progress', icon: PlayCircle },
+                { id: 'review', label: 'Review', icon: Eye },
+                { id: 'completed', label: 'Completed', icon: CheckCircle2 },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setCurrentPage(1);
+                  }}
+                  className={`
+                    flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors
+                    ${activeTab === tab.id
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    }
+                  `}
+                >
+                  <tab.icon className="w-5 h-5" />
+                  {tab.label}
+                </button>
               ))}
-            </select>
+            </nav>
           </div>
-        )}
 
-        {/* Search and Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
-            />
+          {/* Tasks List */}
+          <div className="p-6">
+            {allTasks.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 dark:text-gray-400">No tasks found</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {allTasks.map((task) => (
+                  <div key={task._id}>
+                    <TaskCard
+                      task={task}
+                      onTaskClick={handleTaskClick}
+                      onRequestReview={handleRequestReview}
+                      currentUserRole={currentUserRole}
+                    />
+                    {/* Review Actions */}
+                    {activeTab === 'review' && canReview && task.status === 'review' && (
+                      <div className="mt-2 flex gap-2">
+                        <CustomButton
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAcceptReview(task);
+                          }}
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-xs"
+                        >
+                          <CheckCircle className="w-3 h-3 inline mr-1" />
+                          Accept
+                        </CustomButton>
+                        <CustomButton
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRejectReview(task);
+                          }}
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-xs"
+                        >
+                          <XCircle className="w-3 h-3 inline mr-1" />
+                          Reject
+                        </CustomButton>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <CustomButton
-            onClick={() => setShowFilters(!showFilters)}
-            variant="outline"
-            className="flex items-center gap-2 w-full sm:w-auto"
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-          </CustomButton>
         </div>
 
-        {/* Filters Panel */}
-        {showFilters && (
-          <CustomCard className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Task Status
-              </label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              >
-                <option value="">All</option>
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="review">Review</option>
-                <option value="completed">Completed</option>
-              </select>
+        {/* Pagination Controls */}
+        {pagination.totalPages > 1 && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Showing page {pagination.currentPage} of {pagination.totalPages} 
+                ({pagination.totalCount} total tasks)
+              </div>
+              <div className="flex items-center gap-2">
+                <CustomButton
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={!pagination.hasPrevPage || isLoading}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </CustomButton>
+                
+                <div className="flex gap-1">
+                  {[...Array(pagination.totalPages)].map((_, i) => {
+                    const pageNum = i + 1;
+                    // Show first page, last page, current page, and pages around current
+                    if (
+                      pageNum === 1 ||
+                      pageNum === pagination.totalPages ||
+                      (pageNum >= pagination.currentPage - 1 && pageNum <= pagination.currentPage + 1)
+                    ) {
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          disabled={isLoading}
+                          className={`px-3 py-1 text-sm rounded ${
+                            pageNum === pagination.currentPage
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    } else if (
+                      pageNum === pagination.currentPage - 2 ||
+                      pageNum === pagination.currentPage + 2
+                    ) {
+                      return <span key={pageNum} className="px-2 text-gray-500">...</span>;
+                    }
+                    return null;
+                  })}
+                </div>
+
+                <CustomButton
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage(prev => Math.min(pagination.totalPages, prev + 1))}
+                  disabled={!pagination.hasNextPage || isLoading}
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </CustomButton>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Task Priority
-              </label>
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              >
-                <option value="">All</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            </div>
-          </CustomCard>
+          </div>
         )}
       </div>
-
-      {/* Kanban Board */}
-      {selectedBoard && (
-        <div className="flex gap-6 overflow-x-auto">
-          {columns.map((column) => (
-            <KanbanColumn
-              key={column.id}
-              title={column.title}
-              tasks={tasksByStatus[column.status]}
-              status={column.status}
-              onTaskClick={handleTaskClick}
-              onCreateTask={handleCreateTask}
-            />
-          ))}
-        </div>
-      )}
 
       {/* Create Task Modal */}
       {showCreateModal && (
-        <CreateTaskModal
+        <TaskCreateModal
           isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           projectId={projectId}
-          onTaskCreated={(newTask) => {
-            refetch();
-            setShowCreateModal(false);
+          projectMembers={projectMembers.map(member => ({
+            user: member.user
+          }))}
+          onCreateTask={(taskData) => {
+            taskApi.createTask(projectId, taskData).then(() => {
+              queryClient.invalidateQueries(['project-tasks', projectId]);
+              setShowCreateModal(false);
+              toast.success("Task created successfully");
+            }).catch((error) => {
+              toast.error(error.response?.data?.message || 'Failed to create task');
+            });
           }}
         />
       )}
@@ -575,22 +644,23 @@ const KanbanBoard = ({ projectId, selectedBoardId }) => {
           isOpen={showTaskDetails}
           onClose={() => {
             setShowTaskDetails(false);
-            setSelectedTask(null);
+            dispatch(clearSelectedTask());
           }}
           task={selectedTask}
+          project={project}
           onTaskUpdated={() => {
             refetch();
             setShowTaskDetails(false);
-            setSelectedTask(null);
+            dispatch(clearSelectedTask());
           }}
           onTaskDeleted={() => {
             refetch();
             setShowTaskDetails(false);
-            setSelectedTask(null);
+            dispatch(clearSelectedTask());
           }}
         />
       )}
-    </div>
+    </>
   );
 };
 

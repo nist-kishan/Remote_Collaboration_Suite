@@ -29,9 +29,22 @@ export const securityHeaders = helmet({
 
 // Rate limiting middleware
 export const createRateLimit = (windowMs = 15 * 60 * 1000, max = 100) => {
-  // Disable rate limiting in development
+  // Use more lenient rate limiting in development
   if (process.env.NODE_ENV === 'development') {
-    return (req, res, next) => next();
+    return rateLimit({
+      windowMs: windowMs,
+      max: max * 10, // 10x more lenient in development
+      message: {
+        success: false,
+        message: 'Too many requests from this IP, please try again later.',
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+      skip: (req) => {
+        // Skip rate limiting for certain endpoints in development
+        return req.url.includes('/socket.io/') || req.url.includes('/health');
+      }
+    });
   }
   
   return rateLimit({
@@ -61,8 +74,7 @@ export const uploadLimiter = createRateLimit(60 * 1000, 10); // 10 uploads per m
 // MongoDB injection prevention
 export const sanitizeMongo = mongoSanitize({
   onSanitize: ({ req, key }) => {
-    console.warn(`MongoDB injection attempt detected in ${key}:`, req[key]);
-  },
+    },
 });
 
 // HTTP Parameter Pollution prevention
@@ -111,7 +123,7 @@ export const corsOptions = {
 
     // In development, be more permissive
     if (process.env.NODE_ENV === 'development') {
-      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0')) {
+      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0') || process.env.NODE_ENV === 'development') {
         return callback(null, true);
       }
     }
@@ -119,7 +131,6 @@ export const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn('🚫 CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -167,8 +178,7 @@ export const securityLogger = (req, res, next) => {
     
     // Log only critical errors (500+)
     if (res.statusCode >= 500) {
-      console.error('Critical Error:', logData);
-    }
+      }
   });
   
   next();

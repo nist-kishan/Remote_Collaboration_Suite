@@ -118,7 +118,6 @@ export const useForm = (initialValues = {}, validationRules = {}) => {
 
       await onSubmit(values);
     } catch (error) {
-      console.error('Form submission error:', error);
     } finally {
       setIsSubmitting(false);
     }

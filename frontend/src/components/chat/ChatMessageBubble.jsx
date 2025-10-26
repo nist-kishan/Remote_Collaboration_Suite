@@ -9,14 +9,17 @@ import {
   Image as ImageIcon,
   Video,
   FileText,
-  Download
+  Download,
+  ArrowUpRight
 } from 'lucide-react';
 import ReadReceipt from './ReadReceipt';
+import ImagePreviewModal from '../ui/ImagePreviewModal';
 
 const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) => {
   const { user } = useSelector((state) => state.auth);
   const [showMenu, setShowMenu] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const [showImagePreview, setShowImagePreview] = useState(false);
 
   const isOwnMessage = message.sender._id === user._id;
   const isOptimistic = message.isOptimistic;
@@ -34,13 +37,22 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
     switch (message.type) {
       case 'image':
         return (
-          <div className="rounded-lg overflow-hidden">
+          <div className="relative rounded-lg overflow-hidden group">
             <img
               src={message.media[0]?.url}
               alt="Shared image"
-              className="max-w-xs max-h-64 object-contain cursor-pointer"
-              onClick={() => window.open(message.media[0]?.url, '_blank')}
+              className="w-full max-w-[280px] sm:max-w-[320px] md:max-w-[360px] h-auto max-h-[200px] sm:max-h-[240px] md:max-h-[280px] object-cover cursor-pointer"
             />
+            {/* Arrow icon overlay */}
+            <button
+              onClick={() => setShowImagePreview(true)}
+              className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-all duration-200 opacity-0 group-hover:opacity-100"
+              title="Open image preview"
+            >
+              <div className="bg-white/90 dark:bg-gray-800/90 rounded-full p-2 shadow-lg">
+                <ArrowUpRight className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+              </div>
+            </button>
           </div>
         );
       
@@ -50,7 +62,7 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
             <video
               src={message.media[0]?.url}
               controls
-              className="max-w-xs max-h-64"
+              className="w-full max-w-[280px] sm:max-w-[320px] md:max-w-[360px] h-auto max-h-[200px] sm:max-h-[240px] md:max-h-[280px] object-cover"
             />
           </div>
         );
@@ -103,12 +115,7 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
         />
       )}
 
-      <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'} max-w-[70%]`}>
-        {!isOwnMessage && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 mb-1 px-2">
-            {message.sender.name}
-          </span>
-        )}
+      <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'} max-w-[85%] sm:max-w-[80%] md:max-w-[75%] lg:max-w-[70%]`}>
 
         <div className="relative group">
           <div
@@ -263,6 +270,16 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
           src={user.avatar || '/default-avatar.png'}
           alt={user.name}
           className="w-8 h-8 rounded-full object-cover"
+        />
+      )}
+
+      {/* Image Preview Modal */}
+      {message.type === 'image' && (
+        <ImagePreviewModal
+          isOpen={showImagePreview}
+          onClose={() => setShowImagePreview(false)}
+          imageUrl={message.media[0]?.url}
+          imageName={message.media[0]?.name || 'Shared Image'}
         />
       )}
     </div>

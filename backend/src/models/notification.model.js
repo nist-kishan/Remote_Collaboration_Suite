@@ -15,9 +15,15 @@ const notificationSchema = new mongoose.Schema(
         "task_assigned",
         "task_completed",
         "meeting_invite",
+        "meeting_scheduled",
         "meeting_reminder",
         "project_invite",
         "workspace_invite",
+        "budget_allocated",
+        "budget_updated",
+        "budget_request",
+        "budget_approved",
+        "budget_rejected",
         "role_changed",
         "comment_added",
         "mention"
@@ -141,6 +147,10 @@ notificationSchema.statics.createMeetingNotification = function(userId, meeting,
       title: "Meeting Invitation",
       message: `You have been invited to meeting "${meeting.title}"`
     },
+    meeting_scheduled: {
+      title: "Meeting Scheduled",
+      message: `A new meeting "${meeting.title}" has been scheduled in project ${meeting.project?.name || "Unknown"}`
+    },
     meeting_reminder: {
       title: "Meeting Reminder",
       message: `Meeting "${meeting.title}" starts in 15 minutes`
@@ -157,6 +167,36 @@ notificationSchema.statics.createMeetingNotification = function(userId, meeting,
     notification.message,
     { meetingId: meeting._id, projectId: meeting.project },
     options
+  );
+};
+
+// Static method to create project notification
+notificationSchema.statics.createProjectNotification = function(userId, project, type, details = {}) {
+  const notifications = {
+    budget_allocated: {
+      title: "Budget Allocated",
+      message: `Budget has been allocated for project "${project.name}"`
+    },
+    budget_updated: {
+      title: "Budget Updated",
+      message: `Budget has been updated for project "${project.name}"`
+    },
+    task_completed: {
+      title: "Task Completed",
+      message: details.taskTitle ? `Task "${details.taskTitle}" has been completed in project "${project.name}"` : `A task has been completed in project "${project.name}"`
+    }
+  };
+
+  const notification = notifications[type];
+  if (!notification) return null;
+
+  return this.createNotification(
+    userId,
+    type,
+    notification.title,
+    notification.message,
+    { projectId: project._id, ...details },
+    { priority: "medium" }
   );
 };
 

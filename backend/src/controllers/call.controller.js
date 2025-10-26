@@ -26,6 +26,21 @@ export const startCall = asyncHandle(async (req, res) => {
       throw new ApiError(403, 'You are not a participant in this chat');
     }
 
+    // Check for existing ongoing calls between the same participants
+    const existingCall = await Call.findOne({
+      chat: chatId,
+      status: { $in: ['ringing', 'ongoing'] },
+      participants: {
+        $all: chat.participants.map(p => ({
+          $elemMatch: { user: p.user }
+        }))
+      }
+    });
+
+    if (existingCall) {
+      throw new ApiError(409, 'A call is already in progress with these participants');
+    }
+
     // Get all participants except the caller
     participants = chat.participants
       .filter(p => p.user.toString() !== userId.toString())
@@ -45,6 +60,21 @@ export const startCall = asyncHandle(async (req, res) => {
     const { participantIds } = req.body;
     if (!participantIds || participantIds.length === 0) {
       throw new ApiError(400, 'Participants are required');
+    }
+
+    // Check for existing ongoing calls between the same participants
+    const allParticipantIds = [userId, ...participantIds];
+    const existingCall = await Call.findOne({
+      status: { $in: ['ringing', 'ongoing'] },
+      participants: {
+        $all: allParticipantIds.map(id => ({
+          $elemMatch: { user: id }
+        }))
+      }
+    });
+
+    if (existingCall) {
+      throw new ApiError(409, 'A call is already in progress with these participants');
     }
 
     participants = [
@@ -182,7 +212,6 @@ export const getCallHistory = asyncHandle(async (req, res) => {
     query.status = { $in: ['ended', 'missed', 'rejected', 'ringing', 'ongoing'] };
   }
 
-
   const calls = await Call.find(query)
     .populate('participants.user', 'name avatar')
     .populate('startedBy', 'name avatar')
@@ -190,7 +219,6 @@ export const getCallHistory = asyncHandle(async (req, res) => {
     .sort({ startedAt: -1 })
     .limit(limit * 1)
     .skip((page - 1) * limit);
-
 
   const total = await Call.countDocuments(query);
 
@@ -435,39 +463,5 @@ export const cleanupMissedCalls = asyncHandle(async (req, res) => {
     new ApiResponse(200, { 
       modifiedCount: result.modifiedCount 
     }, `Marked ${result.modifiedCount} calls as missed`)
-  );
-});
-
-// Debug function to check call status
-export const debugCallStatus = asyncHandle(async (req, res) => {
-  const { callId } = req.params;
-
-  const call = await Call.findById(callId)
-    .populate('participants.user', 'name avatar')
-    .populate('startedBy', 'name avatar')
-    .populate('chat');
-
-  if (!call) {
-    throw new ApiError(404, 'Call not found');
-  }
-
-  return res.status(200).json(
-    new ApiResponse(200, { 
-      call: {
-        _id: call._id,
-        status: call.status,
-        startedAt: call.startedAt,
-        endedAt: call.endedAt,
-        duration: call.duration,
-        startedBy: call.startedBy,
-        participants: call.participants.map(p => ({
-          user: p.user,
-          status: p.status,
-          joinedAt: p.joinedAt,
-          leftAt: p.leftAt,
-          duration: p.duration
-        }))
-      }
-    }, 'Call status debug info')
   );
 });

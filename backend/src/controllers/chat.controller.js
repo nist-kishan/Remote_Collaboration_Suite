@@ -58,7 +58,13 @@ export const getUserChats = asyncHandle(async (req, res) => {
   try {
     const chats = await Chat.find(query)
       .populate('participants.user', 'name email avatar isOnline lastSeen')
-      .populate('lastMessage')
+      .populate({
+        path: 'lastMessage',
+        populate: {
+          path: 'sender',
+          select: 'name avatar'
+        }
+      })
       .populate('createdBy', 'name avatar')
       .sort({ lastMessageAt: -1, updatedAt: -1 })
       .skip(skip)
@@ -71,12 +77,28 @@ export const getUserChats = asyncHandle(async (req, res) => {
       chat.participants.every(p => p.user !== null && p.user !== undefined)
     );
 
+    // Enhance chat data with unread counts and better formatting
+    const enhancedChats = validChats.map(chat => {
+      const userUnreadCount = chat.unreadCount?.get?.(userId.toString()) || 0;
+      
+      return {
+        ...chat.toObject(),
+        userUnreadCount,
+        hasUnreadMessages: userUnreadCount > 0,
+        isOneToOne: chat.type === 'one-to-one',
+        // For one-to-one chats, get the other participant
+        otherParticipant: chat.type === 'one-to-one' 
+          ? chat.participants.find(p => p.user._id.toString() !== userId.toString())?.user
+          : null
+      };
+    });
+
     // Determine response data structure based on type
     const responseData = type === 'group' 
-      ? { groupChats: validChats }
+      ? { groupChats: enhancedChats }
       : type === 'one-to-one'
-      ? { oneToOneChats: validChats }
-      : { chats: validChats };
+      ? { oneToOneChats: enhancedChats }
+      : { chats: enhancedChats };
 
     return res.status(200).json(
       new ApiResponse(200, `${type ? type.charAt(0).toUpperCase() + type.slice(1) : 'All'} chats fetched successfully`, { 
@@ -140,7 +162,6 @@ export const getOrCreateOneToOneChat = asyncHandle(async (req, res) => {
   if (!otherUser) {
     throw new ApiError(404, 'User not found');
   }
-  
 
   // Check if chat already exists
   let chat = await Chat.findOne({
@@ -300,13 +321,15 @@ export const getGroupMembers = asyncHandle(async (req, res) => {
   const userParticipant = chat.participants.find(p => p.user._id.toString() === userId.toString());
   const isAdmin = userParticipant?.role === 'admin' || userParticipant?.role === 'owner';
 
+  const response = {
+    members: chat.participants,
+    createdBy: chat.createdBy,
+    isAdmin,
+    userRole: userParticipant?.role
+  };
+
   return res.status(200).json(
-    new ApiResponse(200, 'Group members fetched successfully', {
-      members: chat.participants,
-      createdBy: chat.createdBy,
-      isAdmin,
-      userRole: userParticipant?.role
-    })
+    new ApiResponse(200, 'Group members fetched successfully', response)
   );
 });
 
@@ -488,6 +511,121 @@ export const leaveGroup = asyncHandle(async (req, res) => {
   );
 });
 
+// Get recent chats with enhanced data for chat list display
+export const getRecentChats = asyncHandle(async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const { page = 1, limit = 50, search } = req.query;
+
+    // Validate user
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated',
+        data: null
+      });
+    }
+
+    // Build query for active chats with messages
+    let query = {
+      'participants.user': userId,
+      isArchived: false,
+      // Only include chats that have at least one message
+      lastMessage: { $exists: true, $ne: null },
+      lastMessageAt: { $exists: true, $ne: null },
+      $or: [
+        { [`userVisibility.${userId}.isHidden`]: { $ne: true } },
+        { [`userVisibility.${userId}.isDeleted`]: { $ne: true } },
+        { [`userVisibility.${userId}`]: { $exists: false } }
+      ]
+    };
+
+    // Add search functionality
+    if (search && search.trim()) {
+      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      query.$and = [
+        {
+          $or: [
+            { name: searchRegex },
+            { description: searchRegex },
+            { 'participants.user.name': searchRegex },
+            { 'participants.user.email': searchRegex }
+          ]
+        }
+      ];
+    }
+
+    // Get chats with enhanced population
+    const chats = await Chat.find(query)
+      .populate('participants.user', 'name email avatar isOnline lastSeen')
+      .populate({
+        path: 'lastMessage',
+        populate: {
+          path: 'sender',
+          select: 'name avatar'
+        }
+      })
+      .populate('createdBy', 'name avatar')
+      .select('participants type name description lastMessageAt updatedAt lastMessage unreadCount createdBy')
+      .sort({ lastMessageAt: -1, updatedAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
+
+    // Enhance chat data
+    const enhancedChats = chats.map(chat => {
+      const userUnreadCount = chat.unreadCount?.get?.(userId.toString()) || 0;
+      const otherParticipant = chat.type === 'one-to-one' 
+        ? chat.participants.find(p => p.user._id.toString() !== userId.toString())?.user
+        : null;
+
+      // Debug logging for chat processing
+      if (chat.type === 'one-to-one' && !otherParticipant) {
+        // Warning: No other participant found for one-to-one chat
+      }
+
+      return {
+        _id: chat._id,
+        type: chat.type,
+        name: chat.type === 'one-to-one' ? (otherParticipant?.name || 'Unknown User') : chat.name,
+        description: chat.description,
+        avatar: chat.type === 'one-to-one' ? otherParticipant?.avatar : chat.avatar,
+        lastMessage: chat.lastMessage,
+        lastMessageAt: chat.lastMessageAt || chat.updatedAt,
+        updatedAt: chat.updatedAt,
+        createdAt: chat.createdAt,
+        participants: chat.participants,
+        createdBy: chat.createdBy,
+        unreadCount: userUnreadCount, // Include unread count in the expected format
+        userUnreadCount,
+        hasUnreadMessages: userUnreadCount > 0,
+        isOneToOne: chat.type === 'one-to-one',
+        otherParticipant,
+        memberCount: chat.participants.length
+      };
+    });
+
+    const total = await Chat.countDocuments(query);
+
+    return res.status(200).json(
+      new ApiResponse(200, 'Recent chats fetched successfully', {
+        chats: enhancedChats,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit))
+        }
+      })
+    );
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch recent chats: ' + error.message,
+      data: null
+    });
+  }
+});
+
 // Get all users the current user has chatted with
 export const getChattedUsers = asyncHandle(async (req, res) => {
   try {
@@ -503,15 +641,24 @@ export const getChattedUsers = asyncHandle(async (req, res) => {
       });
     }
 
-    // Get all chats where the user is a participant
+    // Get all chats where the user is a participant and has messages
     const chats = await Chat.find({
       'participants.user': userId,
-      isArchived: false
+      isArchived: false,
+      // Only include chats that have at least one message
+      lastMessage: { $exists: true, $ne: null },
+      lastMessageAt: { $exists: true, $ne: null }
     })
     .populate('participants.user', 'name email avatar isOnline lastSeen')
-    .populate('lastMessage')
-    .select('participants type name lastMessageAt updatedAt lastMessage')
-    .sort({ updatedAt: -1 });
+    .populate({
+      path: 'lastMessage',
+      populate: {
+        path: 'sender',
+        select: 'name avatar'
+      }
+    })
+    .select('participants type name lastMessageAt updatedAt lastMessage unreadCount')
+    .sort({ lastMessageAt: -1, updatedAt: -1 });
 
     // Separate one-to-one chats and group chats
     const oneToOneChats = chats.filter(chat => chat.type === 'one-to-one');
@@ -527,12 +674,17 @@ export const getChattedUsers = asyncHandle(async (req, res) => {
           if (user && user._id.toString() !== userId.toString()) {
             const userIdStr = user._id.toString();
             
+            // Debug logging for user processing
+            // Processing chatted user:
+            
             if (!chattedUsers.has(userIdStr)) {
+              const userUnreadCount = chat.unreadCount?.get?.(userId.toString()) || 0;
               chattedUsers.set(userIdStr, {
                 user: user,
                 lastChatAt: chat.updatedAt || chat.lastMessageAt,
                 chatCount: 0,
                 lastMessage: chat.lastMessage,
+                unreadCount: userUnreadCount,
                 type: 'one-to-one'
               });
             }
@@ -547,30 +699,39 @@ export const getChattedUsers = asyncHandle(async (req, res) => {
             if (chat.lastMessageAt && (!existing.lastChatAt || chat.lastMessageAt > existing.lastChatAt)) {
               existing.lastChatAt = chat.lastMessageAt;
             }
+          } else if (user && user._id.toString() === userId.toString()) {
+            // Skipping current user from chatted users:
           }
         });
       }
     });
 
     // Convert group chats to the same format
-    const groupChatsFormatted = groupChats.map(chat => ({
-      group: {
-        _id: chat._id,
-        name: chat.name,
-        type: 'group',
-        participants: chat.participants,
-        memberCount: chat.participants.length
-      },
-      lastChatAt: chat.updatedAt || chat.lastMessageAt,
-      chatCount: 1,
-      lastMessage: chat.lastMessage,
-      type: 'group'
-    }));
+    const groupChatsFormatted = groupChats.map(chat => {
+      const userUnreadCount = chat.unreadCount?.get?.(userId.toString()) || 0;
+      return {
+        group: {
+          _id: chat._id,
+          name: chat.name,
+          type: 'group',
+          participants: chat.participants,
+          memberCount: chat.participants.length
+        },
+        lastChatAt: chat.updatedAt || chat.lastMessageAt,
+        chatCount: 1,
+        lastMessage: chat.lastMessage,
+        unreadCount: userUnreadCount,
+        type: 'group'
+      };
+    });
 
     // Combine users and groups
     const usersArray = Array.from(chattedUsers.values());
     const allItems = [...usersArray, ...groupChatsFormatted]
       .sort((a, b) => new Date(b.lastChatAt) - new Date(a.lastChatAt));
+
+    // Debug logging for final response
+    // ChattedUsers final response:
 
     // Apply search filter if provided
     let filteredItems = allItems;

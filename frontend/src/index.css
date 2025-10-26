@@ -698,6 +698,28 @@ select:disabled {
   opacity: 0.6;
 }
 
+/* Country code input styling - reduced padding */
+.country-code-input input {
+  padding-left: 2rem !important; /* Reduced from default pl-10 (2.5rem) */
+  padding-right: 0.75rem !important; /* Reduced from default pr-3 */
+}
+
+.country-code-input .absolute.left-4 {
+  left: 0.75rem !important; /* Move icon closer to edge */
+}
+
+/* Mobile responsive - increase country code width on mobile */
+@media (max-width: 768px) {
+  .country-code-input {
+    min-width: 120px !important; /* Ensure minimum width on mobile */
+  }
+  
+  .country-code-input input {
+    min-width: 120px !important;
+    width: 100% !important;
+  }
+}
+
 :not(.dark) input:disabled,
 :not(.dark) textarea:disabled,
 :not(.dark) select:disabled {
@@ -769,4 +791,14 @@ button {
 
 .dark *:focus {
   outline-color: #60a5fa;
+}
+
+/* Hide scrollbar for toolbar */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
 }

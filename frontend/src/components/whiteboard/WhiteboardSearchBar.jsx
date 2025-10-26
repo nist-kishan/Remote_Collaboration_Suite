@@ -54,7 +54,6 @@ export default function WhiteboardSearch({ onWhiteboardSelect }) {
           <div className="flex gap-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <CustomInput
                   type="text"
                   placeholder="Search whiteboards..."
@@ -180,7 +179,6 @@ export default function WhiteboardSearch({ onWhiteboardSelect }) {
           ) : (
             <CustomCard className="p-6">
               <div className="text-center text-gray-600 dark:text-gray-400">
-                <Search className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                 <p>No whiteboards found matching your search criteria.</p>
                 <p className="text-sm mt-2">Try adjusting your search terms or filters.</p>
               </div>

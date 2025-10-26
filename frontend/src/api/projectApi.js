@@ -62,5 +62,14 @@ export const projectApi = {
   // Search workspace members for project
   searchWorkspaceMembers: (projectId, query) => {
     return ApiClient.get(`/projects/${projectId}/search-members?q=${encodeURIComponent(query)}`);
+  },
+
+  // Upload document to project
+  uploadDocument: (projectId, formData) => {
+    return ApiClient.post(`/projects/${projectId}/documents/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
   }
 };

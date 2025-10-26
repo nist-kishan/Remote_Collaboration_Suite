@@ -1,6 +1,31 @@
 import ApiClient from './ApiClient';
 
 export const meetingApi = {
+  // Create instant meeting
+  createInstantMeeting: (data) => {
+    return ApiClient.post('/meetings/instant', data);
+  },
+
+  // Create scheduled meeting
+  createScheduledMeeting: (data) => {
+    return ApiClient.post('/meetings/scheduled', data);
+  },
+
+  // Join meeting
+  joinMeeting: (meetingId, password) => {
+    return ApiClient.post(`/meetings/${meetingId}/join`, { password });
+  },
+
+  // Get meeting participants
+  getMeetingParticipants: (meetingId) => {
+    return ApiClient.get(`/meetings/${meetingId}/participants`);
+  },
+
+  // Update participant status
+  updateParticipantStatus: (meetingId, userId, data) => {
+    return ApiClient.put(`/meetings/${meetingId}/participants/${userId}`, data);
+  },
+
   // Create meeting
   createMeeting: (projectId, data) => {
     return ApiClient.post(`/projects/${projectId}/meetings`, data);

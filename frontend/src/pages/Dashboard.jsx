@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { useSelector } from "react-redux";
-import { MessageSquare, Video, FileText, PenTool, Building2 } from "lucide-react";
+import { MessageSquare, FileText, PenTool, Building2, FolderKanban, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageLayoutWrapper from "../components/ui/PageLayoutWrapper";
@@ -8,11 +8,6 @@ import CustomCard from "../components/ui/CustomCard";
 
 export default function Dashboard() {
   const user = useSelector((state) => state.auth.user);
-
-  useEffect(() => {
-    // console.log(user);
-  }, [user]);
-
 
   const services = [
     {
@@ -30,13 +25,6 @@ export default function Dashboard() {
       color: "blue"
     },
     {
-      name: "Video Call Live",
-      description: "Start live video calls easily with anyone.",
-      icon: <Video size={32} className="text-green-500 dark:text-green-400" />,
-      path: "/video-call",
-      color: "green"
-    },
-    {
       name: "Documents",
       description: "Shareable documents for real-time collaboration.",
       icon: <FileText size={32} className="text-yellow-500 dark:text-yellow-400" />,
@@ -49,6 +37,20 @@ export default function Dashboard() {
       icon: <PenTool size={32} className="text-pink-500 dark:text-pink-400" />,
       path: "/boards",
       color: "pink"
+    },
+    {
+      name: "Projects",
+      description: "Manage your projects and track progress with Kanban boards.",
+      icon: <FolderKanban size={32} className="text-purple-600 dark:text-purple-400" />,
+      path: "/projects",
+      color: "purple"
+    },
+    {
+      name: "Meetings",
+      description: "Schedule and join virtual meetings with your team.",
+      icon: <Calendar size={32} className="text-red-500 dark:text-red-400" />,
+      path: "/meetings",
+      color: "red"
     },
   ];
 

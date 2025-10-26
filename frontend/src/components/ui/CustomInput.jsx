@@ -1,6 +1,6 @@
 import React from "react";
 
-export default function Input({ 
+const CustomInput = function Input({ 
   label,
   error,
   className = "",
@@ -40,4 +40,7 @@ export default function Input({
       )}
     </div>
   );
-}
+};
+
+export default CustomInput;
+export { CustomInput };

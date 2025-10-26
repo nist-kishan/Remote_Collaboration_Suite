@@ -2,18 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { toast } from 'react-hot-toast';
-import EnhancedChatList from '../components/chat/EnhancedChatList';
-import ChatWindow from '../components/chat/ChatWindow';
-import CreateGroupModal from '../components/chat/CreateGroupModal';
-import NewChatModal from '../components/chat/NewChatModal';
+import EnhancedChatList from '../components/chat/ChatConversationList';
+import ChatWindow from '../components/chat/ChatConversationWindow';
+import CreateGroupModal from '../components/chat/CreateChatGroupModal';
+import NewChatModal from '../components/chat/CreateNewChatModal';
 import { useCall } from '../hook/useCall';
 import { useChat } from '../hook/useChat';
+import { useChatManager, useCreateGroupChat, useCreateOneToOneChat, useChatQuery } from '../hook/useChat';
 import IncomingCallModal from '../components/call/IncomingCallModal';
 import OutgoingCallModal from '../components/call/OutgoingCallModal';
 import ActiveCallWindow from '../components/call/ActiveCallWindow';
 import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
-import ConnectionStatus from '../components/ui/ConnectionStatus';
+import Input from '../components/ui/CustomInput';
 import { X } from 'lucide-react';
 
 const ChatPage = () => {
@@ -142,6 +142,22 @@ const ChatPage = () => {
     // Handle call history logic
   };
 
+  const handleDelete = (chat) => {
+    // Handle delete chat logic
+    };
+
+  const handleArchive = (chat) => {
+    // Handle archive chat logic
+    };
+
+  const handleInfo = (chat) => {
+    // Handle chat info logic
+    };
+
+  const handleBackToChatList = () => {
+    navigate('/chat', { replace: true });
+  };
+
   const handleNewChatCreated = (chat) => {
     selectChat(chat);
     closeNewChatModal();
@@ -197,9 +213,10 @@ const ChatPage = () => {
         <div className="flex-1 overflow-hidden min-h-0">
           <EnhancedChatList
             onSelectChat={selectChat}
-            selectedChatId={selectedChatId}
+            selectedChat={currentChat}
             onVideoCall={handleVideoCall}
-            onCallHistory={handleCallHistory}
+            onNewChat={openNewChatModal}
+            onCreateGroup={openCreateGroupModal}
           />
         </div>
       </div>
@@ -211,8 +228,11 @@ const ChatPage = () => {
             ref={messageInputRef}
             chat={currentChat}
             onVideoCall={handleVideoCall}
-            onCallHistory={handleCallHistory}
-            isMobile={false}
+            onChatSelect={selectChat}
+            onDelete={handleDelete}
+            onArchive={handleArchive}
+            onInfo={handleInfo}
+            onBack={handleBackToChatList}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center p-4">
@@ -240,8 +260,11 @@ const ChatPage = () => {
             ref={messageInputRef}
             chat={currentChat}
             onVideoCall={handleVideoCall}
-            onCallHistory={handleCallHistory}
-            isMobile={true}
+            onChatSelect={selectChat}
+            onDelete={handleDelete}
+            onArchive={handleArchive}
+            onInfo={handleInfo}
+            onBack={handleBackToChatList}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center p-4">
@@ -267,8 +290,7 @@ const ChatPage = () => {
         <CreateGroupModal
           isOpen={showCreateGroupModal}
           onClose={closeCreateGroupModal}
-          onCreateGroup={handleCreateGroup}
-          isLoading={createGroupMutation.isPending}
+          onGroupCreated={handleCreateGroup}
         />
       )}
 
@@ -304,8 +326,7 @@ const ChatPage = () => {
         />
       )}
 
-      {/* Connection Status */}
-      <ConnectionStatus />
+      {/* Connection Status - Removed */}
     </div>
   );
 };

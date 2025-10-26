@@ -27,6 +27,7 @@ import workspaceRouter from "./routers/workspace.route.js";
 import { taskRouter } from "./routers/task.route.js";
 import { meetingRouter } from "./routers/meeting.route.js";
 import { notificationRouter } from "./routers/notification.route.js";
+import { budgetRequestRouter } from "./routers/budgetRequest.route.js";
 
 const app = express();
 
@@ -91,9 +92,10 @@ app.use("/api/v1/chat", chatRouter);
 app.use("/api/v1/call", callRouter);
 app.use("/api/v1/workspaces", workspaceRouter);
 app.use("/api/v1/projects", projectRouter);
-app.use("/api/v1", taskRouter);
+app.use("/api/v1/tasks", taskRouter);
 app.use("/api/v1", meetingRouter);
 app.use("/api/v1/notifications", notificationRouter);
+app.use("/api/v1", budgetRequestRouter);
 
 // Security error handling (must be before main error middleware)
 app.use(securityErrorHandler);

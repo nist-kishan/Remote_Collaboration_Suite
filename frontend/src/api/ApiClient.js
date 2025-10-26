@@ -68,11 +68,6 @@ ApiClient.interceptors.response.use(
     // Calculate request duration
     const duration = Date.now() - response.config.metadata.startTime;
     
-    // Performance monitoring
-    if (FEATURE_FLAGS.ENABLE_PERFORMANCE_MONITORING && duration > 5000) {
-      console.warn(`⚠️ Slow API response: ${response.config.url} took ${duration}ms`);
-    }
-    
     return response;
   },
   async (error) => {

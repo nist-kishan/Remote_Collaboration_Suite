@@ -9,7 +9,7 @@ const TotalUnreadBadge = ({ className = '' }) => {
   }
 
   if (error) {
-    console.error('Error fetching total unread count:', error);
+
     return null;
   }
 

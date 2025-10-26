@@ -10,10 +10,13 @@ import {
   Trash2,
   Calendar,
   User,
-  Crown
+  Crown,
+  Upload,
+  Download,
+  UserPlus
 } from "lucide-react";
-import Button from "../ui/Button";
-import Card from "../ui/Card";
+import Button from "../ui/CustomButton";
+import Card from "../ui/CustomCard";
 import { getUserRole, getRoleColorClasses, canPerformAction } from "../../utils/roleUtils";
 
 const DocumentCard = (props) => {
@@ -29,6 +32,9 @@ const DocumentCard = (props) => {
     onShare, 
     onDelete, 
     onView,
+    onUpload,
+    onExport,
+    onCollaborate,
     className = "" 
   } = props;
 
@@ -40,6 +46,23 @@ const DocumentCard = (props) => {
   // Get user role for this document
   const userRole = getUserRole(document, currentUser);
   
+  // Determine which action icons to show based on role
+  const getVisibleActions = () => {
+    switch (userRole) {
+      case 'viewer':
+        return ['view']; // Only view button
+      case 'editor':
+        return ['edit', 'collaborate']; // Only edit and collaborate buttons
+      case 'owner':
+        return ['edit', 'collaborate', 'delete']; // 3 buttons: edit, collaborate, delete
+      default:
+        return ['view']; // Default to view only
+    }
+  };
+  
+  const visibleActions = getVisibleActions();
+  
+  // Debug logging
   const getStatusColor = (status) => {
     switch (status) {
       case "published":
@@ -127,17 +150,21 @@ const DocumentCard = (props) => {
                 <span>{new Date(document.updatedAt).toLocaleDateString()}</span>
               </div>
               <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onView(document)}
-                  title="View Document"
-                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  <Eye className="w-4 h-4" />
-                </Button>
+                {/* View Button - Only for viewers */}
+                {visibleActions.includes('view') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onView(document)}
+                    title="View Document"
+                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                )}
                 
-                {canPerformAction(document, currentUser, 'canEdit') && (
+                {/* Edit Button - For editors and owners */}
+                {visibleActions.includes('edit') && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -149,19 +176,32 @@ const DocumentCard = (props) => {
                   </Button>
                 )}
                 
-                {canPerformAction(document, currentUser, 'canShare') && (
+                {/* Collaborate Button - For editors and owners */}
+                {visibleActions.includes('collaborate') && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onShare(document)}
-                    title="Share Document"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (onCollaborate) {
+                        onCollaborate(document);
+                      } else {
+                        console.warn('⚠️ onCollaborate handler not provided, falling back to onShare');
+                        if (onShare) {
+                          onShare(document);
+                        }
+                      }
+                    }}
+                    title="Manage Collaboration"
                     className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700"
                   >
-                    <Share className="w-4 h-4" />
+                    <Users className="w-4 h-4" />
                   </Button>
                 )}
                 
-                {canPerformAction(document, currentUser, 'canDelete') && (
+                {/* Delete Button - For editors and owners */}
+                {visibleActions.includes('delete') && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -220,19 +260,21 @@ const DocumentCard = (props) => {
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {/* View */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onView(document)}
-                    title="View Document"
-                    className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
+                  {/* View Button - Only for viewers */}
+                  {visibleActions.includes('view') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onView(document)}
+                      title="View Document"
+                      className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                  )}
                   
-                  {/* Edit */}
-                  {canPerformAction(document, currentUser, 'canEdit') && (
+                  {/* Edit Button - For editors and owners */}
+                  {visibleActions.includes('edit') && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -244,21 +286,28 @@ const DocumentCard = (props) => {
                     </Button>
                   )}
                   
-                  {/* Share */}
-                  {canPerformAction(document, currentUser, 'canShare') && (
+                  {/* Collaborate Button - For editors and owners */}
+                  {visibleActions.includes('collaborate') && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onShare(document)}
-                      title="Share Document"
+                      onClick={() => {
+                        if (onCollaborate) {
+                          onCollaborate(document);
+                        } else {
+                          console.warn('⚠️ onCollaborate handler not provided, falling back to onShare');
+                          onShare(document);
+                        }
+                      }}
+                      title="Manage Collaboration"
                       className="p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
-                      <Share className="w-4 h-4" />
+                      <Users className="w-4 h-4" />
                     </Button>
                   )}
                   
-                  {/* Delete */}
-                  {canPerformAction(document, currentUser, 'canDelete') && (
+                  {/* Delete Button - For editors and owners */}
+                  {visibleActions.includes('delete') && (
                     <Button
                       variant="ghost"
                       size="sm"

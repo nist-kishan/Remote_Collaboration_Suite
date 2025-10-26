@@ -1,309 +1,166 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { 
-  getUserChats, 
-  getUserGroupChats,
-  getOneToOneChats,
-  getChattedUsers,
-  getChatById, 
-  getOrCreateOneToOneChat, 
-  createGroupChat,
-  updateGroupChat,
-  addGroupMembers,
-  removeGroupMember,
-  leaveGroup,
-  archiveChat,
-  unarchiveChat,
-  updateMemberRole,
-  getGroupMembers
-} from '../../api/chatApi';
+import { createSlice } from '@reduxjs/toolkit';
 
-// Async thunks for API calls
-export const fetchUserChats = createAsyncThunk(
-  'chat/fetchUserChats',
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await getUserChats(params);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch chats');
-    }
-  }
-);
-
-export const fetchGroupChats = createAsyncThunk(
-  'chat/fetchGroupChats',
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await getUserGroupChats(params);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch group chats');
-    }
-  }
-);
-
-export const fetchOneToOneChats = createAsyncThunk(
-  'chat/fetchOneToOneChats',
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await getOneToOneChats(params);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch one-to-one chats');
-    }
-  }
-);
-
-export const fetchChattedUsers = createAsyncThunk(
-  'chat/fetchChattedUsers',
-  async (params = {}, { rejectWithValue }) => {
-    try {
-      const response = await getChattedUsers(params);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch chatted users');
-    }
-  }
-);
-
-export const fetchChatById = createAsyncThunk(
-  'chat/fetchChatById',
-  async (chatId, { rejectWithValue }) => {
-    try {
-      const response = await getChatById(chatId);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch chat');
-    }
-  }
-);
-
-export const fetchOrCreateOneToOneChat = createAsyncThunk(
-  'chat/fetchOrCreateOneToOneChat',
-  async (otherUserId, { rejectWithValue }) => {
-    try {
-      const response = await getOrCreateOneToOneChat(otherUserId);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create/fetch chat');
-    }
-  }
-);
-
-export const createGroupChatAction = createAsyncThunk(
-  'chat/createGroupChat',
-  async (data, { rejectWithValue }) => {
-    try {
-      const response = await createGroupChat(data);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create group chat');
-    }
-  }
-);
-
-export const updateGroupChatAction = createAsyncThunk(
-  'chat/updateGroupChat',
-  async ({ chatId, data }, { rejectWithValue }) => {
-    try {
-      const response = await updateGroupChat(chatId, data);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update group chat');
-    }
-  }
-);
-
-export const addGroupMembersAction = createAsyncThunk(
-  'chat/addGroupMembers',
-  async ({ chatId, memberIds }, { rejectWithValue }) => {
-    try {
-      const response = await addGroupMembers(chatId, memberIds);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to add members');
-    }
-  }
-);
-
-export const removeGroupMemberAction = createAsyncThunk(
-  'chat/removeGroupMember',
-  async ({ chatId, memberId }, { rejectWithValue }) => {
-    try {
-      const response = await removeGroupMember(chatId, memberId);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to remove member');
-    }
-  }
-);
-
-export const updateMemberRoleAction = createAsyncThunk(
-  'chat/updateMemberRole',
-  async ({ chatId, memberId, role }, { rejectWithValue }) => {
-    try {
-      const response = await updateMemberRole(chatId, memberId, role);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update member role');
-    }
-  }
-);
-
-export const leaveGroupAction = createAsyncThunk(
-  'chat/leaveGroup',
-  async (chatId, { rejectWithValue }) => {
-    try {
-      const response = await leaveGroup(chatId);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to leave group');
-    }
-  }
-);
-
-export const archiveChatAction = createAsyncThunk(
-  'chat/archiveChat',
-  async (chatId, { rejectWithValue }) => {
-    try {
-      const response = await archiveChat(chatId);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to archive chat');
-    }
-  }
-);
-
-export const unarchiveChatAction = createAsyncThunk(
-  'chat/unarchiveChat',
-  async (chatId, { rejectWithValue }) => {
-    try {
-      const response = await unarchiveChat(chatId);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to unarchive chat');
-    }
-  }
-);
-
-export const fetchGroupMembers = createAsyncThunk(
-  'chat/fetchGroupMembers',
-  async (chatId, { rejectWithValue }) => {
-    try {
-      const response = await getGroupMembers(chatId);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch group members');
-    }
-  }
-);
-
-// Initial state
 const initialState = {
-  // Chat lists
-  chats: [],
-  groupChats: [],
-  oneToOneChats: [],
-  chattedUsers: [],
-  
-  // Current chat
+  // Current chat state
   currentChat: null,
-  currentChatMessages: [],
+  selectedChat: null,
   
-  // Group members
-  groupMembers: [],
-  isAdmin: false,
-  userRole: 'member',
+  // Chat list state
+  chatList: [],
+  filteredChatList: [],
   
   // UI state
-  selectedChatId: null,
   showCreateGroupModal: false,
   showNewChatModal: false,
-  showGroupMembersModal: false,
+  showChatDetails: false,
+  showGroupMembers: false,
+  showEmojiPicker: false,
+  showMediaViewer: false,
   
-  // Loading states
-  loading: {
-    chats: false,
-    groupChats: false,
-    oneToOneChats: false,
-    chattedUsers: false,
-    currentChat: false,
-    groupMembers: false,
-    creatingGroup: false,
-    updatingGroup: false,
-    addingMembers: false,
-    removingMember: false,
-    updatingRole: false,
-    leavingGroup: false,
-    archiving: false,
-    unarchiving: false,
-  },
+  // Search and filters
+  searchQuery: '',
+  chatType: 'all', // 'all', 'one-to-one', 'group'
   
-  // Error states
-  errors: {
-    chats: null,
-    groupChats: null,
-    oneToOneChats: null,
-    chattedUsers: null,
-    currentChat: null,
-    groupMembers: null,
-    creatingGroup: null,
-    updatingGroup: null,
-    addingMembers: null,
-    removingMember: null,
-    updatingRole: null,
-    leavingGroup: null,
-    archiving: null,
-    unarchiving: null,
-  },
+  // Message state
+  messages: [],
+  typingUsers: [],
+  isTyping: false,
+  messageInput: '',
+  replyToMessage: null,
   
-  // Pagination
-  pagination: {
-    chats: { page: 1, limit: 20, total: 0, pages: 0 },
-    groupChats: { page: 1, limit: 20, total: 0, pages: 0 },
-    oneToOneChats: { page: 1, limit: 20, total: 0, pages: 0 },
-    chattedUsers: { page: 1, limit: 50, total: 0, pages: 0 },
-  },
+  // Media state
+  selectedMedia: null,
+  mediaViewerIndex: 0,
+  
+  // Group management
+  groupMembers: [],
+  selectedMembers: [],
+  
+  // Error handling
+  errors: [],
+  
+  // Loading states (for UI only)
+  isLoading: false,
+  isSendingMessage: false,
+  isUploadingMedia: false
 };
 
-// Chat slice
 const chatSlice = createSlice({
   name: 'chat',
   initialState,
   reducers: {
-    // UI state management
-    setSelectedChatId: (state, action) => {
-      state.selectedChatId = action.payload;
-    },
-    
+    // Chat management
     setCurrentChat: (state, action) => {
       state.currentChat = action.payload;
-      state.selectedChatId = action.payload?._id || null;
     },
     
-    setCurrentChatMessages: (state, action) => {
-      state.currentChatMessages = action.payload;
+    setSelectedChat: (state, action) => {
+      state.selectedChat = action.payload;
     },
     
-    addMessageToCurrentChat: (state, action) => {
-      if (state.currentChatMessages) {
-        state.currentChatMessages.push(action.payload);
+    updateChatList: (state, action) => {
+      state.chatList = action.payload;
+    },
+    
+    addChatToList: (state, action) => {
+      const newChat = action.payload;
+      const existingIndex = state.chatList.findIndex(chat => chat._id === newChat._id);
+      
+      if (existingIndex >= 0) {
+        state.chatList[existingIndex] = newChat;
+      } else {
+        state.chatList.unshift(newChat);
       }
     },
     
-    updateMessageInCurrentChat: (state, action) => {
+    updateChatInList: (state, action) => {
+      const { chatId, updates } = action.payload;
+      const chatIndex = state.chatList.findIndex(chat => chat._id === chatId);
+      
+      if (chatIndex >= 0) {
+        state.chatList[chatIndex] = {
+          ...state.chatList[chatIndex],
+          ...updates
+        };
+      }
+    },
+    
+    removeChatFromList: (state, action) => {
+      state.chatList = state.chatList.filter(chat => chat._id !== action.payload);
+    },
+    
+    // Message management
+    setMessages: (state, action) => {
+      state.messages = action.payload;
+    },
+    
+    addMessage: (state, action) => {
+      state.messages.push(action.payload);
+    },
+    
+    updateMessage: (state, action) => {
       const { messageId, updates } = action.payload;
-      const messageIndex = state.currentChatMessages.findIndex(msg => msg._id === messageId);
-      if (messageIndex !== -1) {
-        state.currentChatMessages[messageIndex] = { ...state.currentChatMessages[messageIndex], ...updates };
+      const messageIndex = state.messages.findIndex(msg => msg._id === messageId);
+      
+      if (messageIndex >= 0) {
+        state.messages[messageIndex] = {
+          ...state.messages[messageIndex],
+          ...updates
+        };
       }
     },
     
-    removeMessageFromCurrentChat: (state, action) => {
-      state.currentChatMessages = state.currentChatMessages.filter(msg => msg._id !== action.payload);
+    removeMessage: (state, action) => {
+      state.messages = state.messages.filter(msg => msg._id !== action.payload);
     },
     
-    // Modal state management
+    // Typing indicators
+    setTypingUsers: (state, action) => {
+      state.typingUsers = action.payload;
+    },
+    
+    addTypingUser: (state, action) => {
+      const userId = action.payload;
+      if (!state.typingUsers.includes(userId)) {
+        state.typingUsers.push(userId);
+      }
+    },
+    
+    removeTypingUser: (state, action) => {
+      state.typingUsers = state.typingUsers.filter(userId => userId !== action.payload);
+    },
+    
+    setIsTyping: (state, action) => {
+      state.isTyping = action.payload;
+    },
+    
+    // Message input
+    setMessageInput: (state, action) => {
+      state.messageInput = action.payload;
+    },
+    
+    setReplyToMessage: (state, action) => {
+      state.replyToMessage = action.payload;
+    },
+    
+    clearReplyToMessage: (state) => {
+      state.replyToMessage = null;
+    },
+    
+    // Search and filters
+    setSearchQuery: (state, action) => {
+      state.searchQuery = action.payload;
+    },
+    
+    setChatType: (state, action) => {
+      state.chatType = action.payload;
+    },
+    
+    setFilteredChatList: (state, action) => {
+      state.filteredChatList = action.payload;
+    },
+    
+    // Modal management
     setShowCreateGroupModal: (state, action) => {
       state.showCreateGroupModal = action.payload;
     },
@@ -312,392 +169,215 @@ const chatSlice = createSlice({
       state.showNewChatModal = action.payload;
     },
     
-    setShowGroupMembersModal: (state, action) => {
-      state.showGroupMembersModal = action.payload;
+    setShowChatDetails: (state, action) => {
+      state.showChatDetails = action.payload;
     },
     
-    // Clear errors
-    clearError: (state, action) => {
-      const errorType = action.payload;
-      if (state.errors[errorType]) {
-        state.errors[errorType] = null;
+    setShowGroupMembers: (state, action) => {
+      state.showGroupMembers = action.payload;
+    },
+    
+    setShowEmojiPicker: (state, action) => {
+      state.showEmojiPicker = action.payload;
+    },
+    
+    setShowMediaViewer: (state, action) => {
+      state.showMediaViewer = action.payload;
+    },
+    
+    // Media management
+    setSelectedMedia: (state, action) => {
+      state.selectedMedia = action.payload;
+    },
+    
+    setMediaViewerIndex: (state, action) => {
+      state.mediaViewerIndex = action.payload;
+    },
+    
+    // Group management
+    setGroupMembers: (state, action) => {
+      state.groupMembers = action.payload;
+    },
+    
+    addGroupMember: (state, action) => {
+      const member = action.payload;
+      const existingIndex = state.groupMembers.findIndex(m => m._id === member._id);
+      
+      if (existingIndex >= 0) {
+        state.groupMembers[existingIndex] = member;
+      } else {
+        state.groupMembers.push(member);
       }
     },
     
-    clearAllErrors: (state) => {
-      Object.keys(state.errors).forEach(key => {
-        state.errors[key] = null;
+    removeGroupMember: (state, action) => {
+      state.groupMembers = state.groupMembers.filter(member => member._id !== action.payload);
+    },
+    
+    updateGroupMember: (state, action) => {
+      const { memberId, updates } = action.payload;
+      const memberIndex = state.groupMembers.findIndex(m => m._id === memberId);
+      
+      if (memberIndex >= 0) {
+        state.groupMembers[memberIndex] = {
+          ...state.groupMembers[memberIndex],
+          ...updates
+        };
+      }
+    },
+    
+    setSelectedMembers: (state, action) => {
+      state.selectedMembers = action.payload;
+    },
+    
+    addSelectedMember: (state, action) => {
+      const member = action.payload;
+      const existingIndex = state.selectedMembers.findIndex(m => m._id === member._id);
+      
+      if (existingIndex === -1) {
+        state.selectedMembers.push(member);
+      }
+    },
+    
+    removeSelectedMember: (state, action) => {
+      state.selectedMembers = state.selectedMembers.filter(member => member._id !== action.payload);
+    },
+    
+    // Loading states
+    setLoading: (state, action) => {
+      state.isLoading = action.payload;
+    },
+    
+    setSendingMessage: (state, action) => {
+      state.isSendingMessage = action.payload;
+    },
+    
+    setUploadingMedia: (state, action) => {
+      state.isUploadingMedia = action.payload;
+    },
+    
+    // Error handling
+    addError: (state, action) => {
+      state.errors.push({
+        id: Date.now(),
+        message: action.payload,
+        timestamp: new Date().toISOString()
       });
+    },
+    
+    clearError: (state, action) => {
+      state.errors = state.errors.filter(error => error.id !== action.payload);
+    },
+    
+    clearAllErrors: (state) => {
+      state.errors = [];
     },
     
     // Reset state
     resetChatState: (state) => {
       return { ...initialState };
     },
-  },
-  extraReducers: (builder) => {
-    builder
-      // Fetch user chats
-      .addCase(fetchUserChats.pending, (state) => {
-        state.loading.chats = true;
-        state.errors.chats = null;
-      })
-      .addCase(fetchUserChats.fulfilled, (state, action) => {
-        state.loading.chats = false;
-        state.chats = action.payload.data?.chats || action.payload.data || [];
-        state.pagination.chats = action.payload.pagination || state.pagination.chats;
-      })
-      .addCase(fetchUserChats.rejected, (state, action) => {
-        state.loading.chats = false;
-        state.errors.chats = action.payload;
-      })
-      
-      // Fetch group chats
-      .addCase(fetchGroupChats.pending, (state) => {
-        state.loading.groupChats = true;
-        state.errors.groupChats = null;
-      })
-      .addCase(fetchGroupChats.fulfilled, (state, action) => {
-        state.loading.groupChats = false;
-        state.groupChats = action.payload.data?.groupChats || action.payload.data || [];
-        state.pagination.groupChats = action.payload.pagination || state.pagination.groupChats;
-      })
-      .addCase(fetchGroupChats.rejected, (state, action) => {
-        state.loading.groupChats = false;
-        state.errors.groupChats = action.payload;
-      })
-      
-      // Fetch one-to-one chats
-      .addCase(fetchOneToOneChats.pending, (state) => {
-        state.loading.oneToOneChats = true;
-        state.errors.oneToOneChats = null;
-      })
-      .addCase(fetchOneToOneChats.fulfilled, (state, action) => {
-        state.loading.oneToOneChats = false;
-        state.oneToOneChats = action.payload.data?.oneToOneChats || action.payload.data || [];
-        state.pagination.oneToOneChats = action.payload.pagination || state.pagination.oneToOneChats;
-      })
-      .addCase(fetchOneToOneChats.rejected, (state, action) => {
-        state.loading.oneToOneChats = false;
-        state.errors.oneToOneChats = action.payload;
-      })
-      
-      // Fetch chatted users
-      .addCase(fetchChattedUsers.pending, (state) => {
-        state.loading.chattedUsers = true;
-        state.errors.chattedUsers = null;
-      })
-      .addCase(fetchChattedUsers.fulfilled, (state, action) => {
-        state.loading.chattedUsers = false;
-        state.chattedUsers = action.payload.data?.items || action.payload.data || [];
-        state.pagination.chattedUsers = action.payload.pagination || state.pagination.chattedUsers;
-      })
-      .addCase(fetchChattedUsers.rejected, (state, action) => {
-        state.loading.chattedUsers = false;
-        state.errors.chattedUsers = action.payload;
-      })
-      
-      // Fetch chat by ID
-      .addCase(fetchChatById.pending, (state) => {
-        state.loading.currentChat = true;
-        state.errors.currentChat = null;
-      })
-      .addCase(fetchChatById.fulfilled, (state, action) => {
-        state.loading.currentChat = false;
-        state.currentChat = action.payload.data?.chat || action.payload.data || action.payload;
-      })
-      .addCase(fetchChatById.rejected, (state, action) => {
-        state.loading.currentChat = false;
-        state.errors.currentChat = action.payload;
-      })
-      
-      // Create group chat
-      .addCase(createGroupChatAction.pending, (state) => {
-        state.loading.creatingGroup = true;
-        state.errors.creatingGroup = null;
-      })
-      .addCase(createGroupChatAction.fulfilled, (state, action) => {
-        state.loading.creatingGroup = false;
-        const newChat = action.payload.data?.chat || action.payload.data || action.payload;
-        state.groupChats.unshift(newChat);
-        state.chats.unshift(newChat);
-        state.currentChat = newChat;
-        state.selectedChatId = newChat._id;
-        state.showCreateGroupModal = false;
-      })
-      .addCase(createGroupChatAction.rejected, (state, action) => {
-        state.loading.creatingGroup = false;
-        state.errors.creatingGroup = action.payload;
-      })
-      
-      // Update group chat
-      .addCase(updateGroupChatAction.pending, (state) => {
-        state.loading.updatingGroup = true;
-        state.errors.updatingGroup = null;
-      })
-      .addCase(updateGroupChatAction.fulfilled, (state, action) => {
-        state.loading.updatingGroup = false;
-        const updatedChat = action.payload.data?.chat || action.payload.data || action.payload;
-        
-        // Update in group chats
-        const groupIndex = state.groupChats.findIndex(chat => chat._id === updatedChat._id);
-        if (groupIndex !== -1) {
-          state.groupChats[groupIndex] = updatedChat;
-        }
-        
-        // Update in all chats
-        const chatIndex = state.chats.findIndex(chat => chat._id === updatedChat._id);
-        if (chatIndex !== -1) {
-          state.chats[chatIndex] = updatedChat;
-        }
-        
-        // Update current chat if it's the same
-        if (state.currentChat?._id === updatedChat._id) {
-          state.currentChat = updatedChat;
-        }
-      })
-      .addCase(updateGroupChatAction.rejected, (state, action) => {
-        state.loading.updatingGroup = false;
-        state.errors.updatingGroup = action.payload;
-      })
-      
-      // Add group members
-      .addCase(addGroupMembersAction.pending, (state) => {
-        state.loading.addingMembers = true;
-        state.errors.addingMembers = null;
-      })
-      .addCase(addGroupMembersAction.fulfilled, (state, action) => {
-        state.loading.addingMembers = false;
-        const updatedChat = action.payload.data?.chat || action.payload.data || action.payload;
-        
-        // Update in group chats
-        const groupIndex = state.groupChats.findIndex(chat => chat._id === updatedChat._id);
-        if (groupIndex !== -1) {
-          state.groupChats[groupIndex] = updatedChat;
-        }
-        
-        // Update in all chats
-        const chatIndex = state.chats.findIndex(chat => chat._id === updatedChat._id);
-        if (chatIndex !== -1) {
-          state.chats[chatIndex] = updatedChat;
-        }
-        
-        // Update current chat if it's the same
-        if (state.currentChat?._id === updatedChat._id) {
-          state.currentChat = updatedChat;
-        }
-      })
-      .addCase(addGroupMembersAction.rejected, (state, action) => {
-        state.loading.addingMembers = false;
-        state.errors.addingMembers = action.payload;
-      })
-      
-      // Remove group member
-      .addCase(removeGroupMemberAction.pending, (state) => {
-        state.loading.removingMember = true;
-        state.errors.removingMember = null;
-      })
-      .addCase(removeGroupMemberAction.fulfilled, (state, action) => {
-        state.loading.removingMember = false;
-        const updatedChat = action.payload.data?.chat || action.payload.data || action.payload;
-        
-        // Update in group chats
-        const groupIndex = state.groupChats.findIndex(chat => chat._id === updatedChat._id);
-        if (groupIndex !== -1) {
-          state.groupChats[groupIndex] = updatedChat;
-        }
-        
-        // Update in all chats
-        const chatIndex = state.chats.findIndex(chat => chat._id === updatedChat._id);
-        if (chatIndex !== -1) {
-          state.chats[chatIndex] = updatedChat;
-        }
-        
-        // Update current chat if it's the same
-        if (state.currentChat?._id === updatedChat._id) {
-          state.currentChat = updatedChat;
-        }
-      })
-      .addCase(removeGroupMemberAction.rejected, (state, action) => {
-        state.loading.removingMember = false;
-        state.errors.removingMember = action.payload;
-      })
-      
-      // Update member role
-      .addCase(updateMemberRoleAction.pending, (state) => {
-        state.loading.updatingRole = true;
-        state.errors.updatingRole = null;
-      })
-      .addCase(updateMemberRoleAction.fulfilled, (state, action) => {
-        state.loading.updatingRole = false;
-        const updatedChat = action.payload.data?.chat || action.payload.data || action.payload;
-        
-        // Update in group chats
-        const groupIndex = state.groupChats.findIndex(chat => chat._id === updatedChat._id);
-        if (groupIndex !== -1) {
-          state.groupChats[groupIndex] = updatedChat;
-        }
-        
-        // Update in all chats
-        const chatIndex = state.chats.findIndex(chat => chat._id === updatedChat._id);
-        if (chatIndex !== -1) {
-          state.chats[chatIndex] = updatedChat;
-        }
-        
-        // Update current chat if it's the same
-        if (state.currentChat?._id === updatedChat._id) {
-          state.currentChat = updatedChat;
-        }
-      })
-      .addCase(updateMemberRoleAction.rejected, (state, action) => {
-        state.loading.updatingRole = false;
-        state.errors.updatingRole = action.payload;
-      })
-      
-      // Leave group
-      .addCase(leaveGroupAction.pending, (state) => {
-        state.loading.leavingGroup = true;
-        state.errors.leavingGroup = null;
-      })
-      .addCase(leaveGroupAction.fulfilled, (state, action) => {
-        state.loading.leavingGroup = false;
-        const leftChatId = action.payload.data?.chat?._id || action.payload.data?._id;
-        
-        // Remove from group chats
-        state.groupChats = state.groupChats.filter(chat => chat._id !== leftChatId);
-        
-        // Remove from all chats
-        state.chats = state.chats.filter(chat => chat._id !== leftChatId);
-        
-        // Clear current chat if it's the one we left
-        if (state.currentChat?._id === leftChatId) {
-          state.currentChat = null;
-          state.selectedChatId = null;
-        }
-      })
-      .addCase(leaveGroupAction.rejected, (state, action) => {
-        state.loading.leavingGroup = false;
-        state.errors.leavingGroup = action.payload;
-      })
-      
-      // Archive chat
-      .addCase(archiveChatAction.pending, (state) => {
-        state.loading.archiving = true;
-        state.errors.archiving = null;
-      })
-      .addCase(archiveChatAction.fulfilled, (state, action) => {
-        state.loading.archiving = false;
-        const archivedChat = action.payload.data?.chat || action.payload.data || action.payload;
-        
-        // Update in group chats
-        const groupIndex = state.groupChats.findIndex(chat => chat._id === archivedChat._id);
-        if (groupIndex !== -1) {
-          state.groupChats[groupIndex] = archivedChat;
-        }
-        
-        // Update in all chats
-        const chatIndex = state.chats.findIndex(chat => chat._id === archivedChat._id);
-        if (chatIndex !== -1) {
-          state.chats[chatIndex] = archivedChat;
-        }
-        
-        // Update current chat if it's the same
-        if (state.currentChat?._id === archivedChat._id) {
-          state.currentChat = archivedChat;
-        }
-      })
-      .addCase(archiveChatAction.rejected, (state, action) => {
-        state.loading.archiving = false;
-        state.errors.archiving = action.payload;
-      })
-      
-      // Unarchive chat
-      .addCase(unarchiveChatAction.pending, (state) => {
-        state.loading.unarchiving = true;
-        state.errors.unarchiving = null;
-      })
-      .addCase(unarchiveChatAction.fulfilled, (state, action) => {
-        state.loading.unarchiving = false;
-        const unarchivedChat = action.payload.data?.chat || action.payload.data || action.payload;
-        
-        // Update in group chats
-        const groupIndex = state.groupChats.findIndex(chat => chat._id === unarchivedChat._id);
-        if (groupIndex !== -1) {
-          state.groupChats[groupIndex] = unarchivedChat;
-        }
-        
-        // Update in all chats
-        const chatIndex = state.chats.findIndex(chat => chat._id === unarchivedChat._id);
-        if (chatIndex !== -1) {
-          state.chats[chatIndex] = unarchivedChat;
-        }
-        
-        // Update current chat if it's the same
-        if (state.currentChat?._id === unarchivedChat._id) {
-          state.currentChat = unarchivedChat;
-        }
-      })
-      .addCase(unarchiveChatAction.rejected, (state, action) => {
-        state.loading.unarchiving = false;
-        state.errors.unarchiving = action.payload;
-      })
-      
-      // Fetch group members
-      .addCase(fetchGroupMembers.pending, (state) => {
-        state.loading.groupMembers = true;
-        state.errors.groupMembers = null;
-      })
-      .addCase(fetchGroupMembers.fulfilled, (state, action) => {
-        state.loading.groupMembers = false;
-        state.groupMembers = action.payload.data?.members || action.payload.data || [];
-        state.isAdmin = action.payload.data?.isAdmin || false;
-        state.userRole = action.payload.data?.userRole || 'member';
-      })
-      .addCase(fetchGroupMembers.rejected, (state, action) => {
-        state.loading.groupMembers = false;
-        state.errors.groupMembers = action.payload;
-      });
-  },
+    
+    // Convenience functions for ChatPageRedux
+    selectChat: (state, action) => {
+      state.selectedChat = action.payload;
+      state.currentChat = action.payload;
+    },
+    
+    openCreateGroupModal: (state) => {
+      state.showCreateGroupModal = true;
+    },
+    
+    closeCreateGroupModal: (state) => {
+      state.showCreateGroupModal = false;
+    },
+    
+    openNewChatModal: (state) => {
+      state.showNewChatModal = true;
+    },
+    
+    closeNewChatModal: (state) => {
+      state.showNewChatModal = false;
+    }
+  }
 });
 
 // Export actions
 export const {
-  setSelectedChatId,
   setCurrentChat,
-  setCurrentChatMessages,
-  addMessageToCurrentChat,
-  updateMessageInCurrentChat,
-  removeMessageFromCurrentChat,
+  setSelectedChat,
+  updateChatList,
+  addChatToList,
+  updateChatInList,
+  removeChatFromList,
+  setMessages,
+  addMessage,
+  updateMessage,
+  removeMessage,
+  setTypingUsers,
+  addTypingUser,
+  removeTypingUser,
+  setIsTyping,
+  setMessageInput,
+  setReplyToMessage,
+  clearReplyToMessage,
+  setSearchQuery,
+  setChatType,
+  setFilteredChatList,
   setShowCreateGroupModal,
   setShowNewChatModal,
-  setShowGroupMembersModal,
+  setShowChatDetails,
+  setShowGroupMembers,
+  setShowEmojiPicker,
+  setShowMediaViewer,
+  setSelectedMedia,
+  setMediaViewerIndex,
+  setGroupMembers,
+  addGroupMember,
+  removeGroupMember,
+  updateGroupMember,
+  setSelectedMembers,
+  addSelectedMember,
+  removeSelectedMember,
+  setLoading,
+  setSendingMessage,
+  setUploadingMedia,
+  addError,
   clearError,
   clearAllErrors,
   resetChatState,
+  selectChat,
+  openCreateGroupModal,
+  closeCreateGroupModal,
+  openNewChatModal,
+  closeNewChatModal
 } = chatSlice.actions;
 
 // Export selectors
-export const selectChats = (state) => state.chat.chats;
-export const selectGroupChats = (state) => state.chat.groupChats;
-export const selectOneToOneChats = (state) => state.chat.oneToOneChats;
-export const selectChattedUsers = (state) => state.chat.chattedUsers;
 export const selectCurrentChat = (state) => state.chat.currentChat;
-export const selectCurrentChatMessages = (state) => state.chat.currentChatMessages;
-export const selectSelectedChatId = (state) => state.chat.selectedChatId;
-export const selectGroupMembers = (state) => state.chat.groupMembers;
-export const selectIsAdmin = (state) => state.chat.isAdmin;
-export const selectUserRole = (state) => state.chat.userRole;
-
-// Modal selectors
+export const selectSelectedChat = (state) => state.chat.selectedChat;
+export const selectChatList = (state) => state.chat.chatList;
+export const selectFilteredChatList = (state) => state.chat.filteredChatList;
+export const selectMessages = (state) => state.chat.messages;
+export const selectTypingUsers = (state) => state.chat.typingUsers;
+export const selectIsTyping = (state) => state.chat.isTyping;
+export const selectMessageInput = (state) => state.chat.messageInput;
+export const selectReplyToMessage = (state) => state.chat.replyToMessage;
+export const selectSearchQuery = (state) => state.chat.searchQuery;
+export const selectChatType = (state) => state.chat.chatType;
 export const selectShowCreateGroupModal = (state) => state.chat.showCreateGroupModal;
 export const selectShowNewChatModal = (state) => state.chat.showNewChatModal;
-export const selectShowGroupMembersModal = (state) => state.chat.showGroupMembersModal;
-
-// Loading selectors
-export const selectChatLoading = (state) => state.chat.loading;
+export const selectShowChatDetails = (state) => state.chat.showChatDetails;
+export const selectShowGroupMembers = (state) => state.chat.showGroupMembers;
+export const selectShowEmojiPicker = (state) => state.chat.showEmojiPicker;
+export const selectShowMediaViewer = (state) => state.chat.showMediaViewer;
+export const selectSelectedMedia = (state) => state.chat.selectedMedia;
+export const selectMediaViewerIndex = (state) => state.chat.mediaViewerIndex;
+export const selectGroupMembers = (state) => state.chat.groupMembers;
+export const selectSelectedMembers = (state) => state.chat.selectedMembers;
+export const selectIsLoading = (state) => state.chat.isLoading;
+export const selectIsSendingMessage = (state) => state.chat.isSendingMessage;
+export const selectIsUploadingMedia = (state) => state.chat.isUploadingMedia;
 export const selectChatErrors = (state) => state.chat.errors;
-
-// Pagination selectors
-export const selectChatPagination = (state) => state.chat.pagination;
 
 export default chatSlice.reducer;

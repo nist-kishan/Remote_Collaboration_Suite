@@ -1,463 +1,714 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSelector } from 'react-redux';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
+  Phone, 
   PhoneOff, 
-  Mic, 
-  MicOff, 
   Video, 
   VideoOff, 
-  Monitor, 
-  MonitorOff,
-  Settings,
+  Mic, 
+  MicOff,
+  User,
   Users,
-  MessageSquare,
-  Phone,
-  RefreshCw
+  Settings,
+  Maximize2,
+  Minimize2,
+  Volume2,
+  VolumeX,
+  Camera,
+  CameraOff,
+  MoreVertical,
+  Wifi,
+  WifiOff,
+  Battery,
+  Signal,
+  Monitor,
+  Share2
 } from 'lucide-react';
-import { useSocket } from '../../hook/useSocket';
-import { useCall } from '../../hook/useCall';
-import CustomButton from '../ui/CustomButton';
-import UserProfileAvatar from '../ui/UserProfileAvatar';
-import { toast } from 'react-hot-toast';
+import CallControls from './CallControls';
+import CallStatusBar from './CallStatusBar';
+import ConnectionStatus from './ConnectionStatus';
 
-const ActiveCallWindow = ({ 
-  call, 
-  onEndCall, 
-  onToggleChat
+const VideoCallInterface = ({
+  callData,
+  callStatus,
+  localStream,
+  remoteStream,
+  isMuted,
+  isVideoEnabled,
+  isScreenSharing = false,
+  timeElapsed,
+  socket,
+  onToggleMute,
+  onToggleVideo,
+  onToggleScreenShare,
+  onEndCall,
+  onAcceptCall,
+  onRejectCall,
+  isIncoming = false,
+  className = ''
 }) => {
-  const { user } = useSelector((state) => state.auth);
-  const { socket } = useSocket();
-  const {
-    localVideoRef,
-    remoteVideoRef,
-    localStream,
-    remoteStream,
-    isVideoEnabled,
-    isScreenSharing,
-    isMuted,
-    toggleVideo,
-    toggleMute,
-    startScreenShare,
-    stopScreenShare,
-    initializeWebRTC,
-    debugWebRTCStatus,
-    forceRestartWebRTC,
-    isWebRTCConnected,
-    hasRemoteStream,
-    isWebRTCReady
-  } = useCall();
+  const [showControls, setShowControls] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [connectionQuality, setConnectionQuality] = useState('good'); // good, poor, excellent
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isTablet, setIsTablet] = useState(window.innerWidth < 1024);
+  
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const controlsTimeoutRef = useRef(null);
 
-  const [callDuration, setCallDuration] = useState(0);
-  const [participants, setParticipants] = useState([]);
-  const [showParticipants, setShowParticipants] = useState(false);
-  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
-  const durationIntervalRef = useRef(null);
-
+  // Handle window resize for responsive behavior
   useEffect(() => {
-    if (call) {
-      setParticipants(call.participants || []);
-      
-      // Start duration timer
-      durationIntervalRef.current = setInterval(() => {
-        setCallDuration(prev => prev + 1);
-      }, 1000);
-    }
-
-    return () => {
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+      setIsTablet(window.innerWidth < 1024);
     };
-  }, [call]);
 
-  // Initialize WebRTC when component mounts
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Auto-hide controls
   useEffect(() => {
-    const initWebRTC = async () => {
+    if (showControls) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 5000);
+    }
+    return () => clearTimeout(controlsTimeoutRef.current);
+  }, [showControls]);
+
+  // Set up video streams with better error handling
+  useEffect(() => {
+    if (localStream && localVideoRef.current) {
       try {
-        await initializeWebRTC();
+        localVideoRef.current.srcObject = localStream;
+        } catch (error) {
+        console.error('❌ Error setting local video stream:', error);
+      }
+    }
+    
+    if (remoteStream && remoteVideoRef.current) {
+      try {
+        // Clear previous stream first
+        remoteVideoRef.current.srcObject = null;
+        remoteVideoRef.current.srcObject = remoteStream;
+        remoteVideoRef.current.load();
+        
+        // Try to play the video
+        const playPromise = remoteVideoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            }).catch(error => {
+            console.warn('⚠️ Remote video play failed:', error);
+            // Retry after a short delay
+            setTimeout(() => {
+              remoteVideoRef.current?.play().catch(err => {
+                console.error('❌ Remote video retry failed:', err);
+              });
+            }, 1000);
+          });
+        }
       } catch (error) {
-        console.error('Failed to initialize WebRTC:', error);
+        console.error('❌ Error setting remote video stream:', error);
       }
-    };
+    } else if (remoteVideoRef.current) {
+      // Clear remote video if no stream
+      remoteVideoRef.current.srcObject = null;
+    }
+  }, [localStream, remoteStream]);
 
-    initWebRTC();
-  }, [initializeWebRTC]);
-
-  const formatDuration = (seconds) => {
-    const mins = Math.floor(seconds / 60);
+  // Format time
+  const formatTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleEndCall = async () => {
-    try {
-      if (socket && call) {
-        socket.emit('end_call', { callId: call._id });
-      }
-      
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
-      
-      if (onEndCall) {
-        onEndCall();
-      }
-    } catch (error) {
-      console.error('Error ending call:', error);
-      toast.error('Failed to end call');
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // The useCall hook will handle the actual cleanup, but we log here for debugging
+    };
+  }, []);
+
+  // Get connection quality color
+  const getConnectionQualityColor = () => {
+    switch (connectionQuality) {
+      case 'excellent': return 'text-green-500';
+      case 'good': return 'text-yellow-500';
+      case 'poor': return 'text-red-500';
+      default: return 'text-gray-500';
     }
   };
 
-  const handleToggleMute = async () => {
-    try {
-      setIsUpdatingSettings(true);
-      toggleMute();
-      
-      if (socket && call) {
-        socket.emit('update_call_settings', {
-          callId: call._id,
-          muted: !isMuted
-        });
-      }
-      
-      toast.success(isMuted ? 'Microphone unmuted' : 'Microphone muted');
-    } catch (error) {
-      toast.error('Failed to toggle microphone');
-    } finally {
-      setIsUpdatingSettings(false);
+  // Handle fullscreen toggle
+  const handleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
     }
   };
 
-  const handleToggleVideo = async () => {
-    try {
-      setIsUpdatingSettings(true);
-      toggleVideo();
-      
-      if (socket && call) {
-        socket.emit('update_call_settings', {
-          callId: call._id,
-          videoEnabled: !isVideoEnabled
-        });
-      }
-      
-      toast.success(isVideoEnabled ? 'Camera turned off' : 'Camera turned on');
-    } catch (error) {
-      toast.error('Failed to toggle camera');
-    } finally {
-      setIsUpdatingSettings(false);
-    }
+  // Handle click to show controls
+  const handleClick = () => {
+    setShowControls(!showControls);
   };
 
-  const handleToggleScreenShare = async () => {
-    try {
-      setIsUpdatingSettings(true);
-      
-      if (isScreenSharing) {
-        await stopScreenShare();
-        toast.success('Screen sharing stopped');
-      } else {
-        await startScreenShare();
-        toast.success('Screen sharing started');
-      }
-      
-      if (socket && call) {
-        socket.emit('update_call_settings', {
-          callId: call._id,
-          screenSharing: !isScreenSharing
-        });
-      }
-    } catch (error) {
-      console.error('Screen sharing error:', error);
-      if (error.name === 'NotAllowedError') {
-        toast.error('Screen sharing permission denied');
-      } else if (error.name === 'NotFoundError') {
-        toast.error('No screen sharing source found');
-      } else {
-        toast.error('Failed to toggle screen sharing: ' + error.message);
-      }
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  };
+  // Incoming Call UI
+  if (isIncoming && callStatus === 'incoming') {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 z-50 overflow-hidden">
+        {/* Connection Status */}
+        <ConnectionStatus socket={socket} />
+        
+        {/* Modern Background Pattern */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-purple-500/10 to-blue-500/10" />
+          {/* Floating particles */}
+          <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-emerald-400/30 rounded-full animate-ping" />
+          <div className="absolute top-3/4 right-1/4 w-3 h-3 bg-purple-400/30 rounded-full animate-ping" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-1/2 left-1/6 w-1 h-1 bg-blue-400/30 rounded-full animate-ping" style={{ animationDelay: '2s' }} />
+          <div className="absolute top-1/3 right-1/3 w-2 h-2 bg-emerald-400/20 rounded-full animate-ping" style={{ animationDelay: '0.5s' }} />
+        </div>
 
-  // Get other participants (excluding current user)
-  const otherParticipants = participants.filter(
-    p => p.user._id !== user._id
-  );
+        {/* Main Content */}
+        <div className="relative z-10 flex flex-col items-center justify-center h-full text-white px-4 sm:px-6">
+          {/* Status Header */}
+          <div className="absolute top-4 sm:top-8 left-1/2 transform -translate-x-1/2 z-20">
+            <div className="flex items-center gap-2 sm:gap-3 bg-black/30 backdrop-blur-md rounded-full px-4 sm:px-8 py-2 sm:py-4 border border-white/10">
+              <div className="w-3 h-3 sm:w-4 sm:h-4 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-sm sm:text-xl font-semibold">Incoming Video Call</span>
+            </div>
+          </div>
 
-  // Check if it's a group call
-  const isGroupCall = participants.length > 2;
+          {/* Caller Avatar with Modern Design */}
+          <div className="mb-6 sm:mb-8 mt-16 sm:mt-20">
+            <div className="relative inline-block">
+              <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-white/30 shadow-2xl bg-gradient-to-br from-emerald-500 via-purple-500 to-blue-500 p-1">
+                {callData?.caller?.avatar ? (
+                  <img 
+                    src={callData.caller.avatar} 
+                    alt={callData.caller.name}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-gradient-to-br from-emerald-400 to-purple-400 flex items-center justify-center">
+                    <User className="w-16 h-16 sm:w-20 sm:h-20 text-white" />
+                  </div>
+                )}
+              </div>
+              
+              {/* Modern Ringing Animation */}
+              <div className="absolute inset-0 rounded-full border-4 border-emerald-400/50 animate-pulse" />
+              <div className="absolute inset-0 rounded-full border-2 border-purple-400/30 animate-ping" />
+            </div>
+          </div>
 
-  return (
-    <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Main Video Area */}
-      <div className="flex-1 relative">
-        {/* Remote Video */}
-        <div className="absolute inset-0">
+          {/* Caller Info */}
+          <div className="text-center mb-6 sm:mb-8">
+            <h2 className="text-2xl sm:text-4xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-emerald-400 to-purple-400 bg-clip-text text-transparent">
+              {callData?.caller?.name || 'Unknown Caller'}
+            </h2>
+            <div className="flex items-center justify-center gap-2 sm:gap-4 mb-4 sm:mb-6">
+              <div className="flex items-center gap-1 sm:gap-2 bg-white/10 backdrop-blur-sm rounded-full px-3 sm:px-4 py-1.5 sm:py-2">
+                <Video className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="text-sm sm:text-lg font-medium">Video Call</span>
+              </div>
+            </div>
+            
+            <div className="text-lg sm:text-xl text-white/80 animate-pulse font-medium">
+              Tap to answer
+            </div>
+          </div>
+
+          {/* Local Video Preview - Modern Design */}
+          <div className="mb-6 sm:mb-8">
+            <div className="relative w-64 h-48 sm:w-72 sm:h-54 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl bg-gray-800/50 backdrop-blur-sm">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                style={{ transform: 'scaleX(-1)' }}
+              />
+              {!localStream && (
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-4 border-white/20 border-t-emerald-400 mx-auto mb-2 sm:mb-4"></div>
+                    <p className="text-sm sm:text-lg text-white/70 font-medium">Preparing camera...</p>
+                  </div>
+                </div>
+              )}
+              {/* Video overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+            </div>
+          </div>
+
+          {/* Always Visible Call Controls */}
+          <div className="flex items-center gap-4 sm:gap-8">
+            {/* Reject Button */}
+            <button
+              onClick={onRejectCall}
+              className="group w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 shadow-2xl border-2 border-red-400/30"
+              title="Reject Call"
+            >
+              <PhoneOff className="w-8 h-8 sm:w-10 sm:h-10 group-hover:rotate-12 transition-transform duration-300" />
+            </button>
+
+            {/* Accept Button */}
+            <button
+              onClick={onAcceptCall}
+              className="group w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 shadow-2xl border-2 border-emerald-400/30"
+              title="Accept Call"
+            >
+              <Phone className="w-8 h-8 sm:w-10 sm:h-10 group-hover:rotate-12 transition-transform duration-300" />
+            </button>
+          </div>
+
+          {/* Status Messages */}
+          <div className="mt-6 sm:mt-8 text-center space-y-2 sm:space-y-3">
+            <div className="text-white/70 text-sm sm:text-lg font-medium">
+              Swipe up to answer or tap the buttons
+            </div>
+            
+            <div className="text-white/50 text-xs sm:text-sm">
+              Video call • Secure connection
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Calling State UI
+  if (callStatus === 'calling') {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 z-50 overflow-hidden">
+        {/* Connection Status */}
+        <ConnectionStatus socket={socket} />
+        
+        {/* Modern Background Pattern */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-indigo-500/10" />
+          {/* Floating particles */}
+          <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-400/30 rounded-full animate-ping" />
+          <div className="absolute top-3/4 right-1/4 w-3 h-3 bg-purple-400/30 rounded-full animate-ping" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-1/2 left-1/6 w-1 h-1 bg-indigo-400/30 rounded-full animate-ping" style={{ animationDelay: '2s' }} />
+          <div className="absolute top-1/3 right-1/3 w-2 h-2 bg-blue-400/20 rounded-full animate-ping" style={{ animationDelay: '0.5s' }} />
+        </div>
+
+        {/* Main Content */}
+        <div className="relative z-10 flex flex-col items-center justify-center h-full text-white px-4 sm:px-6">
+          {/* Status Header */}
+          <div className="absolute top-4 sm:top-8 left-1/2 transform -translate-x-1/2 z-20">
+            <div className="flex items-center gap-2 sm:gap-3 bg-black/30 backdrop-blur-md rounded-full px-4 sm:px-8 py-2 sm:py-4 border border-white/10">
+              <div className="w-3 h-3 sm:w-4 sm:h-4 bg-yellow-500 rounded-full animate-pulse" />
+              <span className="text-sm sm:text-xl font-semibold">Calling...</span>
+            </div>
+          </div>
+
+          {/* Recipient Avatar with Modern Design */}
+          <div className="mb-6 sm:mb-8 mt-16 sm:mt-20">
+            <div className="relative inline-block">
+              <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-white/30 shadow-2xl bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-500 p-1">
+                {callData?.receiver?.avatar ? (
+                  <img 
+                    src={callData.receiver.avatar} 
+                    alt={callData.receiver.name}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center">
+                    <User className="w-16 h-16 sm:w-20 sm:h-20 text-white" />
+                  </div>
+                )}
+              </div>
+              
+              {/* Modern Calling Animation */}
+              <div className="absolute inset-0 rounded-full border-4 border-blue-400/50 animate-pulse" />
+              <div className="absolute inset-0 rounded-full border-2 border-purple-400/30 animate-ping" />
+            </div>
+          </div>
+
+          {/* Recipient Info */}
+          <div className="text-center mb-8">
+            <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              Calling...
+            </h2>
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
+                <Video className="w-5 h-5" />
+                <span className="text-lg font-medium">Video Call</span>
+              </div>
+            </div>
+            
+            <div className="text-xl text-white/80 animate-pulse font-medium">
+              Waiting for answer...
+            </div>
+          </div>
+
+          {/* Local Video Preview - Modern Design */}
+          <div className="mb-8">
+            <div className="relative w-72 h-54 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl bg-gray-800/50 backdrop-blur-sm">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+                style={{ transform: 'scaleX(-1)' }}
+              />
+              {!localStream && (
+                <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-white/20 border-t-blue-400 mx-auto mb-4"></div>
+                    <p className="text-lg text-white/70 font-medium">Starting camera...</p>
+                  </div>
+                </div>
+              )}
+              {/* Video overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+            </div>
+          </div>
+
+          {/* Always Visible Call Controls */}
+          <div className="flex items-center gap-6">
+            {/* Mute Button */}
+            <button
+              onClick={onToggleMute}
+              className={`group w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 shadow-2xl border-2 ${
+                isMuted 
+                  ? 'bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border-red-400/30' 
+                  : 'bg-white/20 hover:bg-white/30 border-white/20'
+              }`}
+              title={isMuted ? 'Unmute' : 'Mute'}
+            >
+              {isMuted ? <MicOff className="w-8 h-8 group-hover:rotate-12 transition-transform duration-300" /> : <Mic className="w-8 h-8 group-hover:rotate-12 transition-transform duration-300" />}
+            </button>
+
+            {/* Video Toggle Button */}
+            <button
+              onClick={onToggleVideo}
+              className={`group w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 shadow-2xl border-2 ${
+                !isVideoEnabled 
+                  ? 'bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border-red-400/30' 
+                  : 'bg-white/20 hover:bg-white/30 border-white/20'
+              }`}
+              title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
+            >
+              {isVideoEnabled ? <Video className="w-8 h-8 group-hover:rotate-12 transition-transform duration-300" /> : <VideoOff className="w-8 h-8 group-hover:rotate-12 transition-transform duration-300" />}
+            </button>
+
+            {/* Reject/Cancel Call Button */}
+            <button
+              onClick={onEndCall}
+              className="group w-20 h-20 bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 shadow-2xl border-2 border-red-400/30"
+              title="Cancel Call"
+            >
+              <PhoneOff className="w-10 h-10 group-hover:rotate-12 transition-transform duration-300" />
+            </button>
+          </div>
+
+          {/* Status Messages */}
+          <div className="mt-8 text-center space-y-3">
+            <div className="text-white/70 text-lg font-medium">
+              Tap Cancel to end call
+            </div>
+            
+            <div className="text-white/50 text-sm">
+              Video call • Secure connection
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Connected State UI
+  if (callStatus === 'connected') {
+    return (
+      <div 
+        className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 z-50 flex flex-col"
+        onClick={handleClick}
+      >
+        {/* Connection Status */}
+        <ConnectionStatus socket={socket} />
+        {/* Remote Video (Main) */}
+        <div className="flex-1 relative">
           <video
             ref={remoteVideoRef}
             autoPlay
-            playsInline
-            muted={false}
             className="w-full h-full object-cover"
-            style={{ backgroundColor: '#1f2937' }}
-            onLoadedMetadata={() => console.log('Remote video metadata loaded')}
-            onCanPlay={() => console.log('Remote video can play')}
-            onPlay={() => console.log('Remote video started playing')}
-            onError={(e) => console.error('Remote video error:', e)}
           />
           
-          {/* No video fallback */}
-          {(!remoteVideoRef.current?.srcObject || 
-            !remoteVideoRef.current.srcObject.getVideoTracks().some(track => track.enabled) ||
-            remoteVideoRef.current.readyState === 0) && (
-            <div className="flex items-center justify-center h-full">
+          {/* Fallback for no remote video */}
+          {!remoteStream && (
+            <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
               <div className="text-center text-white">
-                <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <UserProfileAvatar 
-                    user={otherParticipants[0]?.user || {}} 
-                    size="lg" 
-                  />
+                <div className="w-40 h-40 mx-auto mb-8 bg-gray-700 rounded-full flex items-center justify-center">
+                  <User className="w-20 h-20 text-gray-400" />
                 </div>
-                <p className="text-xl font-semibold">
-                  {otherParticipants[0]?.user?.name || 'Waiting...'}
-                </p>
-                <p className="text-sm text-gray-400 mt-2">
-                  {!remoteVideoRef.current?.srcObject ? 'Connecting video...' : 
-                   !remoteVideoRef.current.srcObject.getVideoTracks().some(track => track.enabled) ? 'Camera is off' :
-                   'Loading video...'}
-                </p>
-                {/* Debug info */}
-                <div className="mt-4 text-xs text-gray-500">
-                  <p>Remote stream: {remoteStream ? 'Yes' : 'No'}</p>
-                  <p>Remote video ref: {remoteVideoRef.current ? 'Yes' : 'No'}</p>
-                  <p>Remote srcObject: {remoteVideoRef.current?.srcObject ? 'Yes' : 'No'}</p>
-                  <p>Video tracks: {remoteVideoRef.current?.srcObject?.getVideoTracks().length || 0}</p>
-                  <p>WebRTC Ready: {isWebRTCReady() ? 'Yes' : 'No'}</p>
-                  <p>WebRTC Connected: {isWebRTCConnected() ? 'Yes' : 'No'}</p>
-                  <p>Has Remote Stream: {hasRemoteStream() ? 'Yes' : 'No'}</p>
+                <h3 className="text-3xl font-semibold mb-4">Connected</h3>
+                <p className="text-gray-400 text-lg">Waiting for video stream...</p>
+                <div className="mt-4">
+                  <div className="animate-pulse bg-gray-600 h-2 w-32 mx-auto rounded"></div>
+                  <p className="text-sm text-gray-500 mt-2">Establishing connection...</p>
                 </div>
               </div>
             </div>
           )}
-        </div>
-
-        {/* Local Video */}
-        <div className="absolute bottom-24 right-4 w-48 h-36 rounded-lg overflow-hidden border-2 border-white shadow-lg">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-            style={{ 
-              backgroundColor: '#1f2937',
-              transform: 'scaleX(-1)' // Mirror the local video
-            }}
-            onLoadedMetadata={() => console.log('Local video metadata loaded')}
-            onCanPlay={() => console.log('Local video can play')}
-            onPlay={() => console.log('Local video started playing')}
-            onError={(e) => console.error('Local video error:', e)}
-          />
-          {/* Fallback if no video stream */}
-          {!localVideoRef.current?.srcObject && (
-            <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
-              <div className="text-center text-white">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-                <p className="text-xs">Starting camera...</p>
+          
+          {/* Connection status overlay */}
+          {remoteStream && (
+            <div className="absolute top-4 left-4 bg-black/50 rounded-lg px-3 py-2 text-white text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>Video Connected</span>
               </div>
             </div>
           )}
-        </div>
-
-            {/* Call Duration */}
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 px-4 py-2 rounded-lg">
-              <p className="text-white font-semibold">{formatDuration(callDuration)}</p>
-            </div>
-
-            {/* Screen Sharing Indicator */}
-            {isScreenSharing && (
-              <div className="absolute top-4 right-4 bg-black bg-opacity-75 px-3 py-1 rounded-lg">
-                <div className="flex items-center gap-2 text-white text-sm">
-                  <Monitor className="w-4 h-4" />
-                  <span>Sharing Screen</span>
+          
+          {/* Local Video (Picture-in-picture) */}
+          <div className="absolute top-6 right-6 w-64 h-48 bg-gray-900 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl">
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              className="w-full h-full object-cover"
+              style={{ transform: 'scaleX(-1)' }}
+            />
+            
+            {/* Local Video Status */}
+            <div className="absolute top-3 left-3 flex items-center gap-2">
+              {isMuted && (
+                <div className="bg-red-600 rounded-full p-2">
+                  <MicOff className="w-4 h-4 text-white" />
                 </div>
-              </div>
-            )}
-
-        {/* Settings Status Indicator */}
-        {isUpdatingSettings && (
-          <div className="absolute top-4 right-4">
-            <div className="flex items-center gap-2 bg-black/50 px-3 py-1 rounded-full text-white text-xs">
-              <Settings className="w-3 h-3 animate-spin" />
-              <span>Updating...</span>
+              )}
+              {!isVideoEnabled && (
+                <div className="bg-red-600 rounded-full p-2">
+                  <VideoOff className="w-4 h-4 text-white" />
+                </div>
+              )}
             </div>
           </div>
-        )}
+
+          {/* Top Status Bar */}
+          <div className="absolute top-6 left-6">
+            <CallStatusBar
+              timeElapsed={timeElapsed}
+              connectionQuality={connectionQuality}
+              participantCount={callData?.participants?.length + 1 || 1}
+              callerName={callData?.caller?.name || callData?.receiver?.name || 'Connected'}
+            />
+          </div>
+        </div>
+
+        {/* Bottom Controls */}
+        <AnimatePresence>
+          {showControls && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="max-w-2xl mx-auto">
+                <CallControls
+                  isMuted={isMuted}
+                  isVideoEnabled={isVideoEnabled}
+                  isScreenSharing={isScreenSharing}
+                  connectionQuality={connectionQuality}
+                  onToggleMute={onToggleMute}
+                  onToggleVideo={onToggleVideo}
+                  onToggleScreenShare={onToggleScreenShare}
+                  onEndCall={onEndCall}
+                  onOpenSettings={() => setShowSettings(!showSettings)}
+                  onToggleFullscreen={handleFullscreen}
+                  isFullscreen={isFullscreen}
+                  showSettings={showSettings}
+                  onCloseSettings={() => setShowSettings(false)}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
+    );
+  }
 
-      {/* Call Controls */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/75 to-transparent p-6">
-        <div className="flex justify-center items-center space-x-4">
-          {/* Microphone On/Off */}
-          <CustomButton
-            onClick={handleToggleMute}
-            variant="ghost"
-            size="lg"
-            className={`rounded-full w-14 h-14 ${
-              !isMuted
-                ? 'bg-white/10 hover:bg-white/20 text-white'
-                : 'bg-red-600 hover:bg-red-700 text-white'
-            }`}
-            title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
-            disabled={isUpdatingSettings}
-          >
-            {isMuted ? (
-              <MicOff className="w-6 h-6" />
-            ) : (
-              <Mic className="w-6 h-6" />
-            )}
-          </CustomButton>
+  // Connecting State UI
+  if (callStatus === 'connecting') {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 z-50 overflow-hidden">
+        {/* Connection Status */}
+        <ConnectionStatus socket={socket} />
+        
+        {/* Modern Background Pattern */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-blue-500/10" />
+          {/* Floating particles */}
+          <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-indigo-400/30 rounded-full animate-ping" />
+          <div className="absolute top-3/4 right-1/4 w-3 h-3 bg-purple-400/30 rounded-full animate-ping" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-1/2 left-1/6 w-1 h-1 bg-blue-400/30 rounded-full animate-ping" style={{ animationDelay: '2s' }} />
+          <div className="absolute top-1/3 right-1/3 w-2 h-2 bg-indigo-400/20 rounded-full animate-ping" style={{ animationDelay: '0.5s' }} />
+        </div>
 
-          {/* Video On/Off */}
-          <CustomButton
-            onClick={handleToggleVideo}
-            variant="ghost"
-            size="lg"
-            className={`rounded-full w-14 h-14 ${
-              isVideoEnabled
-                ? 'bg-white/10 hover:bg-white/20 text-white'
-                : 'bg-red-600 hover:bg-red-700 text-white'
-            }`}
-            title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
-            disabled={isUpdatingSettings}
-          >
-            {isVideoEnabled ? (
-              <Video className="w-6 h-6" />
-            ) : (
-              <VideoOff className="w-6 h-6" />
-            )}
-          </CustomButton>
+        {/* Main Content */}
+        <div className="relative z-10 flex flex-col h-full text-white px-6">
+          {/* Header */}
+          <div className="flex items-center justify-between pt-8 pb-6 z-20">
+            <div className="flex items-center gap-3 bg-black/30 backdrop-blur-md rounded-full px-6 py-3 border border-white/10">
+              <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse" />
+              <span className="text-lg font-semibold">Connecting...</span>
+            </div>
+            
+            {/* Reject Call Button */}
+            <button
+              onClick={onEndCall}
+              className="group w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 shadow-2xl border-2 border-red-400/30"
+              title="Cancel Call"
+            >
+              <PhoneOff className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" />
+            </button>
+          </div>
 
-          {/* Screen Share */}
-          <CustomButton
-            onClick={handleToggleScreenShare}
-            variant="ghost"
-            size="lg"
-            className={`rounded-full w-14 h-14 ${
-              isScreenSharing
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                : 'bg-white/10 hover:bg-white/20 text-white'
-            }`}
-            title={isScreenSharing ? 'Stop sharing' : 'Share screen'}
-            disabled={isUpdatingSettings}
-          >
-            {isScreenSharing ? (
-              <MonitorOff className="w-6 h-6" />
-            ) : (
-              <Monitor className="w-6 h-6" />
-            )}
-          </CustomButton>
+          {/* Content Area */}
+          <div className="flex-1 flex items-center justify-center -mt-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full max-w-6xl">
+              
+              {/* Left Side - Receiver Profile */}
+              <div className="flex flex-col items-center justify-center space-y-6">
+                {/* Receiver Avatar */}
+                <div className="relative">
+                  <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-white/30 shadow-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 p-1">
+                    {callData?.receiver?.avatar || callData?.caller?.avatar ? (
+                      <img 
+                        src={callData.receiver?.avatar || callData.caller?.avatar} 
+                        alt={callData.receiver?.name || callData.caller?.name}
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center">
+                        <User className="w-24 h-24 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Connecting Animation */}
+                  <div className="absolute inset-0 rounded-full border-4 border-indigo-400/50 animate-pulse" />
+                  <div className="absolute inset-0 rounded-full border-2 border-purple-400/30 animate-ping" />
+                </div>
 
-    {/* Debug Button */}
-    <CustomButton
-      onClick={debugWebRTCStatus}
-      variant="ghost"
-      size="lg"
-      className="rounded-full w-14 h-14 bg-white/10 hover:bg-white/20 text-white"
-      title="Debug WebRTC"
-    >
-      <Settings className="w-6 h-6" />
-    </CustomButton>
+                {/* Receiver Info */}
+                <div className="text-center">
+                  <h2 className="text-4xl font-bold mb-3 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                    {callData?.receiver?.name || callData?.caller?.name || 'Connecting...'}
+                  </h2>
+                  <div className="flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
+                    <Video className="w-5 h-5" />
+                    <span className="text-lg font-medium">Video Call</span>
+                  </div>
+                </div>
 
-    {/* Force Refresh Remote Video Button */}
-    <CustomButton
-      onClick={() => {
-        console.log('Force refreshing remote video...');
-        if (remoteVideoRef.current && remoteVideoRef.current.srcObject) {
-          remoteVideoRef.current.srcObject = null;
-          setTimeout(() => {
-            if (remoteStream) {
-              remoteVideoRef.current.srcObject = remoteStream;
-              remoteVideoRef.current.play().catch(console.error);
-            }
-          }, 100);
-        }
-      }}
-      variant="ghost"
-      size="lg"
-      className="rounded-full w-14 h-14 bg-white/10 hover:bg-white/20 text-white"
-      title="Refresh Remote Video"
-    >
-      <RefreshCw className="w-6 h-6" />
-    </CustomButton>
+              </div>
 
-    {/* Force Restart WebRTC Button */}
-    <CustomButton
-      onClick={async () => {
-        console.log('Force restarting WebRTC...');
-        try {
-          await forceRestartWebRTC();
-          toast.success('WebRTC restarted');
-        } catch (error) {
-          console.error('Error restarting WebRTC:', error);
-          toast.error('Failed to restart WebRTC');
-        }
-      }}
-      variant="ghost"
-      size="lg"
-      className="rounded-full w-14 h-14 bg-red-500/20 hover:bg-red-500/30 text-white"
-      title="Restart WebRTC"
-    >
-      <Phone className="w-6 h-6" />
-    </CustomButton>
+              {/* Right Side - Your Video Preview */}
+              <div className="flex flex-col items-center justify-center space-y-6">
 
-    {/* Manual Negotiation Button */}
-    <CustomButton
-      onClick={async () => {
-        console.log('Manual negotiation triggered');
-        try {
-          // First check WebRTC status
-          debugWebRTCStatus();
-          
-          // Force initialize WebRTC if needed
-          if (!isWebRTCReady()) {
-            console.log('WebRTC not ready, initializing...');
-            await initializeWebRTC();
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
-          
-          // Start negotiation
-          await manualStartNegotiation();
-          toast.success('Negotiation started');
-        } catch (error) {
-          console.error('Error starting negotiation:', error);
-          toast.error('Failed to start negotiation');
-        }
-      }}
-      variant="ghost"
-      size="lg"
-      className="rounded-full w-14 h-14 bg-blue-500/20 hover:bg-blue-500/30 text-white"
-      title="Start Negotiation"
-    >
-      <MessageSquare className="w-6 h-6" />
-    </CustomButton>
+                {/* Your Video Preview */}
+                <div className="relative w-80 h-60 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl bg-gray-800/50 backdrop-blur-sm">
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }}
+                  />
+                  {!localStream && (
+                    <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-16 w-16 border-4 border-white/20 border-t-indigo-400 mx-auto mb-4"></div>
+                        <p className="text-lg text-white/70 font-medium">Starting camera...</p>
+                      </div>
+                    </div>
+                  )}
+                  {/* Video overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                  
+                  {/* Video Status Indicators */}
+                  <div className="absolute top-3 left-3 flex items-center gap-2">
+                    {isMuted && (
+                      <div className="bg-red-600 rounded-full p-1">
+                        <MicOff className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                    {!isVideoEnabled && (
+                      <div className="bg-red-600 rounded-full p-1">
+                        <VideoOff className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-          {/* End Call Action */}
-          <CustomButton
-            onClick={handleEndCall}
-            variant="ghost"
-            size="lg"
-            className="rounded-full w-14 h-14 bg-red-600 hover:bg-red-700 text-white"
-            title="End call"
-            disabled={isUpdatingSettings}
-          >
-            <PhoneOff className="w-6 h-6" />
-          </CustomButton>
+                {/* Quick Controls */}
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={onToggleMute}
+                    className={`group w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 shadow-2xl border-2 ${
+                      isMuted 
+                        ? 'bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border-red-400/30' 
+                        : 'bg-white/20 hover:bg-white/30 border-white/20'
+                    }`}
+                    title={isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    {isMuted ? <MicOff className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" /> : <Mic className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" />}
+                  </button>
+
+                  <button
+                    onClick={onToggleVideo}
+                    className={`group w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110 shadow-2xl border-2 ${
+                      !isVideoEnabled 
+                        ? 'bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border-red-400/30' 
+                        : 'bg-white/20 hover:bg-white/30 border-white/20'
+                    }`}
+                    title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
+                  >
+                    {isVideoEnabled ? <Video className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" /> : <VideoOff className="w-6 h-6 group-hover:rotate-12 transition-transform duration-300" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Status */}
+          <div className="pb-8 text-center">
+            <div className="text-white/70 text-lg font-medium mb-2">
+              Establishing secure connection...
+            </div>
+            <div className="text-white/50 text-sm">
+              Video call • Tap Cancel to end call
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 };
 
-export default ActiveCallWindow;
+export default VideoCallInterface;

@@ -12,7 +12,6 @@ export const useNavigation = () => {
     try {
       navigate(path, options);
     } catch (error) {
-      console.warn('Navigation failed, falling back to window.location:', error);
       // Fallback for cases where React Router navigation fails
       window.location.href = path;
     }

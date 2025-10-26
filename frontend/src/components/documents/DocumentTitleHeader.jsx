@@ -1,5 +1,5 @@
 import React from "react";
-import Input from "../ui/Input";
+import Input from "../ui/CustomInput";
 
 const DocumentTitleBar = ({ 
   title, 

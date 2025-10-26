@@ -1,6 +1,7 @@
 import ApiClient from "./ApiClient";
 
 export const getUserChats = (params = {}) => ApiClient.get('/chat', { params });
+export const getRecentChats = (params = {}) => ApiClient.get('/chat/recent', { params });
 export const getUserGroupChats = (params = {}) => ApiClient.get('/chat', { params: { ...params, type: 'group' } });
 export const getOneToOneChats = (params = {}) => ApiClient.get('/chat', { params: { ...params, type: 'one-to-one' } });
 export const getChattedUsers = (params = {}) => {

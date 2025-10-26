@@ -18,9 +18,8 @@ const router = Router();
 // All routes require authentication
 router.use(verifyToken);
 
-// Get all Kanban boards route
-router.route("/kanban-boards")
-  .get(getAllKanbanBoards);
+// Get all Kanban boards route - MUST come before /tasks/:taskId to avoid route conflict
+router.get("/kanban-boards", getAllKanbanBoards);
 
 // Task CRUD routes
 router.route("/projects/:projectId/tasks")

@@ -86,7 +86,6 @@ export default function Signup() {
     signup(signupData);
   };
 
-
   return (
     <AuthContainer
       title="Create Account"
@@ -167,8 +166,8 @@ export default function Signup() {
         />
 
         {/* Country Code and Phone */}
-        <div className="grid grid-cols-4 gap-3">
-          <div className="col-span-1">
+        <div className="grid grid-cols-10 gap-3">
+          <div className="col-span-3">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -185,10 +184,11 @@ export default function Signup() {
                 required
                 disabled={isLoading}
                 icon={Globe}
+                className="country-code-input"
               />
             </motion.div>
           </div>
-          <div className="col-span-3">
+          <div className="col-span-7">
             <AuthInput
               label="Phone Number"
               type="tel"

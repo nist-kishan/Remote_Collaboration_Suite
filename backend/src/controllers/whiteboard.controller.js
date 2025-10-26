@@ -3,7 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import Whiteboard from "../models/whiteboard.model.js";
 import User from "../models/user.model.js";
-import { sendEmail } from "../utils/sendMail.js";
+import { sendMail } from "../utils/sendMail.js";
 import { getWhiteboardUrl } from "../config/url.config.js";
 
 // Create a new whiteboard
@@ -180,7 +180,57 @@ export const updateWhiteboard = asyncHandle(async (req, res) => {
     whiteboard.visibility = visibility;
   }
   if (canvasData !== undefined) {
-    whiteboard.canvasData = canvasData;
+    // Merge canvas data instead of replacing it for collaborative editing
+    if (typeof canvasData === 'object' && canvasData !== null) {
+      const existingCanvasData = whiteboard.canvasData || {};
+      
+      // Merge shapes if they exist
+      if (canvasData.shapes || canvasData.elements) {
+        const existingShapes = existingCanvasData.shapes || existingCanvasData.elements || [];
+        const newShapes = canvasData.shapes || canvasData.elements || [];
+        
+        // Create a map of existing shapes by ID to avoid duplicates
+        const existingShapesMap = new Map();
+        existingShapes.forEach(shape => {
+          if (shape.id) {
+            existingShapesMap.set(shape.id, shape);
+          }
+        });
+        
+        // Add new shapes that don't already exist
+        const mergedShapes = [...existingShapes];
+        newShapes.forEach(shape => {
+          if (shape.id && !existingShapesMap.has(shape.id)) {
+            mergedShapes.push(shape);
+          } else if (!shape.id) {
+            // Add shapes without IDs (they are new)
+            mergedShapes.push(shape);
+          }
+        });
+        
+        // Update the canvas data with merged shapes
+        whiteboard.canvasData = {
+          ...existingCanvasData,
+          ...canvasData,
+          shapes: mergedShapes,
+          elements: mergedShapes, // Support both naming conventions
+          lastModifiedBy: userId,
+          lastModifiedAt: new Date()
+        };
+      } else {
+        // For other canvas data types, merge the objects
+        whiteboard.canvasData = {
+          ...existingCanvasData,
+          ...canvasData,
+          lastModifiedBy: userId,
+          lastModifiedAt: new Date()
+        };
+      }
+      
+      } else {
+      // For non-object data, replace it (fallback behavior)
+      whiteboard.canvasData = canvasData;
+    }
   }
   if (canvasSettings !== undefined) {
     whiteboard.canvasSettings = { ...whiteboard.canvasSettings, ...canvasSettings };
@@ -189,7 +239,6 @@ export const updateWhiteboard = asyncHandle(async (req, res) => {
   whiteboard.lastModifiedBy = userId;
 
   const updatedWhiteboard = await whiteboard.save();
-
   // Populate fields
   await updatedWhiteboard.populate("owner", "name email username avatar");
   await updatedWhiteboard.populate("lastModifiedBy", "name email username avatar");
@@ -476,8 +525,8 @@ export const shareWhiteboardViaEmail = asyncHandle(async (req, res) => {
     `;
 
     try {
-      await sendEmail({
-        email,
+      await sendMail({
+        to: email,
         subject: emailSubject,
         html: emailHtml,
       });
@@ -589,6 +638,264 @@ export const searchWhiteboards = asyncHandle(async (req, res) => {
     new ApiResponse(200, "Search results fetched successfully", {
       whiteboards,
       searchQuery,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit)),
+      },
+    })
+  );
+});
+
+// Auto-save whiteboard
+export const autoSaveWhiteboard = asyncHandle(async (req, res) => {
+  const { whiteboardId } = req.params;
+  const { canvasData } = req.body;
+  const userId = req.user._id;
+
+  const whiteboard = await Whiteboard.findOne({
+    _id: whiteboardId,
+    isDeleted: false,
+  });
+
+  if (!whiteboard) {
+    throw new ApiError(404, "Whiteboard not found");
+  }
+
+  // Check permissions
+  if (!whiteboard.hasPermission(userId, "editor")) {
+    throw new ApiError(403, "You don't have permission to edit this whiteboard");
+  }
+
+  // Update canvas data - merge instead of replace for collaborative editing
+  if (canvasData !== undefined) {
+    // If canvasData is an object with shapes or elements, merge them
+    if (typeof canvasData === 'object' && canvasData !== null) {
+      // Merge the new canvas data with existing data
+      const existingCanvasData = whiteboard.canvasData || {};
+      
+      // Merge shapes if they exist
+      if (canvasData.shapes || canvasData.elements) {
+        const existingShapes = existingCanvasData.shapes || existingCanvasData.elements || [];
+        const newShapes = canvasData.shapes || canvasData.elements || [];
+        
+        // Create a map of existing shapes by ID to avoid duplicates
+        const existingShapesMap = new Map();
+        existingShapes.forEach(shape => {
+          if (shape.id) {
+            existingShapesMap.set(shape.id, shape);
+          }
+        });
+        
+        // Add new shapes that don't already exist
+        const mergedShapes = [...existingShapes];
+        newShapes.forEach(shape => {
+          if (shape.id && !existingShapesMap.has(shape.id)) {
+            mergedShapes.push(shape);
+          } else if (!shape.id) {
+            // Add shapes without IDs (they are new)
+            mergedShapes.push(shape);
+          }
+        });
+        
+        // Update the canvas data with merged shapes
+        whiteboard.canvasData = {
+          ...existingCanvasData,
+          ...canvasData,
+          shapes: mergedShapes,
+          elements: mergedShapes, // Support both naming conventions
+          lastModifiedBy: userId,
+          lastModifiedAt: new Date()
+        };
+      } else {
+        // For other canvas data types, merge the objects
+        whiteboard.canvasData = {
+          ...existingCanvasData,
+          ...canvasData,
+          lastModifiedBy: userId,
+          lastModifiedAt: new Date()
+        };
+      }
+      
+      } else {
+      // For non-object data, replace it (fallback behavior)
+      whiteboard.canvasData = canvasData;
+    }
+  }
+
+  whiteboard.lastModifiedBy = userId;
+  whiteboard.version += 1;
+
+  const updatedWhiteboard = await whiteboard.save();
+  return res.status(200).json(
+    new ApiResponse(200, "Whiteboard auto-saved successfully", {
+      whiteboard: {
+        _id: updatedWhiteboard._id,
+        version: updatedWhiteboard.version,
+        lastModifiedBy: updatedWhiteboard.lastModifiedBy,
+        updatedAt: updatedWhiteboard.updatedAt
+      },
+    })
+  );
+});
+
+// Enable/disable auto-save for whiteboard
+export const enableAutoSave = asyncHandle(async (req, res) => {
+  const { whiteboardId } = req.params;
+  const { enabled = true } = req.body;
+  const userId = req.user._id;
+
+  const whiteboard = await Whiteboard.findOne({
+    _id: whiteboardId,
+    isDeleted: false,
+  });
+
+  if (!whiteboard) {
+    throw new ApiError(404, "Whiteboard not found");
+  }
+
+  // Check permissions (only owner can change auto-save settings)
+  if (!whiteboard.hasPermission(userId, "owner")) {
+    throw new ApiError(403, "You don't have permission to modify auto-save settings");
+  }
+
+  // Update auto-save settings
+  whiteboard.collaborationSettings.autoSave = enabled;
+  whiteboard.lastModifiedBy = userId;
+
+  await whiteboard.save();
+  return res.status(200).json(
+    new ApiResponse(200, `Auto-save ${enabled ? 'enabled' : 'disabled'} successfully`, {
+      whiteboard: {
+        _id: whiteboard._id,
+        autoSave: whiteboard.collaborationSettings.autoSave,
+        autoSaveInterval: whiteboard.collaborationSettings.autoSaveInterval
+      },
+    })
+  );
+});
+
+// Get whiteboard collaborators
+export const getWhiteboardCollaborators = asyncHandle(async (req, res) => {
+  const { whiteboardId } = req.params;
+  const userId = req.user._id;
+
+  const whiteboard = await Whiteboard.findOne({
+    _id: whiteboardId,
+    isDeleted: false,
+  }).populate("collaborators.user", "name email username avatar");
+
+  if (!whiteboard) {
+    throw new ApiError(404, "Whiteboard not found");
+  }
+
+  // Check permissions
+  if (!whiteboard.hasPermission(userId, "viewer")) {
+    throw new ApiError(403, "You don't have permission to view this whiteboard");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, "Collaborators fetched successfully", {
+      collaborators: whiteboard.collaborators,
+      totalCollaborators: whiteboard.collaborators.length,
+      maxCollaborators: whiteboard.collaborationSettings.maxCollaborators
+    })
+  );
+});
+
+// Get all whiteboards (admin function)
+export const getAllWhiteboards = asyncHandle(async (req, res) => {
+  const { type, status, search, owner, page = 1, limit = 10 } = req.query;
+  const currentUserId = req.user._id;
+
+  // Build query - only show whiteboards the user has access to
+  let query = {
+    isDeleted: false,
+    $or: [
+      // User is the owner
+      { owner: currentUserId },
+      // Whiteboard is shared and user is a collaborator
+      { 
+        visibility: "shared",
+        "collaborators.user": currentUserId
+      },
+      // Whiteboard is public (if allowAnonymousView is true)
+      { 
+        visibility: "shared", 
+        "collaborationSettings.allowAnonymousView": true 
+      }
+    ]
+  };
+
+  // Filter by whiteboard type
+  if (type === "own") {
+    query = { 
+      ...query, 
+      $and: [
+        { owner: currentUserId }
+      ]
+    };
+  } else if (type === "shared") {
+    query = { 
+      ...query, 
+      $and: [
+        { visibility: "shared" },
+        { "collaborators.user": currentUserId }
+      ]
+    };
+  } else if (type === "draft") {
+    query = { 
+      ...query, 
+      $and: [
+        { status: "draft" },
+        { owner: currentUserId } // Only show user's own drafts
+      ]
+    };
+  } else if (type === "public") {
+    query = { 
+      ...query, 
+      $and: [
+        { visibility: "shared" }, 
+        { "collaborationSettings.allowAnonymousView": true }
+      ]
+    };
+  }
+
+  // Filter by specific owner
+  if (owner) {
+    query.owner = owner;
+  }
+
+  // Filter by status
+  if (status) {
+    query.status = status;
+  }
+
+  // Search functionality
+  if (search) {
+    query.$or = [
+      { title: { $regex: search, $options: "i" } },
+      { description: { $regex: search, $options: "i" } },
+      { tags: { $in: [new RegExp(search, "i")] } },
+    ];
+  }
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const whiteboards = await Whiteboard.find(query)
+    .populate("owner", "name email username avatar")
+    .populate("lastModifiedBy", "name email username avatar")
+    .populate("collaborators.user", "name email username avatar")
+    .sort({ updatedAt: -1 })
+    .skip(skip)
+    .limit(parseInt(limit));
+
+  const total = await Whiteboard.countDocuments(query);
+
+  return res.status(200).json(
+    new ApiResponse(200, "All whiteboards fetched successfully", {
+      whiteboards,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),

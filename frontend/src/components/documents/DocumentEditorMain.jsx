@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSelector } from 'react-redux'; // Redux selector hook
 import { 
   Save, 
   Share, 
@@ -54,6 +55,7 @@ import CustomContainer from '../ui/CustomContainer';
 import DocumentShareModal from './DocumentShareModal';
 import ConfirmationDialog from '../ui/ConfirmationDialog';
 import DocumentAutoSaveIndicator from './DocumentAutoSaveIndicator';
+import RichTextEditor from '../editor/RichTextEditor';
 import { useDocument } from '../../hook/useDocument';
 import DocumentCollaborationPanel from './DocumentCollaborationPanel';
 import DocumentLiveCursors from './DocumentLiveCursors';
@@ -87,6 +89,15 @@ const DocumentEditor = ({
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [showTableModal, setShowTableModal] = useState(false);
+  
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'warning',
+    onConfirm: () => {}
+  });
   
   // Modal data
   const [modalData, setModalData] = useState({
@@ -248,9 +259,6 @@ const DocumentEditor = ({
       // Add extra line spacing via CSS
     }
   };
-  
-  
-
 
   const {
     currentDocument,
@@ -274,9 +282,47 @@ const DocumentEditor = ({
     handleUpdateEditorField,
     handleInitializeEditorFromDocument,
     handleResetEditorState
-  } = useDocument(documentId);
+  } = useDocument(documentId, { shouldNavigateAfterCreate: isNew });
 
-  const permissions = useDocumentPermissions(currentDocument, user);
+  // Permissions function based on collaborator roles
+  const getDocumentPermissions = (document, currentUser) => {
+    if (!document || !currentUser) {
+      return {
+        canEdit: false,
+        canShare: false,
+        canDelete: false,
+        canChangeSettings: false,
+        userRole: 'viewer'
+      };
+    }
+
+    // Check if user is the owner
+    const isOwner = document.owner === currentUser._id || document.createdBy === currentUser._id;
+    
+    if (isOwner) {
+      return {
+        canEdit: true,
+        canShare: true,
+        canDelete: true,
+        canChangeSettings: true,
+        userRole: 'owner'
+      };
+    }
+
+    // Check collaborator role
+    const collaborator = document.collaborators?.find(c => c.user === currentUser._id || c.user?._id === currentUser._id);
+    const userRole = collaborator?.role || 'viewer';
+    
+    return {
+      canEdit: userRole === 'editor' || userRole === 'owner',
+      canShare: userRole === 'editor' || userRole === 'owner',
+      canDelete: false, // Only owner can delete
+      canChangeSettings: userRole === 'owner',
+      userRole: userRole
+    };
+  };
+
+  const permissions = getDocumentPermissions(currentDocument, user);
 
   // For new documents, user should always be able to edit
   const canEditTitle = isNew || permissions.canEdit;
@@ -285,52 +331,75 @@ const DocumentEditor = ({
   const isDocumentSaved = currentDocument && currentDocument.status !== 'draft';
   
   // Debug auto-save initialization
-  console.log('🔧 Auto-save initialization:', {
-    documentId,
-    hasDocument: !!currentDocument,
-    documentStatus: currentDocument?.status,
-    isDocumentSaved,
-    contentLength: editorState.content?.length,
-    timestamp: new Date().toLocaleTimeString()
-  });
+  console.log('Auto-save initialized at:', new Date().toLocaleTimeString());
   
-  const { manualSave, isAutoSaveEnabled, toggleAutoSave, autoSaveStatus, lastSaved } = useAutoSave(
-    documentId,
-    editorState.content,
-    isDocumentSaved,
-    5000 // 5 second debounce
-  );
+  // Simple auto-save implementation for now
+  const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved', 'error'
+  const [lastSaved, setLastSaved] = useState(null);
+  
+  const toggleAutoSave = useCallback(() => {
+    setIsAutoSaveEnabled(prev => !prev);
+  }, []);
 
-  // Document collaboration
-  const {
-    activeCollaborators,
-    isTyping,
-    typingUsers,
-    saveStatus,
-    isJoined,
-    isConnected,
-    sendContentChange,
-    sendCursorMove,
-    sendSelectionChange,
-    sendTyping,
-    sendStopTyping,
-    sendFormatChange,
-    sendStructureChange,
-    sendTitleChange,
-    sendSaveStatus,
-  } = useDocumentCollaboration(documentId);
+  const manualSave = useCallback(async () => {
+    if (!isDocumentSaved) return;
+    
+    setAutoSaveStatus('saving');
+    try {
+      await handleUpdateDocument();
+      setAutoSaveStatus('saved');
+      setLastSaved(new Date());
+    } catch (error) {
+      setAutoSaveStatus('error');
+      console.error('Manual save failed:', error);
+    }
+  }, [isDocumentSaved, handleUpdateDocument]);
+
+  // Simple collaboration implementation for now
+  const [activeCollaborators, setActiveCollaborators] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [saveStatus, setSaveStatus] = useState({});
+  const [isJoined, setIsJoined] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  
+  // Simple stub functions for collaboration
+  const sendContentChange = useCallback(() => {}, []);
+  const sendCursorMove = useCallback(() => {}, []);
+  const sendSelectionChange = useCallback(() => {}, []);
+  const sendTyping = useCallback(() => {}, []);
+  const sendStopTyping = useCallback(() => {}, []);
+  const sendFormatChange = useCallback(() => {}, []);
+  const sendStructureChange = useCallback(() => {}, []);
+  const sendTitleChange = useCallback(() => {}, []);
+  const sendSaveStatus = useCallback(() => {}, []);
 
   // Initialize editor when document changes
   useEffect(() => {
     if (currentDocument && !isNew) {
+      console.log('Document loaded:', {
+        content: currentDocument.content || 'empty',
+        updatedAt: currentDocument.updatedAt
+      });
+      
       handleInitializeEditorFromDocument(currentDocument);
+      // Enable auto-save for existing documents
+      setIsAutoSaveEnabled(true);
+      // Set last saved time from document's updatedAt
+      if (currentDocument.updatedAt) {
+        setLastSaved(new Date(currentDocument.updatedAt));
+        setAutoSaveStatus('saved');
+      }
     } else if (isNew) {
       handleResetEditorState();
-            // Set initial state for new documents
-            handleUpdateEditorField('title', '');
+      // Set initial state for new documents
+      handleUpdateEditorField('title', '');
       handleUpdateEditorField('status', 'draft');
       handleUpdateEditorField('visibility', 'private');
-    }
+      // Auto-save disabled for new documents until first save
+      setIsAutoSaveEnabled(false);
+      }
   }, [currentDocument, isNew, handleInitializeEditorFromDocument, handleResetEditorState, handleUpdateEditorField]);
 
   // Add event listener to update formatting state when editor content changes
@@ -357,17 +426,90 @@ const DocumentEditor = ({
     }
   }, [documentId, isNew, handleFetchDocument]);
 
+  // Auto-save effect - triggers when content changes
+  const autoSaveTimeoutRef = useRef(null);
+  const previousContentRef = useRef(null);
+  const isSavingRef = useRef(false);
+  
+  useEffect(() => {
+    // Skip if already saving
+    if (isSavingRef.current) {
+      return;
+    }
+    
+    // Only auto-save if enabled and document is saved
+    if (!isAutoSaveEnabled || !isDocumentSaved || !documentId || !editorState?.content) {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    // Check if content actually changed
+    const currentContent = editorState.content;
+    if (previousContentRef.current === currentContent) {
+      return; // No change, skip
+    }
+    
+    previousContentRef.current = currentContent;
+
+    // Clear existing timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    // Set new timeout for auto-save (5 seconds)
+    autoSaveTimeoutRef.current = setTimeout(async () => {
+      // Skip if already saving
+      if (isSavingRef.current) {
+        return;
+      }
+      
+      isSavingRef.current = true;
+      setAutoSaveStatus('saving');
+      
+      try {
+        const { autoSaveDocument } = await import('../../api/documentApi');
+        await autoSaveDocument(documentId, editorState.content);
+        
+        setAutoSaveStatus('saved');
+        setLastSaved(new Date());
+      } catch (error) {
+        console.error('❌ [AUTO-SAVE] Auto-save failed:', error);
+        setAutoSaveStatus('error');
+      } finally {
+        isSavingRef.current = false;
+      }
+    }, 5000);
+
+    // Cleanup timeout on unmount or when dependencies change
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [isAutoSaveEnabled, isDocumentSaved, documentId, editorState?.content]);
 
   // Handle title change
   const handleTitleChange = useCallback((e) => {
     handleUpdateEditorField('title', e.target.value);
   }, [handleUpdateEditorField]);
 
+  // Log editorState changes
+  useEffect(() => {
+    console.log('Editor state changed:', {
+      content: editorState?.content || 'empty',
+      status: editorState?.status,
+      visibility: editorState?.visibility,
+      tags: editorState?.tags,
+      hasChanges: editorState?.hasChanges
+    });
+  }, [editorState]);
+
   // Handle content change
   const handleContentChange = useCallback((value) => {
-    console.log('📝 Content changed in DocumentEditorUnified:', {
-      contentLength: value?.length,
-      timestamp: new Date().toLocaleTimeString(),
+    console.log('Content changed at:', new Date().toLocaleTimeString(), {
       isAutoSaveEnabled,
       documentStatus: currentDocument?.status,
       isDocumentSaved
@@ -392,13 +534,28 @@ const DocumentEditor = ({
 
   // Handle save
   const handleSave = useCallback(() => {
+    console.log('Saving document:', {
+      content: editorState.content + '...',
+      tags: editorState.tags,
+      visibility: editorState.visibility
+    });
+    
+    console.log('Save parameters:', {
+      isNew,
+      documentId,
+      isUpdating,
+      isCreating
+    });
+
     if (!canEditTitle) {
+      console.error('❌ Save failed: No edit permission');
       toast.error('You do not have permission to edit this document');
       return;
     }
     
     // Validate title
     if (!editorState.title || editorState.title.trim() === '') {
+      console.error('❌ Save failed: No title');
       toast.error('Please enter a document title');
       return;
     }
@@ -410,8 +567,6 @@ const DocumentEditor = ({
       status: 'published', // Always save as published when manually saving
       visibility: editorState.visibility,
     };
-
-    console.log('Saving document with status:', documentData.status);
 
     if (isNew) {
       handleCreateDocument(documentData);
@@ -454,7 +609,6 @@ const DocumentEditor = ({
       navigate('/documents');
     }
   }, [onBack, navigate]);
-
 
   // Show loading state
   if (documentLoading && !isNew) {
@@ -531,19 +685,32 @@ const DocumentEditor = ({
             
             <div className="flex items-center space-x-2 min-w-0 flex-1">
               <File className="h-4 w-4 text-blue-600 flex-shrink-0" />
-              {canEditTitle ? (
-                <input
-                  type="text"
-                  value={editorState.title || ''}
-                  onChange={handleTitleChange}
-                  className="bg-transparent text-sm font-medium text-gray-800 dark:text-gray-200  border-none outline-none focus:outline-none focus:bg-transparent hover:bg-transparent px-1 py-0 min-w-0 w-full max-w-[120px] sm:max-w-xs md:max-w-sm lg:max-w-md document-title-input"
-                  placeholder="Enter document name..."
-                />
-              ) : (
-                <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate max-w-[120px] sm:max-w-xs md:max-w-sm lg:max-w-md document-title-input">
-                  {editorState.title || 'Document'}
-                </span>
-              )}
+              <div className="flex items-center gap-2 min-w-0 w-full">
+                {canEditTitle ? (
+                  <input
+                    type="text"
+                    value={editorState.title || ''}
+                    onChange={handleTitleChange}
+                    className="bg-transparent text-sm font-medium text-gray-800 dark:text-gray-200 border-none outline-none focus:outline-none focus:bg-transparent hover:bg-transparent px-1 py-0 min-w-0 flex-1 max-w-[120px] sm:max-w-xs md:max-w-sm lg:max-w-md document-title-input"
+                    placeholder="Enter document name..."
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate max-w-[120px] sm:max-w-xs md:max-w-sm lg:max-w-md document-title-input">
+                    {editorState.title || 'Document'}
+                  </span>
+                )}
+                
+                {/* Auto-save Status Indicator - Always Visible */}
+                {isAutoSaveEnabled && (
+                  <div className="flex-shrink-0">
+                    <DocumentAutoSaveIndicator 
+                      status={autoSaveStatus}
+                      lastSaved={lastSaved}
+                      isAutoSaveEnabled={isAutoSaveEnabled}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -555,12 +722,7 @@ const DocumentEditor = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  console.log('🔄 Auto-save toggle clicked:', {
-                    currentState: isAutoSaveEnabled,
-                    documentId,
-                    documentStatus: currentDocument?.status,
-                    timestamp: new Date().toLocaleTimeString()
-                  });
+                  console.log('Auto-save toggled at:', new Date().toLocaleTimeString());
                   toggleAutoSave();
                 }}
                 className={`flex items-center space-x-1 px-1 sm:px-2 py-1 text-xs ${
@@ -613,7 +775,8 @@ const DocumentEditor = ({
         </div>
       </div>
 
-      {/* MS Word Style Ribbon */}
+      {/* MS Word Style Ribbon - Only show if user can edit */}
+      {permissions.canEdit && (
       <div className="bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-600 sticky top-10 z-40">
         {/* Tab Navigation */}
         <div className="flex items-center px-2 sm:px-4 py-1 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
@@ -859,8 +1022,6 @@ const DocumentEditor = ({
             </div>
           )}
 
-
-
           {activeTab === 'View' && (
             <div className="flex items-center space-x-1 sm:space-x-2 md:space-x-4 lg:space-x-6 overflow-x-auto scrollbar-hide">
               {/* View Modes Group */}
@@ -959,10 +1120,21 @@ const DocumentEditor = ({
           )}
         </div>
       </div>
-
+      )}
 
       {/* Main Content Area - Properly Aligned */}
       <div className="flex-1 bg-gray-100 dark:bg-gray-900 overflow-auto">
+        {/* View-Only Banner for Viewers */}
+        {!permissions.canEdit && currentDocument && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-4 py-2">
+            <div className="max-w-4xl mx-auto flex items-center gap-2 text-sm text-blue-800 dark:text-blue-300">
+              <Eye className="w-4 h-4" />
+              <span className="font-medium">View-only mode:</span>
+              <span>You have view-only access to this document</span>
+            </div>
+          </div>
+        )}
+        
         <div className="min-h-full flex justify-center items-start py-4 sm:py-6 md:py-8 px-2 sm:px-4">
           {/* Document Container */}
           <div className="w-full max-w-4xl">
@@ -975,7 +1147,7 @@ const DocumentEditor = ({
                   value={editorState.content}
                   onChange={handleContentChange}
                   placeholder="Start writing your document..."
-                  disabled={!permissions.canEdit}
+                  readOnly={!permissions.canEdit}
                   className="min-h-[400px] sm:min-h-[500px] md:min-h-[600px] focus:outline-none w-full"
                 />
               </div>
@@ -1092,19 +1264,7 @@ const DocumentEditor = ({
             <span className="flex-shrink-0 hidden xs:inline status-bar-item">Words: {editorState.content?.split(' ').length || 0}</span>
             <span className="hidden sm:inline">•</span>
             <span className="flex-shrink-0 hidden sm:inline status-bar-item">{editorState.visibility || 'Private'}</span>
-            {/* Auto-save Status */}
-            {isAutoSaveEnabled && (
-              <>
-                <span className="hidden sm:inline">•</span>
-                <div className="flex-shrink-0 hidden sm:inline">
-                  <DocumentAutoSaveIndicator 
-                    status={autoSaveStatus}
-                    lastSaved={lastSaved}
-                    isAutoSaveEnabled={isAutoSaveEnabled}
-                  />
-                </div>
-              </>
-            )}
+            {/* Auto-save Status - Removed from status bar since it's now in header */}
           </div>
           <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
             <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 hidden sm:inline status-bar-item">

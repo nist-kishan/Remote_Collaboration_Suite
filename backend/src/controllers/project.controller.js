@@ -6,6 +6,7 @@ import { Workspace } from "../models/workspace.model.js";
 import User from "../models/user.model.js";
 import { Task } from "../models/task.model.js";
 import { Meeting } from "../models/meeting.model.js";
+import { uploadOnCloudinary } from "../utils/uploadOnCloudinary.js";
 import mongoose from "mongoose";
 
 // Create project in workspace
@@ -36,10 +37,33 @@ export const createProject = asyncHandle(async (req, res) => {
       { "members.user": userId, "members.status": "active" }
     ],
     isActive: true
-  });
+  }).populate("members.user", "name email");
 
   if (!workspace) {
     throw new ApiError(404, "Workspace not found or access denied");
+  }
+
+  // Check user role and permissions
+  let userRole = 'member';
+  
+  // Check if user is owner
+  if (workspace.owner && workspace.owner.toString() === userId.toString()) {
+    userRole = 'owner';
+  } else {
+    // Check workspace members
+    const member = workspace.members.find(
+      m => m.user && m.user._id.toString() === userId.toString()
+    );
+    if (member) {
+      userRole = member.role;
+    }
+  }
+
+  // Check if user has permission to create projects
+  // Only owner, admin, member, hr, and mr can create projects
+  const allowedRoles = ['owner', 'admin', 'member', 'hr', 'mr'];
+  if (!allowedRoles.includes(userRole)) {
+    throw new ApiError(403, "You don't have permission to create projects in this workspace");
   }
 
   // Create project with user as owner
@@ -116,7 +140,6 @@ export const getWorkspaceProjects = asyncHandle(async (req, res) => {
         { description: { $regex: search, $options: "i" } }
       ];
     }
-
 
     const projects = await Project.find(filter)
       .populate("projectManager", "name email avatar")
@@ -291,6 +314,7 @@ export const getProject = asyncHandle(async (req, res) => {
     meetingCount
   };
 
+  // Debug: Log documents
   return res.status(200).json(
     new ApiResponse(200, "Project retrieved successfully", { project: projectWithStats })
   );
@@ -320,7 +344,8 @@ export const updateProject = asyncHandle(async (req, res) => {
     budget,
     tags,
     priority,
-    status
+    status,
+    documents
   } = req.body;
 
   const updateData = {};
@@ -332,6 +357,7 @@ export const updateProject = asyncHandle(async (req, res) => {
   if (tags) updateData.tags = tags;
   if (priority) updateData.priority = priority;
   if (status) updateData.status = status;
+  if (documents !== undefined) updateData.documents = documents;
 
   const updatedProject = await Project.findByIdAndUpdate(
     projectId,
@@ -343,6 +369,7 @@ export const updateProject = asyncHandle(async (req, res) => {
     { path: "workspace", select: "name" }
   ]);
 
+  // Debug: Log documents
   return res.status(200).json(
     new ApiResponse(200, "Project updated successfully", { project: updatedProject })
   );
@@ -432,6 +459,11 @@ export const removeProjectMember = asyncHandle(async (req, res) => {
   // Check if user can manage this project
   if (!project.canBeManagedBy(req.user)) {
     throw new ApiError(403, "You don't have permission to remove members from this project");
+  }
+
+  // Check if user can remove members (only Owner and HR)
+  if (!project.canRemoveMembers(req.user)) {
+    throw new ApiError(403, "Only project owner and HR can remove members");
   }
 
   // Can't remove owner
@@ -533,4 +565,48 @@ export const searchWorkspaceMembers = asyncHandle(async (req, res) => {
   return res.status(200).json(
     new ApiResponse(200, "Members found successfully", { members: availableMembers })
   );
+});
+
+// Upload document to project
+export const uploadDocument = asyncHandle(async (req, res) => {
+  const { projectId } = req.params;
+  const userId = req.user._id;
+
+  if (!req.file) {
+    throw new ApiError(400, "File is required");
+  }
+
+  // Check if project exists and user has access
+  const project = await Project.findById(projectId);
+  if (!project) {
+    throw new ApiError(404, "Project not found");
+  }
+
+  // Check if user is a team member
+  const teamMember = project.team.find(member => 
+    member.user.toString() === userId.toString() && member.status === "active"
+  );
+
+  if (!teamMember) {
+    throw new ApiError(403, "You don't have access to this project");
+  }
+
+  try {
+    // Upload file to Cloudinary
+    const fileLocalPath = req.file.path;
+    const cloudinaryResponse = await uploadOnCloudinary(fileLocalPath);
+
+    if (!cloudinaryResponse) {
+      throw new ApiError(500, "Failed to upload file");
+    }
+
+    // Return the document URL
+    return res.status(200).json(
+      new ApiResponse(200, "File uploaded successfully", {
+        documentUrl: cloudinaryResponse.url
+      })
+    );
+  } catch (error) {
+    throw new ApiError(500, "Failed to upload file: " + error.message);
+  }
 });

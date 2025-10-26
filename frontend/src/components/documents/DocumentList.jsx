@@ -21,6 +21,9 @@ const DocumentListOptimized = ({
   onShareDocument,
   onDeleteDocument,
   onViewDocument,
+  onUploadDocument,
+  onExportDocument,
+  onCollaborateDocument,
   showCreateButton = true,
   className = "" 
 }) => {
@@ -56,7 +59,6 @@ const DocumentListOptimized = ({
   const endIndex = startIndex + itemsPerPage;
   const currentDocuments = filteredDocuments.slice(startIndex, endIndex).filter(doc => doc && doc._id);
 
-
   return (
     <div className={`space-y-6 ${className}`}>
 
@@ -65,7 +67,7 @@ const DocumentListOptimized = ({
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+             
               <CustomInput
                 placeholder="Search documents..."
                 value={searchTerm}
@@ -149,6 +151,9 @@ const DocumentListOptimized = ({
                   onShare={onShareDocument}
                   onDelete={onDeleteDocument}
                   onView={onViewDocument}
+                  onUpload={onUploadDocument}
+                  onExport={onExportDocument}
+                  onCollaborate={onCollaborateDocument}
                   className={localViewMode === "list" ? "flex-row" : ""}
                 />
               );

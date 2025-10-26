@@ -1,8 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useSocket } from './useSocket';
+import { useCall } from './useCall';
 import {
   // API functions
   getUserChats,
@@ -41,47 +43,40 @@ import {
 } from '../api/chatApi';
 import {
   // Redux actions
-  fetchUserChats,
-  fetchGroupChats,
-  fetchOneToOneChats,
-  fetchChattedUsers,
-  fetchChatById,
-  fetchOrCreateOneToOneChat,
-  createGroupChatAction,
-  updateGroupChatAction,
-  addGroupMembersAction,
-  removeGroupMemberAction,
-  updateMemberRoleAction,
-  leaveGroupAction,
-  archiveChatAction,
-  unarchiveChatAction,
-  fetchGroupMembers,
   setCurrentChat,
-  setSelectedChatId,
+  setSelectedChat,
   setShowCreateGroupModal,
   setShowNewChatModal,
-  setShowGroupMembersModal,
-  addMessageToCurrentChat,
-  updateMessageInCurrentChat,
-  removeMessageFromCurrentChat,
+  setShowGroupMembers,
+  addMessage,
+  updateMessage,
+  removeMessage,
+  addError,
   clearError,
+  clearAllErrors,
+  selectChat,
+  openCreateGroupModal,
+  closeCreateGroupModal,
+  openNewChatModal,
+  closeNewChatModal,
   // Redux selectors
-  selectChats,
-  selectGroupChats,
-  selectOneToOneChats,
-  selectChattedUsers,
   selectCurrentChat,
-  selectCurrentChatMessages,
-  selectSelectedChatId,
+  selectSelectedChat,
+  selectChatList,
+  selectFilteredChatList,
+  selectMessages,
+  selectTypingUsers,
+  selectIsTyping,
+  selectMessageInput,
+  selectReplyToMessage,
+  selectSearchQuery,
+  selectChatType,
   selectGroupMembers,
-  selectIsAdmin,
-  selectUserRole,
   selectShowCreateGroupModal,
   selectShowNewChatModal,
-  selectShowGroupMembersModal,
-  selectChatLoading,
+  selectShowGroupMembers,
   selectChatErrors,
-  selectChatPagination,
+  selectIsLoading,
 } from '../store/slice/chatSlice';
 
 /**
@@ -95,26 +90,27 @@ export const useChat = (chatId = null, params = {}) => {
   const { socket } = useSocket();
 
   // Redux state selectors
-  const chats = useSelector(selectChats);
-  const groupChats = useSelector(selectGroupChats);
-  const oneToOneChats = useSelector(selectOneToOneChats);
-  const chattedUsers = useSelector(selectChattedUsers);
+  const chats = useSelector(selectChatList);
+  const filteredChats = useSelector(selectFilteredChatList);
   const currentChat = useSelector(selectCurrentChat);
-  const currentChatMessages = useSelector(selectCurrentChatMessages);
-  const selectedChatId = useSelector(selectSelectedChatId);
+  const selectedChat = useSelector(selectSelectedChat);
+  const messages = useSelector(selectMessages);
+  const typingUsers = useSelector(selectTypingUsers);
+  const isTyping = useSelector(selectIsTyping);
+  const messageInput = useSelector(selectMessageInput);
+  const replyToMessage = useSelector(selectReplyToMessage);
+  const searchQuery = useSelector(selectSearchQuery);
+  const chatType = useSelector(selectChatType);
   const groupMembers = useSelector(selectGroupMembers);
-  const isAdmin = useSelector(selectIsAdmin);
-  const userRole = useSelector(selectUserRole);
   const showCreateGroupModal = useSelector(selectShowCreateGroupModal);
   const showNewChatModal = useSelector(selectShowNewChatModal);
-  const showGroupMembersModal = useSelector(selectShowGroupMembersModal);
-  const loading = useSelector(selectChatLoading);
+  const showGroupMembersModal = useSelector(selectShowGroupMembers);
+  const loading = useSelector(selectIsLoading);
   const errors = useSelector(selectChatErrors);
-  const pagination = useSelector(selectChatPagination);
 
   // Local state for typing and read status
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
+  const [localIsTyping, setLocalIsTyping] = useState(false);
+  const [localTypingUsers, setLocalTypingUsers] = useState([]);
   const [lastReadMessageRef, setLastReadMessageRef] = useState(null);
   const [deliveredMessagesRef, setDeliveredMessagesRef] = useState(new Set());
   const typingTimeoutRef = useRef(null);
@@ -124,7 +120,7 @@ export const useChat = (chatId = null, params = {}) => {
     queryKey: ['chats', params],
     queryFn: () => getUserChats(params),
     enabled: !!user,
-    staleTime: 30000,
+    staleTime: 60000, // 1 minute - more reasonable for chat data
     refetchOnWindowFocus: false,
   });
 
@@ -132,17 +128,23 @@ export const useChat = (chatId = null, params = {}) => {
     queryKey: ['groupChats', params],
     queryFn: () => getUserGroupChats(params),
     enabled: !!user,
-    staleTime: 30000,
+    staleTime: 60000, // 1 minute - more reasonable for group chat data
     refetchOnWindowFocus: false,
   });
 
-  const { data: chattedUsersData, isLoading: isLoadingChattedUsers, error: chattedUsersError } = useQuery({
-    queryKey: ['chattedUsers', params],
-    queryFn: () => getChattedUsers(params),
-    enabled: !!user,
-    staleTime: 30000,
-    refetchOnWindowFocus: false,
-  });
+  // Chatted users query - DISABLED to prevent duplicates
+  // const { data: chattedUsersData, isLoading: isLoadingChattedUsers, error: chattedUsersError } = useQuery({
+  //   queryKey: ['chattedUsers', params],
+  //   queryFn: () => getChattedUsers(params),
+  //   enabled: !!user,
+  //   staleTime: 30000,
+  //   refetchOnWindowFocus: false,
+  // });
+  
+  // Mock data for disabled query
+  const chattedUsersData = null;
+  const isLoadingChattedUsers = false;
+  const chattedUsersError = null;
 
   const { data: currentChatData, isLoading: isLoadingCurrentChat, error: currentChatError } = useQuery({
     queryKey: ['chat', chatId],
@@ -155,7 +157,7 @@ export const useChat = (chatId = null, params = {}) => {
     queryKey: ['messages', chatId, params],
     queryFn: () => getChatMessages(chatId, params),
     enabled: !!user && !!chatId,
-    staleTime: 30000,
+    staleTime: 30000, // 30 seconds - messages need more frequent updates
     refetchOnWindowFocus: false,
     keepPreviousData: true,
   });
@@ -190,6 +192,8 @@ export const useChat = (chatId = null, params = {}) => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries(['messages', variables.chatId]);
       queryClient.invalidateQueries(['chats']);
+      queryClient.invalidateQueries(['recentChats']);
+      queryClient.invalidateQueries(['groupChats']);
     },
     onError: (error) => {
       toast.error('Failed to send message');
@@ -360,7 +364,6 @@ export const useChat = (chatId = null, params = {}) => {
       queryClient.invalidateQueries(['messages', variables.chatId]);
     },
     onError: (error) => {
-      console.error('Failed to mark messages as read:', error);
     },
   });
 
@@ -370,7 +373,6 @@ export const useChat = (chatId = null, params = {}) => {
       queryClient.invalidateQueries(['messages', variables.chatId]);
     },
     onError: (error) => {
-      console.error('Failed to mark message as delivered:', error);
     },
   });
 
@@ -378,9 +380,9 @@ export const useChat = (chatId = null, params = {}) => {
   const startTyping = useCallback(() => {
     if (!socket || !chatId) return;
     
-    if (!isTyping) {
+    if (!localIsTyping) {
       socket.emit('typing', { chatId });
-      setIsTyping(true);
+      setLocalIsTyping(true);
     }
 
     if (typingTimeoutRef.current) {
@@ -390,37 +392,37 @@ export const useChat = (chatId = null, params = {}) => {
     typingTimeoutRef.current = setTimeout(() => {
       stopTyping();
     }, 2000);
-  }, [socket, chatId, isTyping]);
+  }, [socket, chatId, localIsTyping]);
 
   const stopTyping = useCallback(() => {
     if (!socket || !chatId) return;
     
-    if (isTyping) {
+    if (localIsTyping) {
       socket.emit('stop_typing', { chatId });
-      setIsTyping(false);
+      setLocalIsTyping(false);
     }
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-  }, [socket, chatId, isTyping]);
+  }, [socket, chatId, localIsTyping]);
 
   const handleTypingEvent = useCallback((data) => {
     if (data.chatId === chatId) {
-      setTypingUsers(prev => {
+      setLocalTypingUsers(prev => {
         const filtered = prev.filter(user => user.userId !== data.userId);
         return [...filtered, { userId: data.userId, name: data.userName }];
       });
 
       setTimeout(() => {
-        setTypingUsers(prev => prev.filter(user => user.userId !== data.userId));
+        setLocalTypingUsers(prev => prev.filter(user => user.userId !== data.userId));
       }, 3000);
     }
   }, [chatId]);
 
   const handleStopTypingEvent = useCallback((data) => {
     if (data.chatId === chatId) {
-      setTypingUsers(prev => prev.filter(user => user.userId !== data.userId));
+      setLocalTypingUsers(prev => prev.filter(user => user.userId !== data.userId));
     }
   }, [chatId]);
 
@@ -515,13 +517,13 @@ export const useChat = (chatId = null, params = {}) => {
 
     const handleMessagesRead = (data) => {
       if (data.chatId === chatId && data.userId !== user?._id) {
-        console.log('Messages read by user:', data.userId);
+        // Messages read by another user
       }
     };
 
     const handleMessageDelivered = (data) => {
       if (data.chatId === chatId && data.userId !== user?._id) {
-        console.log('Message delivered to user:', data.userId);
+        // Message delivered to another user
       }
     };
 
@@ -557,7 +559,7 @@ export const useChat = (chatId = null, params = {}) => {
 
   const chatsList = apiChatsData?.data?.chats || [];
   const groupChatsList = apiGroupChatsData?.data?.chats || [];
-  const chattedUsersList = apiChattedUsersData?.data?.users || [];
+  const chattedUsersList = apiChattedUsersData?.data?.users || []; // Will be empty since chattedUsersData is null
   const currentChatDetails = apiCurrentChatData?.data?.chat;
   const messagesList = apiMessagesData?.data?.messages || [];
   const groupMembersList = apiGroupMembersData?.data?.members || [];
@@ -574,19 +576,17 @@ export const useChat = (chatId = null, params = {}) => {
     currentChat: currentChatDetails || currentChat,
     messages: messagesList,
     groupMembers: groupMembersList,
-    selectedChatId,
-    isAdmin,
-    userRole,
+    selectedChat,
+    selectedChatId: selectedChat?._id,
     showCreateGroupModal,
     showNewChatModal,
     showGroupMembersModal,
     loading,
     errors,
-    pagination,
     
     // Typing state
-    isTyping,
-    typingUsers,
+    isTyping: localIsTyping,
+    typingUsers: localTypingUsers,
     
     // Read status
     unreadCount,
@@ -675,4 +675,335 @@ export const useChat = (chatId = null, params = {}) => {
     isMarkingAsRead: markAsReadMutation.isPending,
     isMarkingAsDelivered: markAsDeliveredMutation.isPending,
   };
+};
+
+// Chat Page Business Logic Hook
+export const useChatPage = () => {
+  const navigate = useNavigate();
+  const { receiverId, groupId } = useParams();
+  const { user } = useSelector((state) => state.auth);
+  
+  // Local UI state
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [selectedChat, setSelectedChat] = useState(null);
+  const [showChatList, setShowChatList] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Use the API functions directly instead of the hook
+  const queryClient = useQueryClient();
+  
+  // Get call functionality
+  const { startCall } = useCall();
+
+  // Start a one-to-one chat
+  const handleStartChat = useCallback(async (userId) => {
+    try {
+      const response = await getOrCreateOneToOneChat(userId);
+      
+      const chat = response.data?.data?.chat || response.data?.chat || response.data;
+      
+      if (chat && chat._id) {
+        setSelectedChat(chat);
+        setShowChatList(false);
+        navigate(`/chat/${userId}`, { replace: true });
+        return { success: true, chat };
+      } else {
+        throw new Error('Failed to start chat with user');
+      }
+    } catch (error) {
+      toast.error('Failed to start chat with user');
+      return { success: false, error };
+    }
+  }, [navigate]);
+
+  // Load a group chat
+  const handleLoadGroupChat = useCallback(async (groupId) => {
+    try {
+      const response = await getChatById(groupId);
+      
+      const chat = response.data?.data?.chat || response.data?.chat || response.data;
+      
+      if (chat && chat._id) {
+        setSelectedChat(chat);
+        setShowChatList(false);
+        navigate(`/chat/group/${groupId}`, { replace: true });
+        return { success: true, chat };
+      } else {
+        throw new Error('Failed to load group chat');
+      }
+    } catch (error) {
+      toast.error('Failed to load group chat');
+      return { success: false, error };
+    }
+  }, [navigate]);
+
+  // Show chat list without auto-selecting latest chat
+  const handleShowChatList = useCallback(() => {
+    // Just show the chat list, don't auto-select any chat
+    setSelectedChat(null);
+    setShowChatList(true);
+    return { success: true };
+  }, []);
+
+  // Handle URL parameters and auto-load chats
+  const handleUrlParams = useCallback(async () => {
+    if (receiverId) {
+      await handleStartChat(receiverId);
+    } else if (groupId) {
+      await handleLoadGroupChat(groupId);
+    } else {
+      // No specific chat requested, show chat list
+      handleShowChatList();
+    }
+  }, [receiverId, groupId, handleStartChat, handleLoadGroupChat, handleShowChatList]);
+
+  // Handle new chat creation
+  const handleNewChatCreated = useCallback((chat) => {
+    setSelectedChat(chat);
+    setShowNewChat(false);
+    setShowChatList(false);
+    navigate(`/chat/group/${chat._id}`, { replace: true });
+    return { success: true, chat };
+  }, [navigate]);
+
+  // Handle back to chat list
+  const handleBackToChatList = useCallback(() => {
+    setSelectedChat(null);
+    setShowChatList(true);
+    navigate('/chat', { replace: true });
+  }, [navigate]);
+
+  // Handle chat selection with navigation
+  const handleSelectChat = useCallback((chat) => {
+    setSelectedChat(chat);
+    setShowChatList(false);
+    
+    // Navigate to the appropriate chat URL
+    if (chat.isOneToOne) {
+      const otherParticipant = chat.participants?.find(p => p.user?._id !== user?._id);
+      if (otherParticipant?.user?._id) {
+        navigate(`/chat/${otherParticipant.user._id}`, { replace: true });
+      }
+    } else {
+      navigate(`/chat/group/${chat._id}`, { replace: true });
+    }
+    
+    return { success: true, chat };
+  }, [navigate, user]);
+
+  // Handle video call with better integration
+  const handleVideoCall = useCallback(async (chat) => {
+    if (!chat) {
+      toast.error('No chat selected for video call');
+      return { success: false, error: 'No chat selected' };
+    }
+
+    try {
+      // Start the call using just the chatId as expected by useCall
+      await startCall(chat._id);
+      
+      const chatName = chat.name || chat.participants?.[0]?.user?.name || 'Unknown Chat';
+      toast.success(`Video call initiated with ${chatName}`);
+      return { success: true };
+    } catch (error) {
+      toast.error('Error starting video call: ' + error.message);
+      return { success: false, error: error.message };
+    }
+  }, [startCall]);
+
+  // Handle call history navigation
+  const handleCallHistory = useCallback(() => {
+    navigate('/call-history');
+  }, [navigate]);
+
+  // Handle create group
+  const handleCreateGroup = useCallback(() => {
+    setShowCreateGroup(true);
+  }, []);
+
+  // Handle modal close
+  const handleCloseModal = useCallback((modalType) => {
+    switch (modalType) {
+      case 'newChat':
+        setShowNewChat(false);
+        break;
+      case 'createGroup':
+        setShowCreateGroup(false);
+        break;
+      default:
+        break;
+    }
+  }, []);
+
+  // Handle modal open
+  const handleOpenModal = useCallback((modalType) => {
+    switch (modalType) {
+      case 'newChat':
+        setShowNewChat(true);
+        break;
+      case 'createGroup':
+        setShowCreateGroup(true);
+        break;
+      default:
+        break;
+    }
+  }, []);
+
+  // Handle chat archive
+  const handleArchive = useCallback((chat, onChatSelect) => {
+    if (!chat?._id) return;
+    
+    // TODO: Implement archive functionality with React Query mutation
+    // For now, just navigate away from the chat
+    if (onChatSelect) {
+      onChatSelect(null);
+    }
+    return { success: true, chatId: chat._id };
+  }, []);
+
+  // Handle chat delete
+  const handleDelete = useCallback((chat, onChatSelect) => {
+    if (!chat?._id) return;
+    
+    // TODO: Implement delete functionality with React Query mutation
+    // For now, just navigate away from the chat
+    if (onChatSelect) {
+      onChatSelect(null);
+    }
+    return { success: true, chatId: chat._id };
+  }, []);
+
+  // Handle chat info
+  const handleInfo = useCallback((chat) => {
+    if (chat.type === 'group') {
+      // This would typically open a group info modal
+      return { success: true, action: 'showGroupInfo', chat };
+    }
+    return { success: true, action: 'showUserInfo', chat };
+  }, []);
+
+  // Show chat list when no specific chat is selected
+  useEffect(() => {
+    if (!selectedChat && !receiverId && !groupId) {
+      handleShowChatList();
+    }
+  }, [selectedChat, receiverId, groupId, handleShowChatList]);
+
+  return {
+    // State
+    showCreateGroup,
+    showNewChat,
+    selectedChat,
+    showChatList,
+    searchQuery,
+
+    // Actions
+    handleStartChat,
+    handleLoadGroupChat,
+    handleNewChatCreated,
+    handleBackToChatList,
+    handleSelectChat,
+    handleVideoCall,
+    handleCallHistory,
+    handleCreateGroup,
+    handleCloseModal,
+    handleOpenModal,
+    handleUrlParams,
+    handleArchive,
+    handleDelete,
+    handleInfo,
+    handleShowChatList,
+
+    // Setters
+    setSelectedChat,
+    setShowChatList,
+    setSearchQuery,
+
+    // Modal states
+    setShowCreateGroup,
+    setShowNewChat,
+  };
+};
+
+// Additional hooks for ChatPageRedux
+export const useChatManager = () => {
+  const dispatch = useDispatch();
+  const currentChat = useSelector(selectCurrentChat);
+  const selectedChatId = useSelector(selectSelectedChat)?._id;
+  const showCreateGroupModal = useSelector(selectShowCreateGroupModal);
+  const showNewChatModal = useSelector(selectShowNewChatModal);
+
+  const selectChat = useCallback((chat) => {
+    dispatch(selectChat(chat));
+  }, [dispatch]);
+
+  const openCreateGroupModal = useCallback(() => {
+    dispatch(openCreateGroupModal());
+  }, [dispatch]);
+
+  const closeCreateGroupModal = useCallback(() => {
+    dispatch(closeCreateGroupModal());
+  }, [dispatch]);
+
+  const openNewChatModal = useCallback(() => {
+    dispatch(openNewChatModal());
+  }, [dispatch]);
+
+  const closeNewChatModal = useCallback(() => {
+    dispatch(closeNewChatModal());
+  }, [dispatch]);
+
+  return {
+    currentChat,
+    selectedChatId,
+    showCreateGroupModal,
+    showNewChatModal,
+    selectChat,
+    openCreateGroupModal,
+    closeCreateGroupModal,
+    openNewChatModal,
+    closeNewChatModal,
+  };
+};
+
+export const useCreateGroupChat = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: createGroupChat,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['chats']);
+      queryClient.invalidateQueries(['groupChats']);
+      toast.success('Group chat created successfully');
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || 'Failed to create group chat');
+    },
+  });
+};
+
+export const useCreateOneToOneChat = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: getOrCreateOneToOneChat,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['chats']);
+      queryClient.invalidateQueries(['oneToOneChats']);
+      toast.success('Chat started successfully');
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || 'Failed to start chat');
+    },
+  });
+};
+
+export const useChatQuery = (chatId) => {
+  return useQuery({
+    queryKey: ['chat', chatId],
+    queryFn: () => getChatById(chatId),
+    enabled: !!chatId,
+    staleTime: 30000,
+  });
 };

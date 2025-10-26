@@ -26,80 +26,72 @@ const WhiteboardList = ({
 }) => {
   const { user: currentUser } = useSelector((state) => state.auth);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("all");
   const [viewMode, setViewMode] = useState("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
 
-  const filteredWhiteboards = whiteboards.filter((whiteboard) => {
+  // Ensure whiteboards is an array
+  const safeWhiteboards = Array.isArray(whiteboards) ? whiteboards : [];
+
+  const filteredWhiteboards = safeWhiteboards.filter((whiteboard) => {
+    // Skip null or undefined whiteboards
+    if (!whiteboard) return false;
+
     const matchesSearch = 
-      whiteboard.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      whiteboard.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       whiteboard.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       whiteboard.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesFilter = 
-      filterType === "all" ||
-      (filterType === "own" && whiteboard.owner?._id === currentUser?._id) ||
-      (filterType === "shared" && whiteboard.visibility === "shared") ||
-      (filterType === "draft" && whiteboard.status === "draft");
-
-    return matchesSearch && matchesFilter;
+    return matchesSearch;
   });
 
   // Pagination logic
   const totalPages = Math.ceil(filteredWhiteboards.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentWhiteboards = filteredWhiteboards.slice(startIndex, endIndex);
+  const currentWhiteboards = filteredWhiteboards.slice(startIndex, endIndex).filter(wb => wb && wb._id);
 
   return (
-    <div className={`space-y-8 ${className}`}>
-      {/* Header */}
+    <div className={`space-y-6 ${className}`}>
 
       {/* Filters and Search */}
-      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 dark:border-gray-700/50 p-8">
-        <div className="flex flex-col lg:flex-row gap-6">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <CustomInput
                 placeholder="Search whiteboards..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-gray-50/50 dark:bg-gray-700/50 text-lg"
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
           </div>
           
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative">
-              <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="pl-12 pr-10 py-4 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50/50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base appearance-none font-medium"
-              >
-                <option value="all">All Whiteboards</option>
-                <option value="own">My Whiteboards</option>
-                <option value="shared">Shared with Me</option>
-                <option value="draft">Drafts</option>
-              </select>
-            </div>
-
-            <div className="flex items-center bg-gray-100/50 dark:bg-gray-700/50 rounded-xl p-2 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
               <button
-                onClick={() => setViewMode("grid")}
-                className={`p-3 rounded-lg transition-all duration-200 ${viewMode === "grid" ? "bg-white dark:bg-gray-600 text-indigo-600 dark:text-indigo-400 shadow-md" : "text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-600/50"}`}
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-md transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
                 title="Grid View"
               >
-                <Grid className="w-5 h-5" />
+                <Grid className="h-4 w-4" />
               </button>
               <button
-                onClick={() => setViewMode("list")}
-                className={`p-3 rounded-lg transition-all duration-200 ${viewMode === "list" ? "bg-white dark:bg-gray-600 text-indigo-600 dark:text-indigo-400 shadow-md" : "text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-600/50"}`}
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-md transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
                 title="List View"
               >
-                <List className="w-5 h-5" />
+                <List className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -108,25 +100,25 @@ const WhiteboardList = ({
 
       {/* Whiteboards Grid/List */}
       {currentWhiteboards.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Grid className="w-12 h-12 text-indigo-600 dark:text-indigo-400" />
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Grid className="w-8 h-8 text-gray-500 dark:text-gray-400" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-            {searchTerm || filterType !== "all" ? "No whiteboards found" : "No whiteboards yet"}
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            {searchTerm ? "No whiteboards found" : "No whiteboards yet"}
           </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-            {searchTerm || filterType !== "all" 
-              ? "Try adjusting your search or filters to find what you're looking for"
-              : "Create your first whiteboard and start collaborating with your team in real-time"
+          <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto text-sm">
+            {searchTerm 
+              ? "Try adjusting your search to find what you're looking for"
+              : "Create your first whiteboard and start collaborating with your team"
             }
           </p>
-          {!searchTerm && filterType === "all" && showCreateButton && (
+          {!searchTerm && showCreateButton && (
             <CustomButton 
               onClick={onCreateWhiteboard} 
-              className="px-10 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 text-lg"
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
             >
-              <Plus className="w-5 h-5 mr-2" />
+              <Plus className="w-4 h-4 mr-2" />
               Create Your First Whiteboard
             </CustomButton>
           )}
@@ -135,26 +127,30 @@ const WhiteboardList = ({
         <>
           <div className={
             viewMode === "grid" 
-              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8"
-              : "space-y-4 lg:space-y-6"
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6"
+              : "space-y-3 sm:space-y-4"
           }>
-            {currentWhiteboards.map((whiteboard) => (
-              <WhiteboardCardItem
-                key={whiteboard._id}
-                whiteboard={whiteboard}
-                currentUser={currentUser}
-                onEdit={onEditWhiteboard}
-                onShare={onShareWhiteboard}
-                onDelete={onDeleteWhiteboard}
-                onView={onViewWhiteboard}
-                className={viewMode === "list" ? "flex-row" : ""}
-              />
-            ))}
+            {currentWhiteboards.map((whiteboard, index) => {
+              if (!whiteboard || !whiteboard._id) return null;
+              
+              return (
+                <WhiteboardCardItem
+                  key={whiteboard._id || `wb-${index}`}
+                  whiteboard={whiteboard}
+                  currentUser={currentUser}
+                  onEdit={onEditWhiteboard}
+                  onShare={onShareWhiteboard}
+                  onDelete={onDeleteWhiteboard}
+                  onView={onViewWhiteboard}
+                  className={viewMode === "list" ? "flex-row" : ""}
+                />
+              );
+            })}
           </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-12 pt-8 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 Showing {startIndex + 1} to {Math.min(endIndex, filteredWhiteboards.length)} of {filteredWhiteboards.length} whiteboards
               </div>
@@ -165,10 +161,10 @@ const WhiteboardList = ({
                   size="sm"
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className="flex items-center gap-2 px-4 py-2"
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                  Previous
+                  <span className="hidden sm:inline">Previous</span>
                 </CustomButton>
                 
                 <div className="flex items-center gap-1">
@@ -190,9 +186,9 @@ const WhiteboardList = ({
                         variant={currentPage === pageNum ? "default" : "outline"}
                         size="sm"
                         onClick={() => setCurrentPage(pageNum)}
-                        className={`w-10 h-10 p-0 ${currentPage === pageNum 
-                          ? "bg-indigo-600 text-white border-indigo-600" 
-                          : "hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+                        className={`w-8 h-8 p-0 text-sm ${currentPage === pageNum 
+                          ? "bg-blue-600 text-white border-blue-600" 
+                          : "hover:bg-gray-50 dark:hover:bg-gray-700"
                         }`}
                       >
                         {pageNum}
@@ -206,9 +202,9 @@ const WhiteboardList = ({
                   size="sm"
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="flex items-center gap-2 px-4 py-2"
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm"
                 >
-                  Next
+                  <span className="hidden sm:inline">Next</span>
                   <ChevronRight className="w-4 h-4" />
                 </CustomButton>
               </div>

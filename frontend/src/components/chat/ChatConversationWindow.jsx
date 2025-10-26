@@ -6,8 +6,9 @@ import ChatMessageInput from '../ui/ChatMessageInput';
 import ChatGroupMembersModal from './ChatGroupMembersModal';
 import { useSocket } from '../../hook/useSocket';
 import { useChat } from '../../hook/useChat';
-import { useCreateOneToOneChat, useArchiveChatForUser, useDeleteChatForUser } from '../../hook/useChat';
+import { useTyping } from '../../hook/useTyping';
 import { useQueryClient } from '@tanstack/react-query';
+import { createOptimizedMessageSender } from '../../utils/messageOptimizer';
 
 // Debounce utility function
 const debounce = (func, wait) => {
@@ -25,8 +26,10 @@ const debounce = (func, wait) => {
 const ChatWindow = forwardRef(({ 
   chat, 
   onVideoCall,
-  onCallHistory,
   onChatSelect,
+  onDelete,
+  onInfo,
+  onBack,
   isMobile = false,
   className = '' 
 }, ref) => {
@@ -46,17 +49,15 @@ const ChatWindow = forwardRef(({
     handleStopTypingEvent 
   } = useTyping(chat?._id);
   
-  const createChatMutation = useCreateOneToOneChat();
-  const sendMessageMutation = useSendMessage();
-  const archiveChatForUserMutation = useArchiveChatForUser();
-  const deleteChatForUserMutation = useDeleteChatForUser();
+  // Note: These mutations would be implemented using React Query's useMutation
+  // For now, we'll handle them directly in the component
   const queryClient = useQueryClient();
 
   // Create debounced mark as read function
   const debouncedMarkAsRead = useCallback(
     debounce(() => {
       if (socket && socket.connected && chat?._id) {
-        console.log('ChatWindow: Marking messages as read for chat:', chat._id);
+        // Marking messages as read for chat
         socket.emit('mark_as_read', { chatId: chat._id });
       }
     }, 1000), // Debounce for 1 second
@@ -67,69 +68,40 @@ const ChatWindow = forwardRef(({
   useEffect(() => {
     if (!socket || !chat?._id) return;
 
-    console.log('ChatWindow: Socket connection status:', { 
-      socket: !!socket, 
-      connected: socket?.connected, 
-      chatId: chat._id 
-    });
+    // Socket connection status check
+    if (!socket.connected) {
+      console.log('Socket not connected, attempting to connect...');
+      socket.connect();
+      return; // Wait for socket to connect
+    }
 
     // Join the chat room
-    console.log('ChatWindow: Socket connection status:', { 
-      connected: socket?.connected, 
-      id: socket?.id,
-      chatId: chat._id 
-    });
-    
-    // Ensure socket is connected before joining chat
-    if (socket && socket.connected) {
-      socket.emit('join_chat', { chatId: chat._id });
-      console.log('ChatWindow: Joined chat room successfully');
-    } else {
-      console.log('ChatWindow: Socket not connected, retrying...');
-      // Retry connection
-      setTimeout(() => {
-        if (socket) {
-          socket.connect();
-          socket.emit('join_chat', { chatId: chat._id });
-        }
-      }, 1000);
-    }
+    console.log('Joining chat room:', chat._id);
+    socket.emit('join_chat', { chatId: chat._id });
     
     // Mark messages as read when opening the chat
-    socket.emit('mark_as_read', { chatId: chat._id });
+    debouncedMarkAsRead();
 
     const handleNewMessage = (data) => {
-      console.log('=== NEW MESSAGE EVENT RECEIVED ===');
-      console.log('ChatWindow: Received new_message event:', data);
-      console.log('Current chat ID:', chat._id);
-      console.log('Message chat ID:', data.chatId);
-      console.log('Message details:', {
-        messageId: data.message?._id,
-        content: data.message?.content,
-        senderId: data.message?.sender?._id,
-        senderName: data.message?.sender?.name
-      });
-      
+      console.log('📨 Received new message:', data);
+
       // Validate message data
       if (!data || !data.message) {
-        console.log('ChatWindow: Invalid message data received');
+        console.warn('Invalid message data received:', data);
         return;
       }
 
       // Update for all messages in the current chat (including own messages)
       if (data.chatId === chat._id) {
-        console.log('ChatWindow: Updating queries for current chat:', chat._id);
-        
-        // Simply refresh messages to show new message in real-time
-        console.log('ChatWindow: Refreshing messages for real-time update');
-        
+        console.log('✅ Message belongs to current chat, refreshing...');
+
         // Force refresh messages to ensure real-time updates
         queryClient.invalidateQueries(['messages', chat._id]);
         queryClient.invalidateQueries(['chats']);
-        
-        console.log('ChatWindow: Invalidated queries for real-time update');
+        queryClient.invalidateQueries(['recentChats']);
+        queryClient.invalidateQueries(['groupChats']);
       } else {
-        console.log('ChatWindow: Message not for current chat. Expected:', chat._id, 'Received:', data.chatId);
+        console.log('Message for different chat:', data.chatId);
       }
     };
 
@@ -155,7 +127,7 @@ const ChatWindow = forwardRef(({
     
     // Listen for socket connection to ensure chat room is joined
     const handleConnect = () => {
-      console.log('ChatWindow: Socket connected, joining chat room');
+
       socket.emit('join_chat', { chatId: chat._id });
     };
     
@@ -174,7 +146,7 @@ const ChatWindow = forwardRef(({
 
   const handleSendMessage = (data) => {
     if (!chat?._id || isSendingMessage) {
-      console.log('ChatWindow: Cannot send message - no chat or already sending');
+
       return;
     }
 
@@ -188,8 +160,6 @@ const ChatWindow = forwardRef(({
       type: data.type || 'text',
       tempId: messageId // Add temporary ID to track this specific message
     };
-    
-    console.log('ChatWindow: Sending message with tempId:', messageId);
 
     // Only include media if it exists
     if (data.media) {
@@ -201,40 +171,26 @@ const ChatWindow = forwardRef(({
       messageData.replyTo = data.replyTo;
     }
 
-    console.log('ChatWindow sending:', messageData);
-
     // For real-time messaging, we'll rely on Socket.IO events rather than optimistic updates
     // This ensures messages appear consistently for both sender and receiver
 
     // Try Socket.IO first
-    console.log('ChatWindow: Socket status:', { 
-      socket: !!socket, 
-      connected: socket?.connected,
-      socketId: socket?.id,
-      messageData: messageData 
-    });
-    
+
     if (socket && socket.connected) {
-      console.log('=== SENDING MESSAGE VIA SOCKET.IO ===');
-      console.log('ChatWindow: Socket.IO connected, sending via Socket.IO');
-      console.log('Socket connection details:', {
-        connected: socket.connected,
-        id: socket.id,
-        messageData: messageData
-      });
-      
+      console.log('📤 Sending message via socket:', messageData);
+
       // Reset sending flag immediately for better UX
       setIsSendingMessage(false);
       
-      socket.emit('send_message', messageData);
-      console.log('ChatWindow: Message sent via Socket.IO');
-      
       // Listen for confirmation from Socket.IO
       const confirmationHandler = (data) => {
-        console.log('ChatWindow: Socket.IO message confirmation received:', data);
+        console.log('✅ Message confirmed by server:', data);
         
-        // Refresh messages to show the confirmed message
+        // Refresh messages and chat list to show the confirmed message
         queryClient.invalidateQueries(['messages', chat._id]);
+        queryClient.invalidateQueries(['chats']);
+        queryClient.invalidateQueries(['recentChats']);
+        queryClient.invalidateQueries(['groupChats']);
         
         socket.off('message_confirmed', confirmationHandler);
       };
@@ -245,12 +201,17 @@ const ChatWindow = forwardRef(({
       setTimeout(() => {
         socket.off('message_confirmed', confirmationHandler);
       }, 5000);
+      
+      // Emit the message
+      socket.emit('send_message', messageData);
+
+      // Immediately invalidate queries to update chat list
+      queryClient.invalidateQueries(['recentChats']);
+      queryClient.invalidateQueries(['chats']);
+      queryClient.invalidateQueries(['groupChats']);
     } else {
       // Socket.IO not available, use API directly
-      console.log('=== USING API FALLBACK ===');
-      console.log('ChatWindow: Socket.IO not connected, using API fallback');
-      console.log('Socket status:', { socket: !!socket, connected: socket?.connected });
-      
+
       sendMessageMutation.mutate({
         chatId: chat._id,
         data: { ...messageData, wasSentViaSocket: false } // Mark as API fallback
@@ -274,47 +235,7 @@ const ChatWindow = forwardRef(({
     setReplyTo(null);
   };
 
-  const handleArchive = (chat) => {
-    if (!chat?._id) return;
-    
-    archiveChatForUserMutation.mutate(chat._id, {
-      onSuccess: () => {
-        // Invalidate chats query to refresh the list
-        queryClient.invalidateQueries(['chats']);
-        // Navigate away from this chat
-        if (onChatSelect) {
-          onChatSelect(null);
-        }
-      },
-      onError: (error) => {
-        console.error('Failed to archive chat:', error);
-      }
-    });
-  };
-
-  const handleDelete = (chat) => {
-    if (!chat?._id) return;
-    
-    deleteChatForUserMutation.mutate(chat._id, {
-      onSuccess: () => {
-        // Invalidate chats query to refresh the list
-        queryClient.invalidateQueries(['chats']);
-        // Navigate away from this chat
-        if (onChatSelect) {
-          onChatSelect(null);
-        }
-      },
-      onError: (error) => {
-        console.error('Failed to delete chat:', error);
-      }
-    });
-  };
-
-  const handleInfo = (chat) => {
-    if (chat.type === 'group') {
-      setShowGroupMembers(true);
-    }
-  };
+  // Use the handler functions passed as props
 
   if (!chat) {
     return (
@@ -336,23 +257,35 @@ const ChatWindow = forwardRef(({
     );
   }
 
+  // Add error boundary for socket errors
+  if (isSendingMessage && !socket?.connected) {
+
+  }
+
   return (
-    <div className={`chat-container bg-white dark:bg-gray-900 flex flex-col h-full ${className}`}>
+    <div className={`chat-container bg-white dark:bg-gray-900 flex flex-col h-full w-full overflow-hidden relative ${className}`}>
       {/* Chat Header - Fixed at top */}
-      <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-        <ChatHeader
+      <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 relative z-50 sticky top-0">
+        <ChatWindowHeader
           chat={chat}
           onVideoCall={onVideoCall}
-          onArchive={handleArchive}
-          onDelete={handleDelete}
-          onInfo={handleInfo}
-          onCallHistory={onCallHistory}
+          onDelete={(chat) => onDelete(chat, onChatSelect)}
+          onInfo={(chat) => {
+            if (chat.type === 'group') {
+
+              setShowGroupMembers(true);
+            } else {
+
+              onInfo?.(chat);
+            }
+          }}
+          onBack={onBack}
           isMobile={isMobile}
         />
       </div>
 
       {/* Messages - Scrollable Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50 dark:bg-gray-800 min-h-0 pb-2">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50 dark:bg-gray-800 min-h-0 pb-2 px-2 sm:px-4 relative z-10">
         <ChatMessageList
           chatId={chat._id}
           typingUsers={typingUsers}
@@ -363,7 +296,7 @@ const ChatWindow = forwardRef(({
       </div>
 
       {/* Message Input - Fixed at bottom */}
-      <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 min-h-[80px]">
+      <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 min-h-[80px] px-2 sm:px-4 relative z-20">
         <ChatMessageInput
           ref={ref}
           onSendMessage={handleSendMessage}
@@ -379,13 +312,14 @@ const ChatWindow = forwardRef(({
 
       {/* Group Members Modal */}
       {chat.type === 'group' && (
-        <GroupMembersModal
+        <ChatGroupMembersModal
           isOpen={showGroupMembers}
           onClose={() => setShowGroupMembers(false)}
           chatId={chat._id}
           chatName={chat.name}
         />
       )}
+
     </div>
   );
 });
