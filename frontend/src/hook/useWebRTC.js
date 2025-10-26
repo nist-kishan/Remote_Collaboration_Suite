@@ -443,7 +443,7 @@ export const useWebRTC = (callId, userId) => {
     if (socketRef.current && isConnectedRef.current && callId) {
       // Allow rejoining even if hasJoinedCallRef is true (for page refresh scenarios)
       console.log('🔌 Joining call room:', callId);
-      socketRef.current.emit('join-call', { callId, userId });
+      socketRef.current.emit('join_call', { callId, userId }); // Fixed: use join_call not join-call
       hasJoinedCallRef.current = true;
     }
   }, [callId, userId]);
