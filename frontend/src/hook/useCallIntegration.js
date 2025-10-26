@@ -100,10 +100,13 @@ export const useCallIntegration = () => {
 
       // Initialize WebRTC immediately when call starts
       try {
+        console.log('🎬 Initializing local stream for outgoing call...');
         await initializeLocalStream();
+        console.log('✅ Local stream initialized, joining call room...');
         joinCallRoom();
       } catch (error) {
-        console.error('Failed to initialize media:', error);
+        console.error('❌ Failed to initialize media:', error);
+        toast.error('Failed to access camera/microphone');
       }
 
       startCallSocket(callData?.chat || callData?.chatId || callData?._id);
@@ -189,10 +192,13 @@ export const useCallIntegration = () => {
 
       // Initialize WebRTC when joining call
       try {
+        console.log('🎬 Initializing local stream before joining call room...');
         await initializeLocalStream();
+        console.log('✅ Local stream initialized, now joining call room...');
         joinCallRoom();
       } catch (error) {
-        console.error('Failed to initialize media:', error);
+        console.error('❌ Failed to initialize media:', error);
+        toast.error('Failed to access camera/microphone');
       }
 
       joinCallSocket(data?.call?._id || data?.callId || data?._id);
@@ -409,6 +415,7 @@ export const useCallIntegration = () => {
     // Mutations
     startCall: initiateCall,
     joinCall: joinCallMutation.mutateAsync,
+    acceptCall: joinCallMutation.mutateAsync, // Alias for joinCall
     endCall: endCallMutation.mutateAsync,
     rejectCall: rejectCallMutation.mutateAsync,
     cancelCall: (callId) => cancelCallSocket(callId || outgoingCall?._id || outgoingCall?.callId),

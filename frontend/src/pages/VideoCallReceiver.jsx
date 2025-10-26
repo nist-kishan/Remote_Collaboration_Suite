@@ -55,8 +55,15 @@ const VideoCallReceiver = () => {
   // Handle accept call
   const handleAcceptCall = async () => {
     try {
+      const currentCallId = callData?.callId || callData?._id;
+      if (!currentCallId) {
+        toast.error("No call ID found");
+        return;
+      }
+      
+      console.log('📞 Accepting call:', currentCallId);
       // Use the useCall hook's acceptCall function
-      await acceptCall();
+      await acceptCall(currentCallId);
 
       // Update call data with connected status
       const updatedCallData = {
@@ -69,7 +76,8 @@ const VideoCallReceiver = () => {
       // Call status is managed by useCall hook
       // Don't show toast - UI clearly shows call is connected
     } catch (error) {
-      toast.error("Failed to accept call");
+      console.error('❌ Error accepting call:', error);
+      toast.error("Failed to accept call: " + error.message);
     }
   };
 

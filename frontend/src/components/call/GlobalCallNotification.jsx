@@ -82,15 +82,17 @@ const GlobalCallNotification = () => {
       setShowNotification(false);
 
       // Navigate to receiver page after accepting the call
+      // The route parameter is the OTHER person's ID (the caller)
       if (incomingCall) {
-        const receiverId =
+        const callerUserId =
+          incomingCall.fromUserId ||  // Caller's ID from backend
           incomingCall.callerId ||
           incomingCall.senderId ||
-          incomingCall.fromUserId ||
           incomingCall.userId ||
           incomingCall.chatId ||
           "unknown";
-        navigate(`/video-call/receiver/${receiverId}`, { replace: true });
+        console.log('📍 Navigating to receiver route with caller ID:', callerUserId);
+        navigate(`/video-call/receiver/${callerUserId}`, { replace: true });
       }
     } catch (error) {
       console.error("Error accepting call:", error);

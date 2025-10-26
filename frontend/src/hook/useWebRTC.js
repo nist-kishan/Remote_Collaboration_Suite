@@ -309,8 +309,22 @@ export const useWebRTC = (callId, userId) => {
   const handleUserJoined = useCallback(async ({ userId: newUserId, user }) => {
     if (newUserId !== userId) {
       console.log(`👥 New user joined call: ${newUserId}`);
-      // Create offer for the new user
-      await createOffer(newUserId);
+      
+      // Ensure local stream is ready before creating offer
+      if (!localStreamRef.current) {
+        console.warn('⚠️ Local stream not ready, waiting...');
+        // Wait a bit for local stream to initialize
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      if (localStreamRef.current) {
+        console.log(`🤝 Creating peer connection for: ${newUserId}`);
+        console.log(`📹 Local stream has ${localStreamRef.current.getTracks().length} tracks`);
+        // Create offer for the new user
+        await createOffer(newUserId);
+      } else {
+        console.error('❌ Local stream still not available, cannot create offer');
+      }
     }
   }, [userId, createOffer]);
 

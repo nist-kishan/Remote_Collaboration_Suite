@@ -129,9 +129,11 @@ export default function VideoCall() {
         // Auto-accept the call if we have an incoming call and we're on the call page
         setTimeout(async () => {
           try {
-            await acceptCall();
+            const currentCallId = incomingCall.callId || incomingCall._id || callId;
+            console.log('📞 Auto-accepting call:', currentCallId);
+            await acceptCall(currentCallId);
           } catch (error) {
-            console.error("Error auto-accepting call:", error);
+            console.error("❌ Error auto-accepting call:", error);
             toast.error("Failed to accept call: " + error.message);
           }
         }, 2000); // Increased delay to ensure everything is loaded
