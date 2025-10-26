@@ -161,8 +161,6 @@ export const searchDocuments = async (params = {}) => {
 // Auto-save document
 export const autoSaveDocument = async (documentId, content) => {
   try {
-    console.log('Auto-saving document:', documentId, content || 'empty');
-    
     const response = await ApiClient.post(`/documents/${documentId}/autosave`, {
       content,
     });

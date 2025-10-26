@@ -37,6 +37,9 @@ import CallHistoryPage from "./pages/CallHistoryPage";
 import MediaViewerPage from "./pages/MediaViewerPage";
 import MeetingsList from "./pages/meetings/MeetingsList";
 import MeetingRoom from "./pages/meetings/MeetingRoom";
+import MinimizedMeeting from "./components/meeting/MinimizedMeeting";
+import IncomingVideoCallModal from "./components/call/IncomingVideoCallModal";
+import OutgoingVideoCallModal from "./components/call/OutgoingVideoCallModal";
 import WorkspaceListGrid from "./components/workspace/WorkspaceListGrid";
 import WorkspacePage from "./pages/workspace/WorkspacePage";
 import ProjectPage from "./pages/project/ProjectPage";
@@ -44,13 +47,32 @@ import AllProjectsPage from "./pages/AllProjectsPage";
 import { useCurrentUser } from "./hook/useAuth";
 import { useDispatch, useSelector } from "react-redux";
 import { clearUser, setUser } from "./store/slice/authSlice";
+import { useCallIntegration } from "./hook/useCallIntegration";
+import { useUserLocation } from "./hook/useUserLocation";
+import {
+  selectIncomingCall,
+  selectOutgoingCall,
+  selectShowIncomingCallModal,
+  selectShowOutgoingCallModal,
+} from "./store/slice/callSlice";
 import ResetPasswordWithLink from "./pages/authenication/ResetPasswordWithLink";
+
 
 export default function App() {
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, isAuthenticated, loading } = useSelector((state) => state.auth);
+  const { loading } = useSelector((state) => state.auth);
+
+  // Track user location for call notifications
+  useUserLocation();
+
+  // Call state - use useCallIntegration instead of useCallSocket to avoid duplicate listeners
+  const incomingCall = useSelector(selectIncomingCall);
+  const outgoingCall = useSelector(selectOutgoingCall);
+  const showIncomingCallModal = useSelector(selectShowIncomingCallModal);
+  const showOutgoingCallModal = useSelector(selectShowOutgoingCallModal);
+  const { joinCall, rejectCall, cancelCall } = useCallIntegration();
 
   const isAuthPage =
     ["/login", "/signup", "/reset-password"].includes(location.pathname) ||
@@ -61,16 +83,14 @@ export default function App() {
 
   useEffect(() => {
     setupGlobalErrorHandling();
-    // Set up global navigation function for non-React contexts
     setNavigateFunction(navigate);
   }, [navigate]);
 
-  // Safety timeout to prevent infinite loading
   useEffect(() => {
     if (loading && !isAuthPage) {
       const timeout = setTimeout(() => {
         dispatch(clearUser());
-      }, 10000); // 10 second timeout
+      }, import.meta.env.VITE_LOADING_TIMEOUT);
 
       return () => clearTimeout(timeout);
     }
@@ -129,29 +149,50 @@ export default function App() {
 
             {/* Video Calling */}
             <Route path="/video-call" element={<VideoCall />} />
-            <Route path="/video-call/receiver/:receiverId" element={<VideoCallReceiver />} />
-            <Route path="/video-call/caller/:senderId" element={<VideoCallCaller />} />
+            <Route
+              path="/video-call/receiver/:receiverId"
+              element={<VideoCallReceiver />}
+            />
+            <Route
+              path="/video-call/caller/:senderId"
+              element={<VideoCallCaller />}
+            />
             <Route path="/video-call/ended" element={<VideoCallEnded />} />
             <Route path="/call/:callId" element={<VideoCall />} />
             <Route path="/call-history" element={<CallHistoryPage />} />
 
             {/* Media Viewer */}
             <Route path="/media/:chatId" element={<MediaViewerPage />} />
-            <Route path="/media/:chatId/:messageId" element={<MediaViewerPage />} />
+            <Route
+              path="/media/:chatId/:messageId"
+              element={<MediaViewerPage />}
+            />
 
             {/* ==================== DOCUMENT MANAGEMENT ==================== */}
             <Route path="/documents" element={<DocumentsList />} />
             <Route path="/documents/new" element={<NewDocument />} />
             <Route path="/documents/:documentId" element={<EditDocument />} />
             <Route path="/documents/shared" element={<SharedDocumentsList />} />
-            <Route path="/documents/shared/:documentId" element={<SharedDocument />} />
-            <Route path="/documents/preview/:documentId" element={<DocumentPreview />} />
+            <Route
+              path="/documents/shared/:documentId"
+              element={<SharedDocument />}
+            />
+            <Route
+              path="/documents/preview/:documentId"
+              element={<DocumentPreview />}
+            />
 
             {/* ==================== WHITEBOARD COLLABORATION ==================== */}
             <Route path="/boards" element={<WhiteboardsList />} />
             <Route path="/boards/new" element={<NewWhiteboard />} />
-            <Route path="/boards/:whiteboardId" element={<WhiteboardEditor />} />
-            <Route path="/boards/shared/:whiteboardId" element={<WhiteboardEditor />} />
+            <Route
+              path="/boards/:whiteboardId"
+              element={<WhiteboardEditor />}
+            />
+            <Route
+              path="/boards/shared/:whiteboardId"
+              element={<WhiteboardEditor />}
+            />
             <Route path="/whiteboard" element={<Whiteboard />} />
 
             {/* ==================== MEETING MANAGEMENT ==================== */}
@@ -165,12 +206,27 @@ export default function App() {
 
             {/* Project Management */}
             <Route path="/projects" element={<AllProjectsPage />} />
-            <Route path="/workspace/:workspaceId/projects/:projectId" element={<ProjectPage />} />
-            <Route path="/workspace/:workspaceId/projects/:projectId/board" element={<ProjectPage />} />
-            <Route path="/workspace/:workspaceId/projects/:projectId/tasks/:taskId" element={<ProjectPage />} />
+            <Route
+              path="/workspace/:workspaceId/projects/:projectId"
+              element={<ProjectPage />}
+            />
+            <Route
+              path="/workspace/:workspaceId/projects/:projectId/board"
+              element={<ProjectPage />}
+            />
+            <Route
+              path="/workspace/:workspaceId/projects/:projectId/tasks/:taskId"
+              element={<ProjectPage />}
+            />
             {/* Meeting Management */}
-            <Route path="/workspace/:workspaceId/projects/:projectId/meetings" element={<ProjectPage />} />
-            <Route path="/workspace/:workspaceId/projects/:projectId/meetings/:meetingId" element={<ProjectPage />} />
+            <Route
+              path="/workspace/:workspaceId/projects/:projectId/meetings"
+              element={<ProjectPage />}
+            />
+            <Route
+              path="/workspace/:workspaceId/projects/:projectId/meetings/:meetingId"
+              element={<ProjectPage />}
+            />
           </Route>
         </Route>
 
@@ -181,6 +237,35 @@ export default function App() {
       <div className="relative z-[9999] pointer-events-auto">
         <ToastNotification />
         <BrowserExtensionNotification />
+        <MinimizedMeeting />
+        
+        {/* Global Call Modals */}
+        {showIncomingCallModal && incomingCall && (
+          <IncomingVideoCallModal
+            incomingCall={incomingCall}
+            onAccept={async () => {
+              const callId = incomingCall.callId || incomingCall._id;
+              await joinCall(callId);
+              navigate("/video-call");
+            }}
+            onReject={async () => {
+              const callId = incomingCall.callId || incomingCall._id;
+              await rejectCall(callId);
+            }}
+            isVisible={showIncomingCallModal}
+          />
+        )}
+        
+        {showOutgoingCallModal && outgoingCall && (
+          <OutgoingVideoCallModal
+            outgoingCall={outgoingCall}
+            onCancel={async () => {
+              const callId = outgoingCall.call?._id || outgoingCall.callId;
+              await cancelCall(callId);
+            }}
+            isVisible={showOutgoingCallModal}
+          />
+        )}
       </div>
     </AuthRouteGuard>
   );

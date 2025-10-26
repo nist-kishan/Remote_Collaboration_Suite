@@ -1,14 +1,8 @@
-/**
- * Environment Configuration
- * Handles environment variables with fallbacks and validation
- */
-
-// Environment detection
 export const isDevelopment = import.meta.env.DEV;
 export const isProduction = import.meta.env.PROD;
 export const mode = import.meta.env.MODE;
 
-// API Configuration
+
 export const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000',
   TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT) || 30000,
@@ -186,7 +180,7 @@ export const validateEnvironment = () => {
   }
   
   if (errors.length > 0) {
-    console.error('❌ Environment validation failed:', errors);
+    console.error('Environment validation failed:', errors);
     if (isProduction) {
       throw new Error('Environment validation failed');
     }
@@ -200,9 +194,6 @@ if (isProduction) {
   validateEnvironment();
 }
 
-// Development helpers
-if (isDevelopment) {
-  }
 
 // Export all configuration
 export default {

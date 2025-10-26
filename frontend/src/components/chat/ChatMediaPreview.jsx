@@ -11,18 +11,15 @@ const MediaPreview = ({
   disabled = false 
 }) => {
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({});
+  const [ setUploadProgress] = useState({});
 
   const handleSendWithProgress = async () => {
     setIsUploading(true);
     
     try {
-      // Call the original onSend function with progress tracking
       if (onSend && typeof onSend === 'function') {
         await onSend();
-      } else {
       }
-    } catch (error) {
     } finally {
       setIsUploading(false);
     }

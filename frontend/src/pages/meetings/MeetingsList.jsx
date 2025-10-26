@@ -33,14 +33,17 @@ const MeetingsList = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState(null);
 
-  // Filter meetings based on active tab
-  const filteredMeetings = meetings.filter(meeting => {
+  // Filter meetings based on active tab and search
+  const filteredMeetings = (meetings || []).filter(meeting => {
+    // Filter by type based on active tab
     if (activeTab === 'instant') return meeting.meetingType === 'instant';
     if (activeTab === 'scheduled') return meeting.meetingType === 'scheduled';
     return true;
-  }).filter(meeting => 
-    meeting.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  }).filter(meeting => {
+    // Filter by search query
+    const title = meeting.title || 'Meeting';
+    return title.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   const handleCreateMeeting = async (data, type) => {
     if (type === 'instant') {
@@ -57,14 +60,51 @@ const MeetingsList = () => {
     return date.toLocaleString();
   };
 
-  const formatDuration = (startTime, endTime) => {
-    if (!startTime || !endTime) return 'N/A';
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    const diff = end - start;
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}h ${minutes}m`;
+  const formatDuration = (seconds) => {
+    if (!seconds) return 'N/A';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  // Check if scheduled meeting can be joined
+  const canJoinScheduledMeeting = (meeting) => {
+    if (meeting.meetingType !== 'scheduled') return true;
+    
+    const now = new Date();
+    const startTime = new Date(meeting.startTime);
+    const endTime = new Date(meeting.endTime);
+    
+    // Can join 10 minutes before start time
+    const tenMinutesBeforeStart = new Date(startTime.getTime() - 10 * 60 * 1000);
+    
+    return now >= tenMinutesBeforeStart && now <= endTime;
+  };
+
+  // Get meeting status label
+  const getMeetingStatusLabel = (meeting) => {
+    if (meeting.meetingType === 'instant') {
+      return meeting.status === 'in_progress' ? 'LIVE' : 'Ended';
+    } else {
+      const now = new Date();
+      const startTime = new Date(meeting.startTime);
+      const endTime = new Date(meeting.endTime);
+      
+      if (now < startTime) return 'Scheduled';
+      if (now >= startTime && now <= endTime) return 'LIVE';
+      return 'Ended';
+    }
+  };
+
+  // Get status color
+  const getStatusColor = (meeting) => {
+    const status = getMeetingStatusLabel(meeting);
+    if (status === 'LIVE') return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+    if (status === 'Scheduled') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
   };
 
   return (
@@ -152,6 +192,7 @@ const MeetingsList = () => {
         {/* Meetings List */}
         {isLoading ? (
           <div className="text-center py-12">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-600 dark:text-gray-400">Loading meetings...</p>
           </div>
         ) : filteredMeetings.length === 0 ? (
@@ -177,20 +218,41 @@ const MeetingsList = () => {
                 className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
                     {meeting.meetingType === 'instant' ? (
-                      <Video className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <Video className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                     ) : (
-                      <Calendar className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      <Calendar className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                     )}
                     <h3 className="font-semibold text-gray-900 dark:text-white truncate">
                       {meeting.title}
                     </h3>
                   </div>
-                  {meeting.accessType === 'protected' ? (
-                    <Lock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <div className="flex gap-1 flex-shrink-0">
+                    {/* Meeting Status Badge */}
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(meeting)}`}>
+                      {getMeetingStatusLabel(meeting)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Access Type Badge */}
+                <div className="flex gap-2 mb-3">
+                  {meeting.accessType === 'public' ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                      <Globe className="w-3 h-3" />
+                      Public
+                    </span>
                   ) : (
-                    <Globe className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                      <Lock className="w-3 h-3" />
+                      Private
+                    </span>
+                  )}
+                  {meeting.meetingType === 'instant' && (
+                    <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                      Instant
+                    </span>
                   )}
                 </div>
 
@@ -213,32 +275,47 @@ const MeetingsList = () => {
                       <div className="text-gray-600 dark:text-gray-400">
                         <strong>End:</strong> {formatDate(meeting.endTime)}
                       </div>
-                      <div className="text-gray-600 dark:text-gray-400">
-                        <strong>Duration:</strong> {formatDuration(meeting.startTime, meeting.endTime)}
-                      </div>
                     </>
                   )}
                   <div className="text-gray-600 dark:text-gray-400">
-                    <strong>Status:</strong> <span className="capitalize">{meeting.status}</span>
+                    <strong>Organizer:</strong> {meeting.organizer?.name || 'Unknown'}
                   </div>
+                  {meeting.accessType === 'private' && (
+                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                      <Lock className="w-4 h-4" />
+                      <span>Password required</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-2">
-                  <CustomButton
-                    onClick={() => {
-                      setSelectedMeeting(meeting);
-                      setShowDetailsModal(true);
-                    }}
-                    variant="primary"
-                    className="flex-1 text-sm"
-                  >
-                    View Details
-                  </CustomButton>
-                  {meeting.organizer?._id === user?._id && (
+                  {getMeetingStatusLabel(meeting) !== 'Ended' ? (
+                    <CustomButton
+                      onClick={() => navigate(`/meeting/${meeting.meetingId}`)}
+                      variant="primary"
+                      className="flex-1 text-sm"
+                      disabled={!canJoinScheduledMeeting(meeting)}
+                      title={!canJoinScheduledMeeting(meeting) ? 'Meeting starts in ' + formatDate(meeting.startTime) : 'Join meeting'}
+                    >
+                      {canJoinScheduledMeeting(meeting) ? 'Join Meeting' : 'Not Started'}
+                    </CustomButton>
+                  ) : (
+                    <CustomButton
+                      onClick={() => {
+                        setSelectedMeeting(meeting);
+                        setShowDetailsModal(true);
+                      }}
+                      variant="outline"
+                      className="flex-1 text-sm"
+                    >
+                      View Details
+                    </CustomButton>
+                  )}
+                  {meeting.organizer?._id === user?.id && (
                     <CustomButton
                       onClick={() => handleDeleteMeeting(meeting._id)}
                       variant="outline"
-                      className="text-sm"
+                      className="text-sm text-red-600 hover:text-red-700"
                     >
                       Delete
                     </CustomButton>

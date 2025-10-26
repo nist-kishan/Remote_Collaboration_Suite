@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { useSocket } from './useSocket';
+import { useMeetingWebRTC } from './useMeetingWebRTC';
 import { meetingApi } from '../api/meetingApi';
 import {
   setMeetings,
@@ -19,9 +20,6 @@ import {
   setParticipants,
   addParticipant,
   removeParticipant,
-  setLocalStream,
-  addRemoteStream,
-  removeRemoteStream,
   clearStreams,
   toggleMute,
   setMuted,
@@ -42,8 +40,6 @@ import {
   selectMeetingError,
   selectIsInMeeting,
   selectParticipants,
-  selectLocalStream,
-  selectRemoteStreams,
   selectIsMuted,
   selectIsVideoOn,
   selectIsScreenSharing,
@@ -57,6 +53,7 @@ import {
 /**
  * Consolidated Meeting Hook - All meeting-related functionality
  * Follows the architecture pattern: Redux for state, React Query for API calls, Custom hooks for business logic
+ * Integrates with backend meeting controller and WebRTC for many-to-many video streaming
  */
 export const useMeeting = (meetingId = null) => {
   const dispatch = useDispatch();
@@ -64,6 +61,9 @@ export const useMeeting = (meetingId = null) => {
   const queryClient = useQueryClient();
   const { user } = useSelector((state) => state.auth);
   const { socket, isConnected } = useSocket();
+  
+  // WebRTC hook for meeting video streaming (separate from regular calls)
+  const webRTC = useMeetingWebRTC(meetingId, user?.id);
 
   // Redux state selectors
   const meetings = useSelector(selectMeetings);
@@ -72,8 +72,6 @@ export const useMeeting = (meetingId = null) => {
   const meetingError = useSelector(selectMeetingError);
   const isInMeeting = useSelector(selectIsInMeeting);
   const participants = useSelector(selectParticipants);
-  const localStream = useSelector(selectLocalStream);
-  const remoteStreams = useSelector(selectRemoteStreams);
   const isMuted = useSelector(selectIsMuted);
   const isVideoOn = useSelector(selectIsVideoOn);
   const isScreenSharing = useSelector(selectIsScreenSharing);
@@ -94,7 +92,7 @@ export const useMeeting = (meetingId = null) => {
     error: meetingsError,
     refetch: refetchMeetings
   } = useQuery({
-    queryKey: ['meetings', activeTab],
+    queryKey: ['meetings'],
     queryFn: () => meetingApi.getUserMeetings(),
     staleTime: 30000, // 30 seconds
   });
@@ -114,45 +112,151 @@ export const useMeeting = (meetingId = null) => {
   // Mutations
   const createInstantMeetingMutation = useMutation({
     mutationFn: (data) => meetingApi.createInstantMeeting(data),
-    onSuccess: (data) => {
-      const meeting = data.data.meeting;
+    onSuccess: async (response) => {
+      // Backend returns: { success, statusCode, message, data: { meeting } }
+      // Axios wraps it in response.data
+      const meeting = response.data?.data?.meeting || response.data?.meeting;
+      
+      if (!meeting) {
+        toast.error('Meeting created but data structure is unexpected');
+        return;
+      }
+      
       queryClient.invalidateQueries(['meetings']);
-      dispatch(addMeeting(meeting));
       dispatch(setCurrentMeeting(meeting));
-      toast.success('Instant meeting created successfully!');
+      dispatch(setInMeeting(true));
+      toast.success('Meeting created successfully!');
+      
+      // Initialize WebRTC
+      try {
+        await webRTC.initializeLocalStream();
+        webRTC.joinCallRoom();
+      } catch (error) {
+        console.error('Failed to initialize media:', error);
+      }
+      
       // Navigate to meeting room
       navigate(`/meeting/${meeting.meetingId}`);
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || 'Failed to create instant meeting');
+      console.error('❌ Instant meeting creation error:', error);
+      console.error('❌ Error response:', error?.response);
+      toast.error(error?.response?.data?.message || 'Failed to create meeting');
     },
   });
 
   const createScheduledMeetingMutation = useMutation({
     mutationFn: (data) => meetingApi.createScheduledMeeting(data),
-    onSuccess: (data) => {
-      const meeting = data.data.meeting;
-      queryClient.invalidateQueries(['meetings']);
-      dispatch(addMeeting(meeting));
-      toast.success('Scheduled meeting created successfully!');
+    onSuccess: (response) => {
+      // Backend returns: { success, statusCode, message, data: { meeting } }
+      // Axios wraps it in response.data
+      const meeting = response.data?.data?.meeting || response.data?.meeting;
+      
+      if (meeting) {
+        queryClient.invalidateQueries(['meetings']);
+        dispatch(addMeeting(meeting));
+        toast.success('Scheduled meeting created successfully!');
+      } else {
+        console.error('❌ Meeting data not found in response');
+        toast.error('Meeting created but data structure is unexpected');
+      }
     },
     onError: (error) => {
+      console.error('❌ Scheduled meeting creation error:', error);
+      console.error('❌ Error response:', error?.response);
       toast.error(error?.response?.data?.message || 'Failed to create scheduled meeting');
     },
   });
 
   const joinMeetingMutation = useMutation({
     mutationFn: ({ meetingId, password }) => meetingApi.joinMeeting(meetingId, password),
-    onSuccess: (data) => {
-      const meeting = data.data.meeting;
+    onSuccess: async (response) => {
+      // Backend returns: { success, statusCode, message, data: { meeting } }
+      // Axios wraps it in response.data
+      const meeting = response.data?.data?.meeting || response.data?.meeting;
+      
+      if (!meeting) {
+        toast.error('Failed to join meeting - invalid response');
+        return;
+      }
+
+      // Validate scheduled meeting time
+      if (meeting.meetingType === 'scheduled' && meeting.startTime) {
+        const scheduledTime = new Date(meeting.startTime);
+        const now = new Date();
+        const timeDiff = scheduledTime - now;
+        const minutesDiff = timeDiff / (1000 * 60);
+
+        // Meeting hasn't started yet (more than 10 minutes early)
+        if (minutesDiff > 10) {
+          toast.error(`This meeting is scheduled for ${scheduledTime.toLocaleString()}. Please join closer to the start time.`);
+          return;
+        }
+
+        // Meeting ended (more than meeting duration after scheduled time)
+        const meetingDuration = meeting.duration || 60; // default 60 minutes
+        if (minutesDiff < -meetingDuration) {
+          toast.error('This meeting has already ended.');
+          return;
+        }
+      }
+
+      // Check participant limit for public meetings
+      if (meeting.accessType === 'public' && meeting.maxParticipants) {
+        const currentParticipants = meeting.attendees?.filter(a => a.status === 'accepted' || a.status === 'joined').length || 0;
+        if (currentParticipants >= meeting.maxParticipants) {
+          toast.error(`This meeting has reached its maximum capacity of ${meeting.maxParticipants} participants.`);
+          return;
+        }
+      }
+      
       dispatch(setCurrentMeeting(meeting));
       dispatch(setInMeeting(true));
       toast.success('Joined meeting successfully!');
+      
+      // Initialize WebRTC
+      try {
+        await webRTC.initializeLocalStream();
+        webRTC.joinCallRoom();
+      } catch (error) {
+        console.error('Failed to initialize media:', error);
+      }
+      
       // Navigate to meeting room
       navigate(`/meeting/${meeting.meetingId}`);
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || 'Failed to join meeting');
+      console.error('❌ Join meeting error:', error);
+      console.error('❌ Error response:', error?.response);
+      const errorMessage = error?.response?.data?.message || 'Failed to join meeting';
+      
+      // Handle specific error cases
+      if (error?.response?.status === 401) {
+        toast.error('Invalid password. Please try again.');
+      } else if (error?.response?.status === 403) {
+        toast.error('You do not have permission to join this meeting.');
+      } else if (error?.response?.status === 404) {
+        toast.error('Meeting not found.');
+      } else {
+        toast.error(errorMessage);
+      }
+    },
+  });
+
+  const endMeetingMutation = useMutation({
+    mutationFn: (meetingId) => meetingApi.endMeeting(meetingId),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['meetings']);
+      webRTC.cleanup();
+      dispatch(setInMeeting(false));
+      dispatch(clearCurrentMeeting());
+      dispatch(clearStreams());
+      dispatch(setParticipants([]));
+      toast.success('Meeting ended successfully!');
+      navigate('/meetings');
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || 'Failed to end meeting');
     },
   });
 
@@ -196,6 +300,14 @@ export const useMeeting = (meetingId = null) => {
     }
   }, [joinMeetingMutation]);
 
+  const handleEndMeeting = useCallback(async (meetingId) => {
+    try {
+      await endMeetingMutation.mutateAsync(meetingId);
+    } catch (error) {
+      // Error handled in mutation
+    }
+  }, [endMeetingMutation]);
+
   const handleDeleteMeeting = useCallback(async (meetingId) => {
     try {
       await deleteMeetingMutation.mutateAsync(meetingId);
@@ -205,6 +317,8 @@ export const useMeeting = (meetingId = null) => {
   }, [deleteMeetingMutation]);
 
   const handleLeaveMeeting = useCallback(() => {
+    webRTC.leaveCallRoom();
+    webRTC.cleanup();
     dispatch(setInMeeting(false));
     dispatch(clearCurrentMeeting());
     dispatch(clearStreams());
@@ -212,19 +326,35 @@ export const useMeeting = (meetingId = null) => {
     dispatch(setChatMessages([]));
     navigate('/meetings');
     toast.success('Left meeting successfully');
-  }, [dispatch, navigate]);
+  }, [dispatch, navigate, webRTC]);
 
   const handleToggleMute = useCallback(() => {
+    const newMutedState = !isMuted;
     dispatch(toggleMute());
-  }, [dispatch]);
+    webRTC.toggleAudio(!newMutedState);
+  }, [dispatch, isMuted, webRTC]);
 
   const handleToggleVideo = useCallback(() => {
+    const newVideoState = !isVideoOn;
     dispatch(toggleVideo());
-  }, [dispatch]);
+    webRTC.toggleVideo(newVideoState);
+  }, [dispatch, isVideoOn, webRTC]);
 
-  const handleToggleScreenShare = useCallback(() => {
-    dispatch(toggleScreenShare());
-  }, [dispatch]);
+  const handleToggleScreenShare = useCallback(async () => {
+    try {
+      if (!isScreenSharing) {
+        await webRTC.startScreenShare();
+        dispatch(setScreenSharing(true));
+        toast.success('Screen sharing started');
+      } else {
+        webRTC.stopScreenShare();
+        dispatch(setScreenSharing(false));
+        toast.success('Screen sharing stopped');
+      }
+    } catch (error) {
+      console.error('Failed to toggle screen share:', error);
+    }
+  }, [dispatch, isScreenSharing, webRTC]);
 
   const handleToggleChat = useCallback(() => {
     dispatch(toggleChat());
@@ -250,18 +380,14 @@ export const useMeeting = (meetingId = null) => {
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    console.log('🔌 Setting up meeting socket event listeners...');
-
     // Handle meeting created event
     const handleMeetingCreated = (data) => {
-      console.log('📅 Meeting created:', data.meeting);
       dispatch(addMeeting(data.meeting));
       toast.success('New meeting created');
     };
 
     // Handle meeting updated event
     const handleMeetingUpdated = (data) => {
-      console.log('✏️ Meeting updated:', data.meeting);
       dispatch(updateMeetingInList(data.meeting));
       if (currentMeeting?._id === data.meeting._id) {
         dispatch(setCurrentMeeting(data.meeting));
@@ -270,7 +396,6 @@ export const useMeeting = (meetingId = null) => {
 
     // Handle meeting started event
     const handleMeetingStarted = (data) => {
-      console.log('▶️ Meeting started:', data.meeting);
       dispatch(updateMeetingInList({ ...data.meeting, status: 'started' }));
       if (currentMeeting?._id === data.meeting._id) {
         dispatch(setCurrentMeeting({ ...data.meeting, status: 'started' }));
@@ -279,48 +404,67 @@ export const useMeeting = (meetingId = null) => {
 
     // Handle meeting ended event
     const handleMeetingEnded = (data) => {
-      console.log('⏹️ Meeting ended:', data.meeting);
       dispatch(updateMeetingInList({ ...data.meeting, status: 'ended' }));
       if (currentMeeting?._id === data.meeting._id) {
         dispatch(setCurrentMeeting({ ...data.meeting, status: 'ended' }));
         dispatch(setInMeeting(false));
         dispatch(clearStreams());
         dispatch(setParticipants([]));
-        toast.info('Meeting has ended');
+        toast('Meeting has ended', { icon: 'ℹ️' });
         navigate('/meetings');
       }
     };
 
     // Handle participant joined
     const handleParticipantJoined = (data) => {
-      console.log('👋 Participant joined:', data.participant);
       if (currentMeeting?._id === data.meetingId) {
         dispatch(addParticipant(data.participant));
-        toast.info(`${data.participant.user.name} joined the meeting`);
+        toast(`${data.participant.user.name} joined the meeting`, { icon: '👋' });
       }
     };
 
     // Handle participant left
     const handleParticipantLeft = (data) => {
-      console.log('👋 Participant left:', data.userId);
       if (currentMeeting?._id === data.meetingId) {
         dispatch(removeParticipant(data.userId));
-        toast.info('A participant left the meeting');
+        toast('A participant left the meeting', { icon: '👋' });
       }
     };
 
     // Handle meeting room joined
     const handleMeetingRoomJoined = (data) => {
-      console.log('✅ Joined meeting room:', data.meetingId);
       dispatch(setInMeeting(true));
     };
 
     // Handle meeting room left
     const handleMeetingRoomLeft = (data) => {
-      console.log('👋 Left meeting room:', data.meetingId);
       dispatch(setInMeeting(false));
       dispatch(clearStreams());
       dispatch(setParticipants([]));
+    };
+
+    // Handle meeting will be deleted notification
+    const handleMeetingWillBeDeleted = (data) => {
+      toast(`This meeting will be automatically deleted in 5 minutes`, {
+        duration: 10000,
+        icon: '⏰'
+      });
+    };
+
+    // Handle meeting deleted notification
+    const handleMeetingDeleted = (data) => {
+      if (currentMeeting?._id === data.meetingId) {
+        toast('This meeting has been automatically deleted', { icon: '🗑️' });
+        dispatch(removeMeetingFromList(data.meetingId));
+        dispatch(clearCurrentMeeting());
+        dispatch(setInMeeting(false));
+        navigate('/meetings');
+      }
+    };
+
+    // Handle meeting chat message
+    const handleMeetingChatMessage = (data) => {
+      dispatch(addChatMessage(data));
     };
 
     // Register socket event listeners
@@ -332,9 +476,11 @@ export const useMeeting = (meetingId = null) => {
     socket.on('participant_left', handleParticipantLeft);
     socket.on('meeting_room_joined', handleMeetingRoomJoined);
     socket.on('meeting_room_left', handleMeetingRoomLeft);
+    socket.on('meeting_will_be_deleted', handleMeetingWillBeDeleted);
+    socket.on('meeting_deleted', handleMeetingDeleted);
+    socket.on('meeting_chat_message', handleMeetingChatMessage);
 
     return () => {
-      console.log('🔌 Cleaning up meeting socket event listeners...');
       // Cleanup socket event listeners
       socket.off('meeting_created', handleMeetingCreated);
       socket.off('meeting_updated', handleMeetingUpdated);
@@ -344,14 +490,15 @@ export const useMeeting = (meetingId = null) => {
       socket.off('participant_left', handleParticipantLeft);
       socket.off('meeting_room_joined', handleMeetingRoomJoined);
       socket.off('meeting_room_left', handleMeetingRoomLeft);
+      socket.off('meeting_will_be_deleted', handleMeetingWillBeDeleted);
+      socket.off('meeting_deleted', handleMeetingDeleted);
+      socket.off('meeting_chat_message', handleMeetingChatMessage);
     };
   }, [socket, isConnected, currentMeeting, dispatch, navigate]);
 
   // Join meeting room when in meeting
   useEffect(() => {
     if (!socket || !isConnected || !currentMeeting) return;
-
-    console.log('🔌 Joining meeting room:', currentMeeting._id);
 
     // Join the meeting room
     socket.emit('join_meeting_room', { meetingId: currentMeeting._id });
@@ -372,7 +519,6 @@ export const useMeeting = (meetingId = null) => {
     setupParticipantManagement();
 
     return () => {
-      console.log('🔌 Leaving meeting room:', currentMeeting._id);
       // Leave the meeting room
       socket.emit('leave_meeting_room', { meetingId: currentMeeting._id });
     };
@@ -380,29 +526,57 @@ export const useMeeting = (meetingId = null) => {
 
   // Update meetings list when data changes
   useEffect(() => {
-    if (meetingsData?.data?.meetings) {
-      dispatch(setMeetings(meetingsData.data.meetings));
+    // Backend returns: { success, statusCode, message, data: { meetings } }
+    // Axios wraps it in response.data
+    const meetings = meetingsData?.data?.data?.meetings || meetingsData?.data?.meetings;
+    
+    if (meetings) {
+      dispatch(setMeetings(meetings));
     }
   }, [meetingsData, dispatch]);
 
   // Update current meeting when data changes
   useEffect(() => {
-    if (meetingData?.data?.meeting) {
-      dispatch(setCurrentMeeting(meetingData.data.meeting));
+    // Backend returns: { success, statusCode, message, data: { meeting } }
+    // Axios wraps it in response.data
+    const meeting = meetingData?.data?.data?.meeting || meetingData?.data?.meeting;
+    
+    if (meeting) {
+      dispatch(setCurrentMeeting(meeting));
+      // Set participants from meeting data
+      if (meeting.attendees) {
+        dispatch(setParticipants(meeting.attendees));
+      }
     }
   }, [meetingData, dispatch]);
 
+  // Initialize WebRTC when entering a meeting
+  useEffect(() => {
+    if (meetingId && isInMeeting && !webRTC.isInitialized) {
+      const initMedia = async () => {
+        try {
+          await webRTC.initializeLocalStream();
+          webRTC.joinCallRoom();
+        } catch (error) {
+          console.error('Failed to initialize media:', error);
+          toast.error('Failed to access camera/microphone');
+        }
+      };
+      initMedia();
+    }
+  }, [meetingId, isInMeeting, webRTC]);
+
   return {
     // State
-    meetings: meetingsData?.data?.meetings || [],
+    meetings: meetingsData?.data?.data?.meetings || meetingsData?.data?.meetings || [],
     currentMeeting,
     activeTab,
     isLoading: meetingsLoading || meetingDataLoading,
     error: meetingsError || meetingDataError,
     isInMeeting,
     participants,
-    localStream,
-    remoteStreams,
+    localStream: webRTC.localStream,
+    remoteStreams: webRTC.remoteStreams,
     isMuted,
     isVideoOn,
     isScreenSharing,
@@ -411,11 +585,13 @@ export const useMeeting = (meetingId = null) => {
     showCreateMeetingModal,
     showJoinMeetingModal,
     pagination,
+    connectionStatus: webRTC.connectionStatus,
 
     // Actions
     handleCreateInstantMeeting,
     handleCreateScheduledMeeting,
     handleJoinMeeting,
+    handleEndMeeting,
     handleDeleteMeeting,
     handleLeaveMeeting,
     handleToggleMute,
@@ -436,7 +612,11 @@ export const useMeeting = (meetingId = null) => {
     // Operation states
     isCreating: createInstantMeetingMutation.isPending || createScheduledMeetingMutation.isPending,
     isJoining: joinMeetingMutation.isPending,
-    isDeleting: deleteMeetingMutation.isPending
+    isEnding: endMeetingMutation.isPending,
+    isDeleting: deleteMeetingMutation.isPending,
+    
+    // WebRTC functions
+    webRTC
   };
 };
 

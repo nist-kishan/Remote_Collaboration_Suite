@@ -16,7 +16,7 @@ import { sendMail } from "../utils/sendMail.js";
 import { otpTemplate, resetPasswordTemplate } from "../utils/mailTemplates.js";
 import crypto from "crypto";
 import { generateOTP } from "../utils/generateOtp.js";
-import jwt from "jsonwebtoken"
+import jwt from "jsonwebtoken";
 
 export const signupHandler = asyncHandle(async (req, res) => {
   const { name, email, username, password, countrycode, phone } = req.body;
@@ -485,29 +485,41 @@ export const updateProfileHandler = asyncHandle(async (req, res) => {
   }
 
   const userId = req.user._id;
-  const { name, username } = req.body;
-  if (!name && !username) {
-    throw new ApiError(
-      400,
-      "At least one field (name or username) must be provided"
-    );
-  }
+  const { name, username, bio, designation, location } = req.body;
 
   const user = await User.findById(userId);
   if (!user) {
     throw new ApiError(404, "User not found");
   }
 
-  if (name) {
-    user.name = name;
-  }
-  if (username) {
-    user.username = username;
+  // Update text fields
+  if (name) user.name = name;
+  if (username) user.username = username;
+  if (bio !== undefined) user.bio = bio;
+  if (designation !== undefined) user.designation = designation;
+  if (location !== undefined) user.location = location;
+
+  // Handle avatar upload
+  if (req.file) {
+    user.avatar = `/uploads/${req.file.filename}`;
   }
 
   await user.save({ validateBeforeSave: true });
 
-  const responseData = { name: user.name, username: user.username };
+  const responseData = {
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      username: user.username,
+      avatar: user.avatar,
+      bio: user.bio,
+      designation: user.designation,
+      location: user.location,
+      isOnline: user.isOnline,
+      lastSeen: user.lastSeen
+    }
+  };
 
   return res
     .status(200)

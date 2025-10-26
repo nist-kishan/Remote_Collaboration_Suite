@@ -54,7 +54,7 @@ const Skeleton = ({
   );
 };
 
-// Pre-built skeleton components
+
 export const SkeletonText = ({ lines = 1, className = '', ...props }) => {
   if (lines === 1) {
     return <Skeleton variant="text" className={`w-full ${className}`} {...props} />;
@@ -130,7 +130,7 @@ export const SkeletonMessage = ({ isOwn = false, className = '', ...props }) => 
   </div>
 );
 
-export const SkeletonChatItem = ({ className = '', ...props }) => (
+export const SkeletonChatItem = ({ className = '' }) => (
   <div className={`flex items-center gap-3 p-4 ${className}`}>
     <SkeletonAvatar size="lg" className="flex-shrink-0" />
     <div className="flex-1 min-w-0 space-y-2">
@@ -149,7 +149,7 @@ export const SkeletonMessageList = ({ count = 5, className = '', ...props }) => 
     {Array.from({ length: count }).map((_, index) => (
       <SkeletonMessage
         key={index}
-        isOwn={index % 3 === 0} // Mix of own and other messages
+        isOwn={index % 3 === 0}
         {...props}
       />
     ))}

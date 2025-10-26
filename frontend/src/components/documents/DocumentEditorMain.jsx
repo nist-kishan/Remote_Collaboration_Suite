@@ -330,9 +330,6 @@ const DocumentEditor = ({
   // Auto-save functionality - only available for saved documents (not drafts)
   const isDocumentSaved = currentDocument && currentDocument.status !== 'draft';
   
-  // Debug auto-save initialization
-  console.log('Auto-save initialized at:', new Date().toLocaleTimeString());
-  
   // Simple auto-save implementation for now
   const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved', 'error'
@@ -378,11 +375,6 @@ const DocumentEditor = ({
   // Initialize editor when document changes
   useEffect(() => {
     if (currentDocument && !isNew) {
-      console.log('Document loaded:', {
-        content: currentDocument.content || 'empty',
-        updatedAt: currentDocument.updatedAt
-      });
-      
       handleInitializeEditorFromDocument(currentDocument);
       // Enable auto-save for existing documents
       setIsAutoSaveEnabled(true);
@@ -496,24 +488,8 @@ const DocumentEditor = ({
     handleUpdateEditorField('title', e.target.value);
   }, [handleUpdateEditorField]);
 
-  // Log editorState changes
-  useEffect(() => {
-    console.log('Editor state changed:', {
-      content: editorState?.content || 'empty',
-      status: editorState?.status,
-      visibility: editorState?.visibility,
-      tags: editorState?.tags,
-      hasChanges: editorState?.hasChanges
-    });
-  }, [editorState]);
-
   // Handle content change
   const handleContentChange = useCallback((value) => {
-    console.log('Content changed at:', new Date().toLocaleTimeString(), {
-      isAutoSaveEnabled,
-      documentStatus: currentDocument?.status,
-      isDocumentSaved
-    });
     handleUpdateEditorField('content', value);
   }, [handleUpdateEditorField, isAutoSaveEnabled, currentDocument?.status, isDocumentSaved]);
 
@@ -534,19 +510,6 @@ const DocumentEditor = ({
 
   // Handle save
   const handleSave = useCallback(() => {
-    console.log('Saving document:', {
-      content: editorState.content + '...',
-      tags: editorState.tags,
-      visibility: editorState.visibility
-    });
-    
-    console.log('Save parameters:', {
-      isNew,
-      documentId,
-      isUpdating,
-      isCreating
-    });
-
     if (!canEditTitle) {
       console.error('❌ Save failed: No edit permission');
       toast.error('You do not have permission to edit this document');
@@ -722,7 +685,6 @@ const DocumentEditor = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  console.log('Auto-save toggled at:', new Date().toLocaleTimeString());
                   toggleAutoSave();
                 }}
                 className={`flex items-center space-x-1 px-1 sm:px-2 py-1 text-xs ${

@@ -10,7 +10,6 @@ const UserAvatar = ({
   isLoading = false,
   className = '' 
 }) => {
-  // Show skeleton loading if user is loading or not provided
   if (isLoading || !user) {
     return <SkeletonAvatar size={size} className={className} />;
   }

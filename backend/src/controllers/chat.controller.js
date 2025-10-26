@@ -254,6 +254,12 @@ export const updateGroupChat = asyncHandle(async (req, res) => {
   if (description) chat.description = description;
   if (avatar) chat.avatar = avatar;
 
+  // Handle file upload if avatar file is provided
+  if (req.file) {
+    // File path is already set by multer middleware
+    chat.avatar = `/uploads/${req.file.filename}`;
+  }
+
   await chat.save();
   await chat.populate('participants.user', 'name email avatar');
 

@@ -137,13 +137,6 @@ export default function WhiteboardEditor() {
   // Effect to handle canvas data when whiteboardData changes - only load once
   useEffect(() => {
     if (whiteboardData?.data?.whiteboard && !hasLoadedInitialData.current) {
-      console.log('Loading whiteboard data:', {
-        hasCanvasData: !!whiteboardData?.data?.whiteboard?.canvasData,
-        canvasDataKeys: whiteboardData?.data?.whiteboard?.canvasData ? Object.keys(whiteboardData.data.whiteboard.canvasData) : [],
-        hasCanvasSettings: !!whiteboardData?.data?.whiteboard?.canvasSettings,
-        canvasSettings: whiteboardData?.data?.whiteboard?.canvasSettings
-      });
-      
       // Set canvas dimensions from whiteboard settings if available
       if (whiteboardData.data.whiteboard.canvasSettings) {
         const { width, height } = whiteboardData.data.whiteboard.canvasSettings;

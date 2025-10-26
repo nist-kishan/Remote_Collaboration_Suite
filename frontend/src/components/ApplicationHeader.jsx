@@ -13,6 +13,7 @@ import MainNavigationBar from "./Header/MainNavigationBar";
 import UserAuthSection from "./Header/UserAuthSection";
 import MobileNavigationMenu from "./Header/MobileNavigationMenu";
 import DarkLightModeToggle from "./Header/DarkLightModeToggle";
+import NotificationBell from "./notification/NotificationBell";
 import { useLogout } from "../hook/useAuth";
 import { useSelector } from "react-redux";
 
@@ -43,6 +44,8 @@ const Header = memo(() => {
 
         <div className="flex items-center gap-4">
           <DarkLightModeToggle />
+          
+          {user && <NotificationBell />}
 
           <UserAuthSection handleLogout={handleLogout} />
 

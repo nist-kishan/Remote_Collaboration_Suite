@@ -1,21 +1,27 @@
-import React, { useState } from 'react';
-import { useSelector } from 'react-redux';
-import { 
-  MoreVertical, 
-  Edit, 
-  Trash2, 
-  Reply, 
+import React, { useState } from "react";
+import { useSelector } from "react-redux";
+import {
+  MoreVertical,
+  Edit,
+  Trash2,
+  Reply,
   Smile,
   Image as ImageIcon,
-  Video,
   FileText,
   Download,
-  ArrowUpRight
-} from 'lucide-react';
-import ReadReceipt from './ReadReceipt';
-import ImagePreviewModal from '../ui/ImagePreviewModal';
+  ArrowUpRight,
+} from "lucide-react";
+import ReadReceipt from "./ReadReceipt";
+import ImagePreviewModal from "../ui/ImagePreviewModal";
 
-const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) => {
+const MessageBubble = ({
+  message,
+  onReply,
+  onEdit,
+  onDelete,
+  onReact,
+  chatId,
+}) => {
   const { user } = useSelector((state) => state.auth);
   const [showMenu, setShowMenu] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
@@ -25,7 +31,7 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
   const isOptimistic = message.isOptimistic;
   const reactions = message.reactions || [];
 
-  const emojis = ['👍', '❤️', '😄', '😮', '😢', '🙏'];
+  const emojis = ["👍", "❤️", "😄", "😮", "😢", "🙏"];
 
   const handleReaction = (emoji) => {
     onReact(message._id, emoji);
@@ -35,7 +41,7 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
 
   const renderMessageContent = () => {
     switch (message.type) {
-      case 'image':
+      case "image":
         return (
           <div className="relative rounded-lg overflow-hidden group">
             <img
@@ -43,7 +49,6 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
               alt="Shared image"
               className="w-full max-w-[280px] sm:max-w-[320px] md:max-w-[360px] h-auto max-h-[200px] sm:max-h-[240px] md:max-h-[280px] object-cover cursor-pointer"
             />
-            {/* Arrow icon overlay */}
             <button
               onClick={() => setShowImagePreview(true)}
               className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-all duration-200 opacity-0 group-hover:opacity-100"
@@ -55,8 +60,8 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
             </button>
           </div>
         );
-      
-      case 'video':
+
+      case "video":
         return (
           <div className="rounded-lg overflow-hidden">
             <video
@@ -66,21 +71,21 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
             />
           </div>
         );
-      
-      case 'audio':
+
+      case "audio":
         return (
           <div className="flex items-center gap-2">
             <audio src={message.media[0]?.url} controls />
           </div>
         );
-      
-      case 'file':
+
+      case "file":
         return (
           <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg">
             <FileText className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {message.media[0]?.name || 'File'}
+                {message.media[0]?.name || "File"}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {(message.media[0]?.size / 1024).toFixed(2)} KB
@@ -95,7 +100,7 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
             </a>
           </div>
         );
-      
+
       default:
         return (
           <p className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
@@ -106,39 +111,56 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
   };
 
   return (
-    <div className={`flex gap-2 mb-2 ${isOwnMessage ? 'justify-end' : 'justify-start'} ${isOptimistic ? 'opacity-70' : ''}`}>
+    <div
+      className={`flex gap-2 mb-2 ${
+        isOwnMessage ? "justify-end" : "justify-start"
+      } ${isOptimistic ? "opacity-70" : ""}`}
+    >
       {!isOwnMessage && (
         <img
-          src={message.sender.avatar || '/default-avatar.png'}
+          src={message.sender.avatar || "/default-avatar.png"}
           alt={message.sender.name}
           className="w-8 h-8 rounded-full object-cover"
         />
       )}
 
-      <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'} max-w-[85%] sm:max-w-[80%] md:max-w-[75%] lg:max-w-[70%]`}>
-
+      <div
+        className={`flex flex-col ${
+          isOwnMessage ? "items-end" : "items-start"
+        } max-w-[85%] sm:max-w-[80%] md:max-w-[75%] lg:max-w-[70%]`}
+      >
         <div className="relative group">
           <div
             className={`px-4 py-2 rounded-2xl ${
               isOwnMessage
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                ? "bg-indigo-600 text-white"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             }`}
           >
             {message.replyTo && (
-              <div className={`mb-2 pb-2 border-l-2 ${
-                isOwnMessage ? 'border-white/30' : 'border-gray-400'
-              } pl-2`}>
-                <p className={`text-xs font-medium ${
-                  isOwnMessage ? 'text-white/80' : 'text-gray-600 dark:text-gray-400'
-                }`}>
+              <div
+                className={`mb-2 pb-2 border-l-2 ${
+                  isOwnMessage ? "border-white/30" : "border-gray-400"
+                } pl-2`}
+              >
+                <p
+                  className={`text-xs font-medium ${
+                    isOwnMessage
+                      ? "text-white/80"
+                      : "text-gray-600 dark:text-gray-400"
+                  }`}
+                >
                   {message.replyTo.sender.name}
                 </p>
-                <p className={`text-xs ${
-                  isOwnMessage ? 'text-white/70' : 'text-gray-500 dark:text-gray-500'
-                }`}>
+                <p
+                  className={`text-xs ${
+                    isOwnMessage
+                      ? "text-white/70"
+                      : "text-gray-500 dark:text-gray-500"
+                  }`}
+                >
                   {message.replyTo.content?.substring(0, 50)}
-                  {message.replyTo.content?.length > 50 && '...'}
+                  {message.replyTo.content?.length > 50 && "..."}
                 </p>
               </div>
             )}
@@ -146,9 +168,13 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
             {renderMessageContent()}
 
             {message.isEdited && (
-              <span className={`text-xs mt-1 ${
-                isOwnMessage ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
-              }`}>
+              <span
+                className={`text-xs mt-1 ${
+                  isOwnMessage
+                    ? "text-white/70"
+                    : "text-gray-500 dark:text-gray-400"
+                }`}
+              >
                 (edited)
               </span>
             )}
@@ -156,7 +182,11 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
 
           {/* Reactions */}
           {reactions.length > 0 && (
-            <div className={`flex flex-wrap gap-1 mt-1 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
+            <div
+              className={`flex flex-wrap gap-1 mt-1 ${
+                isOwnMessage ? "justify-end" : "justify-start"
+              }`}
+            >
               {reactions.map((reaction, index) => (
                 <span
                   key={index}
@@ -169,7 +199,11 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
           )}
 
           {/* Message Menu */}
-          <div className={`absolute top-0 ${isOwnMessage ? 'left-0' : 'right-0'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+          <div
+            className={`absolute top-0 ${
+              isOwnMessage ? "left-0" : "right-0"
+            } opacity-0 group-hover:opacity-100 transition-opacity`}
+          >
             <button
               onClick={() => setShowMenu(!showMenu)}
               className="p-1 bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600"
@@ -178,7 +212,11 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
             </button>
 
             {showMenu && (
-              <div className={`absolute top-8 ${isOwnMessage ? 'left-0' : 'right-0'} bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-10 min-w-[150px]`}>
+              <div
+                className={`absolute top-8 ${
+                  isOwnMessage ? "left-0" : "right-0"
+                } bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-10 min-w-[150px]`}
+              >
                 <button
                   onClick={() => {
                     onReply(message);
@@ -189,7 +227,7 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
                   <Reply className="w-4 h-4" />
                   Reply
                 </button>
-                
+
                 <button
                   onClick={() => {
                     setShowReactions(true);
@@ -213,7 +251,7 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
                       <Edit className="w-4 h-4" />
                       Edit
                     </button>
-                    
+
                     <button
                       onClick={() => {
                         onDelete(message._id);
@@ -231,7 +269,11 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
 
             {/* Reactions Picker */}
             {showReactions && (
-              <div className={`absolute top-8 ${isOwnMessage ? 'left-10' : 'right-10'} bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-2 z-10`}>
+              <div
+                className={`absolute top-8 ${
+                  isOwnMessage ? "left-10" : "right-10"
+                } bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-2 z-10`}
+              >
                 <div className="flex gap-2">
                   {emojis.map((emoji, index) => (
                     <button
@@ -251,14 +293,14 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
         <div className="flex items-center gap-2 mt-1 px-2">
           <span className="text-xs text-gray-500 dark:text-gray-400">
             {new Date(message.createdAt).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit'
+              hour: "2-digit",
+              minute: "2-digit",
             })}
           </span>
           {isOwnMessage && chatId && (
-            <ReadReceipt 
-              chatId={chatId} 
-              messageId={message._id} 
+            <ReadReceipt
+              chatId={chatId}
+              messageId={message._id}
               senderId={message.sender._id}
             />
           )}
@@ -267,19 +309,19 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
 
       {isOwnMessage && (
         <img
-          src={user.avatar || '/default-avatar.png'}
+          src={user.avatar || "/default-avatar.png"}
           alt={user.name}
           className="w-8 h-8 rounded-full object-cover"
         />
       )}
 
       {/* Image Preview Modal */}
-      {message.type === 'image' && (
+      {message.type === "image" && (
         <ImagePreviewModal
           isOpen={showImagePreview}
           onClose={() => setShowImagePreview(false)}
           imageUrl={message.media[0]?.url}
-          imageName={message.media[0]?.name || 'Shared Image'}
+          imageName={message.media[0]?.name || "Shared Image"}
         />
       )}
     </div>
@@ -287,4 +329,3 @@ const MessageBubble = ({ message, onReply, onEdit, onDelete, onReact, chatId }) 
 };
 
 export default MessageBubble;
-

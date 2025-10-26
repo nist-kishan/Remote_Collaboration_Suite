@@ -122,15 +122,26 @@ export const getWorkspaceProjects = asyncHandle(async (req, res) => {
     const filter = { workspace: workspaceId };
 
     // Add role-based filtering
+    const isOwner = workspace.owner.toString() === userId.toString();
     const userMember = workspace.members.find(member => 
       member.user.toString() === userId.toString() && member.status === "active"
     );
 
-    if (userMember && userMember.role === "member") {
+    console.log('🔍 Get Workspace Projects Debug:');
+    console.log('  - Workspace ID:', workspaceId);
+    console.log('  - User ID:', userId.toString());
+    console.log('  - Is Owner:', isOwner);
+    console.log('  - User Member:', userMember ? `Role: ${userMember.role}` : 'Not a member');
+
+    // Only regular members (not owner, not admin) see filtered projects
+    if (!isOwner && userMember && userMember.role === "member") {
       // Regular members can only see projects they're part of
       filter["team.user"] = userId;
+      console.log('  - Filter applied: Only showing projects where user is team member');
+    } else {
+      console.log('  - Filter: Showing all workspace projects (owner/admin access)');
     }
-    // Owner and admin can see all projects
+    // Owner and admin can see all projects in the workspace
 
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
@@ -154,6 +165,9 @@ export const getWorkspaceProjects = asyncHandle(async (req, res) => {
       .skip((page - 1) * limit);
 
     const total = await Project.countDocuments(filter);
+
+    console.log('  - Projects found:', total);
+    console.log('  - Filter used:', JSON.stringify(filter));
 
     return res.status(200).json(
       new ApiResponse(200, "Projects retrieved successfully", {

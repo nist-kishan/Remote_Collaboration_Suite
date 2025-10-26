@@ -58,6 +58,55 @@ const VideoCallInterface = ({
   const remoteVideoRef = useRef(null);
   const controlsTimeoutRef = useRef(null);
 
+  // Extract other participant info from call data
+  const getOtherParticipant = () => {
+    if (!callData) return { name: 'Connecting...', avatar: null };
+    
+    // Try to get from participants array
+    if (callData.participants && Array.isArray(callData.participants)) {
+      // Find participant that's not the current user
+      const otherParticipant = callData.participants.find(p => {
+        const userId = p.user?._id || p.user?.id || p.user;
+        const currentUserId = localStorage.getItem('userId'); // or get from auth context
+        return userId !== currentUserId;
+      });
+      
+      if (otherParticipant) {
+        return {
+          name: otherParticipant.user?.name || otherParticipant.name || 'Unknown User',
+          avatar: otherParticipant.user?.avatar || otherParticipant.avatar
+        };
+      }
+    }
+    
+    // Fallback to caller/receiver
+    if (callData.caller) {
+      return {
+        name: callData.caller.name || 'Unknown User',
+        avatar: callData.caller.avatar
+      };
+    }
+    
+    if (callData.receiver) {
+      return {
+        name: callData.receiver.name || 'Unknown User',
+        avatar: callData.receiver.avatar
+      };
+    }
+    
+    // Try fromUserName (from socket event)
+    if (callData.fromUserName) {
+      return {
+        name: callData.fromUserName,
+        avatar: callData.fromUserAvatar
+      };
+    }
+    
+    return { name: 'Unknown User', avatar: null };
+  };
+
+  const otherParticipant = getOtherParticipant();
+
   // Handle window resize for responsive behavior
   useEffect(() => {
     const handleResize = () => {
@@ -195,10 +244,10 @@ const VideoCallInterface = ({
           <div className="mb-6 sm:mb-8 mt-16 sm:mt-20">
             <div className="relative inline-block">
               <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-white/30 shadow-2xl bg-gradient-to-br from-emerald-500 via-purple-500 to-blue-500 p-1">
-                {callData?.caller?.avatar ? (
+                {otherParticipant?.avatar ? (
                   <img 
-                    src={callData.caller.avatar} 
-                    alt={callData.caller.name}
+                    src={otherParticipant.avatar} 
+                    alt={otherParticipant.name}
                     className="w-full h-full rounded-full object-cover"
                   />
                 ) : (
@@ -217,7 +266,7 @@ const VideoCallInterface = ({
           {/* Caller Info */}
           <div className="text-center mb-6 sm:mb-8">
             <h2 className="text-2xl sm:text-4xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-emerald-400 to-purple-400 bg-clip-text text-transparent">
-              {callData?.caller?.name || 'Unknown Caller'}
+              {otherParticipant?.name || 'Unknown Caller'}
             </h2>
             <div className="flex items-center justify-center gap-2 sm:gap-4 mb-4 sm:mb-6">
               <div className="flex items-center gap-1 sm:gap-2 bg-white/10 backdrop-blur-sm rounded-full px-3 sm:px-4 py-1.5 sm:py-2">
@@ -292,7 +341,9 @@ const VideoCallInterface = ({
   }
 
   // Calling State UI
-  if (callStatus === 'calling') {
+  const isOutgoingCallState = ['calling', 'connecting', 'outgoing'].includes(callStatus);
+
+  if (isOutgoingCallState) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 z-50 overflow-hidden">
         {/* Connection Status */}
@@ -322,10 +373,10 @@ const VideoCallInterface = ({
           <div className="mb-6 sm:mb-8 mt-16 sm:mt-20">
             <div className="relative inline-block">
               <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-white/30 shadow-2xl bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-500 p-1">
-                {callData?.receiver?.avatar ? (
+                {otherParticipant?.avatar ? (
                   <img 
-                    src={callData.receiver.avatar} 
-                    alt={callData.receiver.name}
+                    src={otherParticipant.avatar} 
+                    alt={otherParticipant.name}
                     className="w-full h-full rounded-full object-cover"
                   />
                 ) : (
@@ -509,8 +560,8 @@ const VideoCallInterface = ({
             <CallStatusBar
               timeElapsed={timeElapsed}
               connectionQuality={connectionQuality}
-              participantCount={callData?.participants?.length + 1 || 1}
-              callerName={callData?.caller?.name || callData?.receiver?.name || 'Connected'}
+              participantCount={callData?.participants?.length || 2}
+              callerName={otherParticipant?.name || 'Connected'}
             />
           </div>
         </div>
@@ -594,10 +645,10 @@ const VideoCallInterface = ({
                 {/* Receiver Avatar */}
                 <div className="relative">
                   <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-white/30 shadow-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500 p-1">
-                    {callData?.receiver?.avatar || callData?.caller?.avatar ? (
+                    {otherParticipant?.avatar ? (
                       <img 
-                        src={callData.receiver?.avatar || callData.caller?.avatar} 
-                        alt={callData.receiver?.name || callData.caller?.name}
+                        src={otherParticipant.avatar} 
+                        alt={otherParticipant.name}
                         className="w-full h-full rounded-full object-cover"
                       />
                     ) : (
@@ -615,7 +666,7 @@ const VideoCallInterface = ({
                 {/* Receiver Info */}
                 <div className="text-center">
                   <h2 className="text-4xl font-bold mb-3 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                    {callData?.receiver?.name || callData?.caller?.name || 'Connecting...'}
+                    {otherParticipant?.name || 'Connecting...'}
                   </h2>
                   <div className="flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2">
                     <Video className="w-5 h-5" />

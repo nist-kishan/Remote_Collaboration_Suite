@@ -2,12 +2,14 @@ import React, { useState, useRef, useEffect, memo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { LogOut, User as UserIcon } from "lucide-react";
+import UserProfileModal from "../settings/UserProfileModal";
 
 const UserAuthorization = memo(({ handleLogout }) => {
   const user = useSelector((state) => state.auth.user);
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const menuRef = useRef(null);
 
   const toggleMenu = useCallback(() => {
@@ -60,13 +62,15 @@ const UserAuthorization = memo(({ handleLogout }) => {
           {menuOpen && (
             <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 overflow-hidden">
               {/* Profile Button */}
-              <Link
-                to="/profile"
+              <button
+                onClick={() => {
+                  setShowProfileModal(true);
+                  closeMenu();
+                }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                onClick={closeMenu}
               >
                 <UserIcon size={16} /> Profile
-              </Link>
+              </button>
 
               {/* Logout Button */}
               <button
@@ -77,6 +81,12 @@ const UserAuthorization = memo(({ handleLogout }) => {
               </button>
             </div>
           )}
+          
+          {/* Profile Modal */}
+          <UserProfileModal
+            isOpen={showProfileModal}
+            onClose={() => setShowProfileModal(false)}
+          />
         </div>
       ) : (
         <div className="hidden md:flex items-center gap-3">

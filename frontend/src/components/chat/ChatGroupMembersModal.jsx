@@ -6,42 +6,34 @@ import { toast } from 'react-hot-toast';
 import Button from '../ui/Button';
 import UserAvatar from '../ui/UserAvatar';
 import { useChat } from '../../hook/useChat';
-import { searchUsers, getGroupMembers } from '../../api/chatApi';
+import { searchUsers } from '../../api/chatApi';
 
 const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
   const { user } = useSelector((state) => state.auth);
-  
-  // Debug logging
+
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [showMemberMenu, setShowMemberMenu] = useState(null);
 
-  // Get group members using React Query
   const { data: membersData, isLoading, error } = useQuery({
     queryKey: ['groupMembers', chatId],
     queryFn: () => {
-      // return getGroupMembers(chatId);
     },
     enabled: !!chatId,
-    staleTime: 5 * 60 * 1000, // 5 minutes - prevent excessive API calls
-    cacheTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnMount: false, // Don't refetch on component mount if data exists
-    onSuccess: (data) => {
-      console.log('Members data loaded:', data);
-    },
+    staleTime: 5 * 60 * 1000,
+    cacheTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
     onError: (error) => {
       console.error('Error loading members:', error);
     },
   });
-  
+
   const members = membersData?.data?.data?.members || [];
   const isAdmin = membersData?.data?.data?.isAdmin || false;
   const userRole = membersData?.data?.data?.userRole || 'member';
 
-  // Debug logging for members data
-  // // User search for adding members
   const { data: searchResults } = useQuery({
     queryKey: ['userSearch', searchQuery],
     queryFn: () => searchUsers({ query: searchQuery }),
@@ -49,15 +41,12 @@ const GroupMembersModal = ({ isOpen, onClose, chatId, chatName }) => {
     staleTime: 60000,
   });
 
-  // Get chat functions from useChat hook
   const {
     addGroupMembers,
     removeGroupMember,
     updateMemberRole,
     leaveGroup,
     isAddingMembers,
-    isRemovingMember,
-    isUpdatingRole,
     isLeavingGroup
   } = useChat();
 

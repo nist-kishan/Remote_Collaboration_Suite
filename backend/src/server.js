@@ -3,78 +3,20 @@ import { createServer } from "http";
 import app from "./app.js";
 import SocketServer from "./socket/socketServer.js";
 import { DbConnection } from "./config/db.config.js";
-
-// Load environment variables
+import { validateEnvironment } from "./constraint/validateEnvironment.constraint.js";
+import { setDefaults } from "./constraint/setDefaults.constraint.js";
+import { startMeetingCleanupScheduler } from "./services/meetingCleanup.service.js";
 dotenv.config();
 
-// Production environment validation
-const validateEnvironment = () => {
-  const requiredVars = [
-    'ACCESS_TOKEN_SECRET',
-    'REFRESH_TOKEN_SECRET',
-    'MONGODB_URI'
-  ];
-
-  const missingVars = requiredVars.filter(varName => !process.env[varName]);
-  
-  if (missingVars.length > 0 && process.env.NODE_ENV === 'production') {
-    process.exit(1);
-  }
-};
-
-// Set secure default environment variables
-const setDefaults = () => {
-  if (!process.env.ACCESS_TOKEN_SECRET) {
-    process.env.ACCESS_TOKEN_SECRET = "your_access_token_secret_key_here_make_it_long_and_secure_123456789";
-  }
-  
-  if (!process.env.REFRESH_TOKEN_SECRET) {
-    process.env.REFRESH_TOKEN_SECRET = "your_refresh_token_secret_key_here_make_it_long_and_secure_123456789";
-  }
-  
-  if (!process.env.ACCESS_TOKEN_EXPIRY) {
-    process.env.ACCESS_TOKEN_EXPIRY = "15m";
-  }
-  
-  if (!process.env.REFRESH_TOKEN_EXPIRY) {
-    process.env.REFRESH_TOKEN_EXPIRY = "7d";
-  }
-  
-  if (!process.env.MONGODB_URI) {
-    process.env.MONGODB_URI = "mongodb://localhost:27017/remote_work_collaboration";
-  }
-  
-  if (!process.env.FRONTEND_URL) {
-    process.env.FRONTEND_URL = "http://localhost:5173";
-  }
-  
-  // Set FRONTEND_URI for backward compatibility
-  if (!process.env.FRONTEND_URI) {
-    process.env.FRONTEND_URI = process.env.FRONTEND_URL;
-  }
-  
-  // Production-specific settings
-  if (process.env.NODE_ENV === 'production') {
-    if (!process.env.PORT) {
-      process.env.PORT = 5000;
-    }
-  }
-};
-
-// Initialize environment
 validateEnvironment();
 setDefaults();
 
-const PORT = process.env.PORT || 5000;
-const NODE_ENV = process.env.NODE_ENV || 'development';
+const PORT = process.env.PORT;
+const NODE_ENV = process.env.NODE_ENV;
 
-// Graceful shutdown handling
 const gracefulShutdown = (server) => {
   const shutdown = (signal) => {
-    
     server.close(() => {
-      
-      // Close database connection
       if (global.mongoose && global.mongoose.connection) {
         global.mongoose.connection.close(() => {
           process.exit(0);
@@ -83,58 +25,56 @@ const gracefulShutdown = (server) => {
         process.exit(0);
       }
     });
-    
-    // Force close after 30 seconds
     setTimeout(() => {
       process.exit(1);
-    }, parseInt(process.env.GRACEFUL_SHUTDOWN_TIMEOUT) || 30000);
+    }, parseInt(process.env.GRACEFUL_SHUTDOWN_TIMEOUT));
   };
-  
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 };
 
-// Start server
 DbConnection()
   .then(() => {
+    console.log("✅ Database connected. Starting server...");
+
     const server = createServer(app);
-    
-    // Initialize Socket.IO server
     const socketServer = new SocketServer(server);
-    
-    server.listen(PORT, '0.0.0.0', () => {
-      
-      // Show correct URLs based on environment
-      if (NODE_ENV === 'production') {
-        const productionUrl = process.env.RENDER_EXTERNAL_URL || `https://remote-collaboration-suite.onrender.com`;
+    console.log("🔌 Socket server initialized.");
+
+    // Start meeting cleanup scheduler
+    startMeetingCleanupScheduler();
+
+    server.listen(PORT, "0.0.0.0", () => {
+      if (NODE_ENV === "production") {
+        const productionUrl =
+          process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+        console.log(`Server running in production at: ${productionUrl}`);
       } else {
+        console.log(`Server running at: http://localhost:${PORT}`);
       }
-      
     });
-    
-    // Set up graceful shutdown
+
     gracefulShutdown(server);
-    
-    // Handle server errors
-    server.on('error', (error) => {
-      if (error.syscall !== 'listen') {
-        throw error;
-      }
-      
-      const bind = typeof PORT === 'string' ? 'Pipe ' + PORT : 'Port ' + PORT;
-      
+
+    server.on("error", (error) => {
+      if (error.syscall !== "listen") throw error;
+
+      const bind = typeof PORT === "string" ? `Pipe ${PORT}` : `Port ${PORT}`;
+
       switch (error.code) {
-        case 'EACCES':
+        case "EACCES":
+          console.error(`${bind} requires elevated privileges`);
           process.exit(1);
-          break;
-        case 'EADDRINUSE':
+        case "EADDRINUSE":
+          console.error(`${bind} is already in use`);
           process.exit(1);
-          break;
         default:
           throw error;
       }
     });
   })
   .catch((err) => {
+    console.error("🚨 Failed to connect to MongoDB:", err.message);
     process.exit(1);
   });

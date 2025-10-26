@@ -1,49 +1,41 @@
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSelector } from 'react-redux';
-import { searchUsers, createGroupChat } from '../../api/chatApi';
-import { X, Search, Users, UserPlus, UserMinus } from 'lucide-react';
-import CustomButton from '../ui/CustomButton';
-import UserAvatar from '../ui/UserAvatar';
-import { toast } from 'react-hot-toast';
+import React, { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { searchUsers, createGroupChat } from "../../api/chatApi";
+import { X, Search, Users, UserPlus, UserMinus } from "lucide-react";
+import CustomButton from "../ui/CustomButton";
+import UserAvatar from "../ui/UserAvatar";
+import { toast } from "react-hot-toast";
 
 const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
-  const { user } = useSelector((state) => state.auth);
-  const [groupName, setGroupName] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [groupName, setGroupName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
-  
-  const queryClient = useQueryClient();
 
-  // User search query
   const { data: searchResults, isLoading: isSearching } = useQuery({
-    queryKey: ['userSearch', searchQuery],
+    queryKey: ["userSearch", searchQuery],
     queryFn: () => searchUsers({ query: searchQuery }),
     enabled: showSearch && searchQuery.length >= 2,
     staleTime: 60000,
   });
 
-  // Create group mutation
   const createGroupMutation = useMutation({
     mutationFn: (data) => createGroupChat(data),
     onSuccess: (response) => {
-      const groupChat = response.data?.data?.chat || response.data?.chat || response.data;
-      toast.success('Group created successfully!');
-      
-      // Don't immediately invalidate queries since group has no messages yet
-      // The group will appear in chat list only after first message is sent
+      const groupChat =
+        response.data?.data?.chat || response.data?.chat || response.data;
+      toast.success("Group created successfully!");
       onGroupCreated?.(groupChat);
       resetForm();
     },
     onError: (error) => {
-      toast.error(error?.response?.data?.message || 'Failed to create group');
+      toast.error(error?.response?.data?.message || "Failed to create group");
     },
   });
 
   const resetForm = () => {
-    setGroupName('');
-    setSearchQuery('');
+    setGroupName("");
+    setSearchQuery("");
     setSelectedMembers([]);
     setShowSearch(false);
   };
@@ -54,33 +46,34 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
   };
 
   const handleAddMember = (userToAdd) => {
-    if (!selectedMembers.find(member => member._id === userToAdd._id)) {
-      setSelectedMembers(prev => [...prev, userToAdd]);
+    if (!selectedMembers.find((member) => member._id === userToAdd._id)) {
+      setSelectedMembers((prev) => [...prev, userToAdd]);
     }
-    setSearchQuery('');
+    setSearchQuery("");
     setShowSearch(false);
   };
 
   const handleRemoveMember = (userId) => {
-    setSelectedMembers(prev => prev.filter(member => member._id !== userId));
+    setSelectedMembers((prev) =>
+      prev.filter((member) => member._id !== userId)
+    );
   };
 
   const handleCreateGroup = () => {
     if (!groupName.trim()) {
-      toast.error('Please enter a group name');
+      toast.error("Please enter a group name");
       return;
     }
 
     if (selectedMembers.length < 2) {
-      toast.error('Please select at least 2 members');
+      toast.error("Please select at least 2 members");
       return;
     }
 
-    const participantIds = selectedMembers.map(member => member._id);
-    
+    const participantIds = selectedMembers.map((member) => member._id);
     createGroupMutation.mutate({
       name: groupName.trim(),
-      participantIds
+      participantIds,
     });
   };
 
@@ -91,7 +84,6 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-md rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-white/20 dark:border-gray-700/50">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
             Create Group Chat
@@ -103,11 +95,8 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
             <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
         </div>
-
-        {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
           <div className="space-y-6">
-            {/* Group Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Group Name *
@@ -120,13 +109,11 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-
-            {/* Selected Members */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Members ({selectedMembers.length} selected)
               </label>
-              
+
               {selectedMembers.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
                   {selectedMembers.map((member, index) => (
@@ -153,7 +140,6 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
               <div className="relative">
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
-                    
                     <input
                       type="text"
                       placeholder="Search users to add..."
@@ -173,7 +159,7 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
                   >
                     <UserPlus className="w-4 h-4" />
                     Add
-                    </CustomButton>
+                  </CustomButton>
                 </div>
 
                 {/* Search Results */}
@@ -182,12 +168,19 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
                     {isSearching ? (
                       <div className="p-4 text-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto"></div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Searching...</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                          Searching...
+                        </p>
                       </div>
                     ) : users.length > 0 ? (
                       <div className="p-2">
                         {users
-                          .filter(user => !selectedMembers.find(member => member._id === user._id))
+                          .filter(
+                            (user) =>
+                              !selectedMembers.find(
+                                (member) => member._id === user._id
+                              )
+                          )
                           .map((searchUser, index) => (
                             <div
                               key={searchUser._id || `search-user-${index}`}
@@ -209,7 +202,9 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
                       </div>
                     ) : searchQuery.length >= 2 ? (
                       <div className="p-4 text-center">
-                        <p className="text-gray-500 dark:text-gray-400">No users found</p>
+                        <p className="text-gray-500 dark:text-gray-400">
+                          No users found
+                        </p>
                       </div>
                     ) : null}
                   </div>
@@ -221,7 +216,9 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
             <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <h3 className="font-medium text-gray-900 dark:text-gray-100">Group Information</h3>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Group Information
+                </h3>
               </div>
               <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                 <li>• Minimum 2 members required (including you)</li>
@@ -235,22 +232,26 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
-            <CustomButton
+          <CustomButton
             onClick={handleClose}
             variant="outline"
             disabled={createGroupMutation.isPending}
           >
             Cancel
-                    </CustomButton>
-            <CustomButton
+          </CustomButton>
+          <CustomButton
             onClick={handleCreateGroup}
-            disabled={createGroupMutation.isPending || !groupName.trim() || selectedMembers.length < 2}
+            disabled={
+              createGroupMutation.isPending ||
+              !groupName.trim() ||
+              selectedMembers.length < 2
+            }
             loading={createGroupMutation.isPending}
             className="flex items-center gap-2"
           >
             <Users className="w-4 h-4" />
             Create Group
-                    </CustomButton>
+          </CustomButton>
         </div>
       </div>
     </div>
@@ -258,4 +259,3 @@ const CreateGroupModal = ({ isOpen, onClose, onGroupCreated }) => {
 };
 
 export default CreateGroupModal;
-

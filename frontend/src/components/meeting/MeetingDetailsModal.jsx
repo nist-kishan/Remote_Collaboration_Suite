@@ -28,7 +28,7 @@ const MeetingDetailsModal = ({ isOpen, onClose, meeting }) => {
   };
 
   const handleJoin = () => {
-    if (meeting.accessType === 'protected' && !password) {
+    if (meeting.accessType === 'private' && !password) {
       toast.error('Please enter the meeting password');
       return;
     }
@@ -93,7 +93,7 @@ const MeetingDetailsModal = ({ isOpen, onClose, meeting }) => {
               </div>
             </div>
 
-            {meeting.accessType === 'protected' && (
+            {meeting.accessType === 'private' && (
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                 <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Password</div>
                 <div className="flex items-center gap-2">
@@ -129,10 +129,10 @@ const MeetingDetailsModal = ({ isOpen, onClose, meeting }) => {
 
           {/* Access Type */}
           <div className="flex items-center gap-2">
-            {meeting.accessType === 'protected' ? (
+            {meeting.accessType === 'private' ? (
               <>
                 <Lock className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Protected Meeting</span>
+                <span className="text-gray-700 dark:text-gray-300 font-medium">Private Meeting</span>
               </>
             ) : (
               <>
@@ -180,7 +180,7 @@ const MeetingDetailsModal = ({ isOpen, onClose, meeting }) => {
           </div>
 
           {/* Join Section */}
-          {meeting.accessType === 'protected' && (
+          {meeting.accessType === 'private' && (
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Enter Password to Join
@@ -195,12 +195,12 @@ const MeetingDetailsModal = ({ isOpen, onClose, meeting }) => {
             </div>
           )}
 
-          {/* Warning for Protected Meeting */}
-          {meeting.accessType === 'protected' && (
+          {/* Warning for Private Meeting */}
+          {meeting.accessType === 'private' && (
             <div className="flex items-start gap-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
               <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
               <div className="text-sm text-orange-800 dark:text-orange-200">
-                This is a protected meeting. You need the password to join.
+                This is a private meeting. You need the password to join.
               </div>
             </div>
           )}

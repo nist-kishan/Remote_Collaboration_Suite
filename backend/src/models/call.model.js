@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const callSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['one-to-one', 'group'],
+    enum: ['one-to-one', 'group', 'video', 'audio'], // Added video and audio for compatibility
     required: true
   },
   chat: {
@@ -52,7 +52,7 @@ const callSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['ringing', 'ongoing', 'ended', 'missed', 'rejected'],
+    enum: ['ringing', 'ongoing', 'ended', 'missed', 'rejected', 'cancelled'],
     default: 'ringing'
   },
   recordingUrl: {

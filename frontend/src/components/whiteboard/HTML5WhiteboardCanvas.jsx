@@ -245,7 +245,6 @@ const HTML5WhiteboardCanvas = forwardRef(({
     
     // If no canvas data exists, immediately hide loading and return
     if (!hasCanvasData) {
-      console.log('No canvas data found, skipping load');
       hasLoadedInitialCanvasData.current = true;
       setIsLoading(false); // No saved data, not loading
       return;

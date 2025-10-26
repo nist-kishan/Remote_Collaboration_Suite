@@ -187,23 +187,93 @@ export const getMeeting = asyncHandle(async (req, res) => {
   const { meetingId } = req.params;
   const userId = req.user._id;
 
-  const meeting = await Meeting.findById(meetingId)
+  console.log('🔍 Get meeting request:', { meetingId, userId: userId.toString() });
+
+  // Try to find by custom meetingId first, then by MongoDB _id
+  let meeting = await Meeting.findOne({ meetingId })
     .populate("organizer", "name email avatar")
     .populate("attendees.user", "name email avatar")
     .populate("project", "name");
 
   if (!meeting) {
+    // Try finding by MongoDB _id
+    try {
+      meeting = await Meeting.findById(meetingId)
+        .populate("organizer", "name email avatar")
+        .populate("attendees.user", "name email avatar")
+        .populate("project", "name");
+    } catch (error) {
+      // Invalid ObjectId format, ignore
+      console.log('⚠️ Invalid MongoDB ObjectId format:', meetingId);
+    }
+  }
+
+  if (!meeting) {
+    console.error('❌ Meeting not found:', meetingId);
     throw new ApiError(404, "Meeting not found");
   }
 
-  // Check if user has access to this meeting's project
-  const project = await Project.findById(meeting.project);
-  const teamMember = project.team.find(member => 
-    member.user.toString() === userId.toString() && member.status === "active"
+  console.log('✅ Meeting found:', { 
+    _id: meeting._id, 
+    meetingId: meeting.meetingId, 
+    title: meeting.title,
+    accessType: meeting.accessType,
+    meetingType: meeting.meetingType,
+    hasProject: !!meeting.project
+  });
+
+  // Check if user has access to this meeting
+  const isOrganizer = meeting.organizer._id.toString() === userId.toString();
+  const isAttendee = meeting.attendees.some(attendee => 
+    attendee.user._id.toString() === userId.toString()
   );
 
-  if (!teamMember) {
-    throw new ApiError(403, "You don't have access to this meeting");
+  console.log('🔐 Access check:', {
+    userId: userId.toString(),
+    organizerId: meeting.organizer._id.toString(),
+    isOrganizer,
+    isAttendee,
+    accessType: meeting.accessType,
+    meetingType: meeting.meetingType
+  });
+
+  // For project meetings, check project membership
+  if (meeting.project) {
+    const project = await Project.findById(meeting.project);
+    if (project) {
+      const teamMember = project.team.find(member => 
+        member.user.toString() === userId.toString() && member.status === "active"
+      );
+      if (!teamMember && !isOrganizer && !isAttendee) {
+        console.error('❌ Access denied: Not a project member, organizer, or attendee');
+        throw new ApiError(403, "You don't have access to this meeting");
+      }
+    }
+  } else {
+    // For instant/scheduled meetings without project
+    const isPublic = meeting.accessType === 'public';
+    const isInstant = meeting.meetingType === 'instant';
+    
+    console.log('🔓 Non-project meeting access check:', {
+      isPublic,
+      isInstant,
+      isOrganizer,
+      isAttendee
+    });
+    
+    // Allow access if ANY of these conditions are true:
+    // 1. Meeting is public (anyone can view)
+    // 2. Meeting is instant (anyone can view, password required to join)
+    // 3. User is the organizer
+    // 4. User is an attendee
+    const hasAccess = isPublic || isInstant || isOrganizer || isAttendee;
+    
+    if (!hasAccess) {
+      console.error('❌ Access denied: Not public, not instant, not organizer, not attendee');
+      throw new ApiError(403, "You don't have access to this meeting");
+    }
+    
+    console.log('✅ Access granted');
   }
 
   return res.status(200).json(
@@ -479,6 +549,41 @@ export const endMeeting = asyncHandle(async (req, res) => {
     { path: "project", select: "name" }
   ]);
 
+  // Schedule automatic deletion after 5 minutes for instant meetings
+  // For scheduled meetings, keep them for record purposes
+  if (meeting.meetingType === "instant") {
+    console.log(`⏰ Scheduling deletion for instant meeting ${meetingId} in 5 minutes`);
+    
+    // Notify participants that meeting will be deleted
+    if (global.io) {
+      global.io.to(`meeting_${meetingId}`).emit('meeting_will_be_deleted', {
+        meetingId: meeting._id,
+        message: 'This instant meeting will be automatically deleted in 5 minutes',
+        deleteAt: new Date(Date.now() + 5 * 60 * 1000)
+      });
+    }
+    
+    setTimeout(async () => {
+      try {
+        const meetingToDelete = await Meeting.findById(meetingId);
+        if (meetingToDelete && meetingToDelete.status === "completed") {
+          // Notify before deletion
+          if (global.io) {
+            global.io.to(`meeting_${meetingId}`).emit('meeting_deleted', {
+              meetingId: meetingId,
+              message: 'Meeting has been automatically deleted'
+            });
+          }
+          
+          await Meeting.findByIdAndDelete(meetingId);
+          console.log(`🗑️ Auto-deleted instant meeting ${meetingId} after completion`);
+        }
+      } catch (error) {
+        console.error(`❌ Error auto-deleting meeting ${meetingId}:`, error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+  }
+
   return res.status(200).json(
     new ApiResponse(200, "Meeting ended successfully", { meeting })
   );
@@ -522,7 +627,7 @@ export const createInstantMeeting = asyncHandle(async (req, res) => {
   const {
     title,
     description,
-    accessType = "protected",
+    accessType = "private",
     password,
     maxParticipants = 50,
     attendees = [],
@@ -533,9 +638,12 @@ export const createInstantMeeting = asyncHandle(async (req, res) => {
     throw new ApiError(400, "Meeting title is required");
   }
 
-  // Generate password if not provided for protected meetings
+  // Validate maxParticipants (max 50)
+  const validatedMaxParticipants = Math.min(maxParticipants || 50, 50);
+
+  // Generate password if not provided for private meetings
   let meetingPassword = password;
-  if (accessType === "protected" && !password) {
+  if (accessType === "private" && !password) {
     meetingPassword = Math.random().toString(36).substr(2, 6).toUpperCase();
   }
 
@@ -547,7 +655,7 @@ export const createInstantMeeting = asyncHandle(async (req, res) => {
     accessType,
     organizer: userId,
     password: meetingPassword,
-    maxParticipants,
+    maxParticipants: validatedMaxParticipants,
     settings: {
       enableChat: settings.enableChat !== undefined ? settings.enableChat : true,
       enableScreenShare: settings.enableScreenShare !== undefined ? settings.enableScreenShare : true,
@@ -587,7 +695,7 @@ export const createScheduledMeeting = asyncHandle(async (req, res) => {
     description,
     startTime,
     endTime,
-    accessType = "protected",
+    accessType = "private",
     password,
     maxParticipants = 50,
     attendees = [],
@@ -611,9 +719,18 @@ export const createScheduledMeeting = asyncHandle(async (req, res) => {
     throw new ApiError(400, "End time must be after start time");
   }
 
-  // Generate password if not provided for protected meetings
+  // Validate meeting duration (max 60 minutes)
+  const durationMinutes = (end - start) / (1000 * 60);
+  if (durationMinutes > 60) {
+    throw new ApiError(400, "Meeting duration cannot exceed 60 minutes");
+  }
+
+  // Validate maxParticipants (max 50)
+  const validatedMaxParticipants = Math.min(maxParticipants || 50, 50);
+
+  // Generate password if not provided for private meetings
   let meetingPassword = password;
-  if (accessType === "protected" && !password) {
+  if (accessType === "private" && !password) {
     meetingPassword = Math.random().toString(36).substr(2, 6).toUpperCase();
   }
 
@@ -627,7 +744,7 @@ export const createScheduledMeeting = asyncHandle(async (req, res) => {
     startTime: start,
     endTime: end,
     password: meetingPassword,
-    maxParticipants,
+    maxParticipants: validatedMaxParticipants,
     settings: {
       enableChat: settings.enableChat !== undefined ? settings.enableChat : true,
       enableScreenShare: settings.enableScreenShare !== undefined ? settings.enableScreenShare : true,
@@ -658,21 +775,83 @@ export const joinMeeting = asyncHandle(async (req, res) => {
   const userId = req.user._id;
   const { password } = req.body;
 
-  const meeting = await Meeting.findOne({ meetingId });
+  console.log('🚪 Join meeting request:', { meetingId, userId: userId.toString() });
+
+  // Try to find by custom meetingId first, then by MongoDB _id
+  let meeting = await Meeting.findOne({ meetingId });
   if (!meeting) {
+    // Try finding by MongoDB _id
+    meeting = await Meeting.findById(meetingId);
+  }
+  
+  if (!meeting) {
+    console.error('❌ Meeting not found:', meetingId);
     throw new ApiError(404, "Meeting not found");
   }
+
+  console.log('✅ Meeting found:', { 
+    _id: meeting._id, 
+    meetingId: meeting.meetingId, 
+    title: meeting.title,
+    accessType: meeting.accessType,
+    isActive: meeting.isActive
+  });
 
   // Check if meeting is active
   if (!meeting.isActive) {
     throw new ApiError(400, "Meeting is not active");
   }
 
-  // Check password for protected meetings
-  if (meeting.accessType === "protected") {
+  // For SCHEDULED meetings, validate time window
+  if (meeting.meetingType === "scheduled") {
+    const now = new Date();
+    const startTime = new Date(meeting.startTime);
+    const endTime = new Date(meeting.endTime);
+    
+    // Calculate time difference in minutes
+    const minutesUntilStart = (startTime - now) / (1000 * 60);
+    const minutesAfterEnd = (now - endTime) / (1000 * 60);
+    
+    console.log('⏰ Scheduled meeting time check:', {
+      now: now.toISOString(),
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      minutesUntilStart: minutesUntilStart.toFixed(2),
+      minutesAfterEnd: minutesAfterEnd.toFixed(2)
+    });
+    
+    // Meeting hasn't started yet (more than 10 minutes early)
+    if (minutesUntilStart > 10) {
+      throw new ApiError(400, `This meeting is scheduled to start at ${startTime.toLocaleString()}. You can join up to 10 minutes before the scheduled time.`);
+    }
+    
+    // Meeting has ended
+    if (minutesAfterEnd > 0) {
+      throw new ApiError(400, "This meeting has already ended.");
+    }
+  }
+
+  // Check password for PRIVATE meetings (both instant and scheduled)
+  if (meeting.accessType === "private") {
+    console.log('🔐 Password check for private meeting');
     if (!password || password !== meeting.password) {
+      console.error('❌ Invalid password provided');
       throw new ApiError(403, "Invalid meeting password");
     }
+    console.log('✅ Password validated');
+  }
+
+  // Check participant limit (max 50)
+  const currentJoinedCount = meeting.attendees.filter(a => a.status === "joined").length;
+  const maxParticipants = meeting.maxParticipants || 50;
+  
+  console.log('👥 Participant count check:', {
+    currentJoined: currentJoinedCount,
+    maxParticipants: maxParticipants
+  });
+  
+  if (currentJoinedCount >= maxParticipants) {
+    throw new ApiError(400, `This meeting has reached its maximum capacity of ${maxParticipants} participants.`);
   }
 
   // Check if user is already an attendee
@@ -683,6 +862,7 @@ export const joinMeeting = asyncHandle(async (req, res) => {
   if (existingAttendee) {
     existingAttendee.status = "joined";
     existingAttendee.joinedAt = new Date();
+    console.log('✅ Existing attendee rejoined');
   } else {
     // Add user as attendee
     meeting.attendees.push({
@@ -691,6 +871,7 @@ export const joinMeeting = asyncHandle(async (req, res) => {
       status: "joined",
       joinedAt: new Date()
     });
+    console.log('✅ New attendee added');
   }
 
   // Update participant count
@@ -724,22 +905,48 @@ export const getMeetingParticipants = asyncHandle(async (req, res) => {
   const { meetingId } = req.params;
   const userId = req.user._id;
 
-  const meeting = await Meeting.findOne({ meetingId })
+  // Try to find by custom meetingId first, then by MongoDB _id
+  let meeting = await Meeting.findOne({ meetingId })
     .populate("attendees.user", "name email avatar")
     .populate("organizer", "name email avatar");
+  
+  if (!meeting) {
+    meeting = await Meeting.findById(meetingId)
+      .populate("attendees.user", "name email avatar")
+      .populate("organizer", "name email avatar");
+  }
 
   if (!meeting) {
     throw new ApiError(404, "Meeting not found");
   }
 
-  // Check if user is an attendee
+  // Check if user is authorized (organizer or attendee)
+  const isOrganizer = meeting.organizer._id.toString() === userId.toString();
   const userAttendee = meeting.attendees.find(attendee => 
     attendee.user._id.toString() === userId.toString()
   );
 
-  if (!userAttendee) {
+  // Allow access if ANY of these conditions are true:
+  // 1. User is organizer
+  // 2. User is attendee
+  // 3. Meeting is public (anyone can view participants)
+  // 4. Meeting is instant (anyone can view participants)
+  const isPublic = meeting.accessType === 'public';
+  const isInstant = meeting.meetingType === 'instant';
+  const hasAccess = isOrganizer || userAttendee || isPublic || isInstant;
+  
+  if (!hasAccess) {
+    console.error('❌ Access denied to meeting participants:', {
+      userId: userId.toString(),
+      isOrganizer,
+      isAttendee: !!userAttendee,
+      isPublic,
+      isInstant
+    });
     throw new ApiError(403, "You are not authorized to view this meeting");
   }
+  
+  console.log('✅ Access granted to meeting participants');
 
   const participants = meeting.attendees.filter(a => a.status === "joined");
 
@@ -758,7 +965,12 @@ export const updateParticipantStatus = asyncHandle(async (req, res) => {
   const userId = req.user._id;
   const { isMuted, isVideoOn } = req.body;
 
-  const meeting = await Meeting.findOne({ meetingId });
+  // Try to find by custom meetingId first, then by MongoDB _id
+  let meeting = await Meeting.findOne({ meetingId });
+  if (!meeting) {
+    meeting = await Meeting.findById(meetingId);
+  }
+  
   if (!meeting) {
     throw new ApiError(404, "Meeting not found");
   }

@@ -125,7 +125,7 @@ const ChatPage = () => {
     if (chat.type === 'one-to-one') {
       const receiver = chat.participants?.find(p => p.user._id !== user?._id);
       if (receiver) {
-        startCall(receiver.user._id, 'video');
+        startCall(chat._id, 'video');
       }
     }
   };
